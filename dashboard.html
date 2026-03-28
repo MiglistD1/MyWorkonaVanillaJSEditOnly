@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>My Workspace 2.0</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Prompt:wght@300;400;500;600&family=Kanit:wght@300;400;500;600&family=Noto+Sans+Thai:wght@300;400;500;600;700&family=Athiti:wght@300;400;500;600;700&family=Sriracha&display=swap"
+    rel="stylesheet"
+  >
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <svg style="display:none;">
+    <symbol id="icon-edit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></symbol>
+    <symbol id="icon-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></symbol>
+    <symbol id="icon-drag" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/></symbol>
+    <symbol id="icon-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></symbol>
+    <symbol id="icon-tag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></symbol>
+    <symbol id="icon-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></symbol>
+    <symbol id="icon-undo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></symbol>
+    <symbol id="icon-gtask" viewBox="0 0 24 24"><path fill="currentColor" d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path fill="#FFF" d="M10.5 15.5l-4-4 1.4-1.4 2.6 2.6 6.6-6.6 1.4 1.4z"/></symbol>
+    <symbol id="icon-share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="18" cy="5" r="3"></circle>
+      <circle cx="6" cy="12" r="3"></circle>
+      <circle cx="18" cy="19" r="3"></circle>
+      <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+      <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+    </symbol>
+    <symbol id="icon-keep" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><line x1="10" y1="9" x2="8" y2="9"></line></symbol>
+    <symbol id="icon-tasks-launcher" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"></path><path d="M9 12l2 2 4-4"></path></symbol>
+    <symbol id="icon-external-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></symbol>
+    <symbol id="icon-dock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"></path><path d="M10 14L21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></symbol>
+    <symbol id="icon-chevron-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></symbol>
+    <symbol id="icon-chevron-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></symbol>
+    <symbol id="icon-chevrons-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 11 12 6 7 11"></polyline><polyline points="17 18 12 13 7 18"></polyline></symbol>
+    <symbol id="icon-chevrons-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 13 12 18 17 13"></polyline><polyline points="7 6 12 11 17 6"></polyline></symbol>
+    <symbol id="icon-chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></symbol>
+    <symbol id="icon-sidebar-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line></symbol>
+    <symbol id="icon-tool" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></symbol>
+    <symbol id="icon-pencil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></symbol>
+    <symbol id="icon-dice" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><path d="M16 8h.01"></path><path d="M8 8h.01"></path><path d="M8 16h.01"></path><path d="M16 16h.01"></path><path d="M12 12h.01"></path></symbol>
+    <symbol id="icon-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></symbol>
+    <symbol id="icon-notebook" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></symbol>
+    <symbol id="icon-floppy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></symbol>
+    <symbol id="icon-google-minimal" viewBox="0 0 24 24" fill="currentColor"><path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .533 5.347.533 12S5.867 24 12.48 24c3.44 0 6.053-1.147 8.16-3.293 2.147-2.147 2.813-5.28 2.813-7.92 0-.787-.067-1.453-.16-2.227h-9.04z"/></symbol>
+    <symbol id="icon-browser" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line></symbol>
+    <symbol id="icon-layers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></symbol>
+    <symbol id="icon-check-square" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></symbol>
+    <symbol id="icon-sparkles" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"></path></symbol>
+    <symbol id="icon-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></symbol>
+    <symbol id="icon-flag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></symbol>
+    <symbol id="icon-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></symbol>
+    <symbol id="icon-reorder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></symbol>
+    <symbol id="icon-lock-minimal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></symbol>
+    <symbol id="icon-folder-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path><line x1="12" y1="11" x2="12" y2="17"></line><line x1="9" y1="14" x2="15" y2="14"></line></symbol>
+    <symbol id="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></symbol>
+    <symbol id="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.09 18.09 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.09 18.09 0 0 1-2.51 3.15"></path><line x1="1" y1="1" x2="23" y2="23"></line><path d="M12 12v.01"></path></symbol>
+    <symbol id="icon-rotate-ccw" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></symbol>
+  </svg>
+
+  <div class="spacebar" id="spacebar">
+    <div class="spacebar-header">
+      <div class="app-branding"><div class="app-icon-box" id="display-app-icon">🚀</div><span id="display-app-title">My Workspace</span></div>
+      <div style="display: flex; gap: 4px; align-items: center;">
+        <button class="btn-icon" id="btn-command-center" title="Master Command Center"><svg class="svg-icon-lg" style="width: 20px; height: 20px;"><use href="#icon-layers"></use></svg></button>
+        <button class="btn-icon" id="btn-open-settings" title="App Settings"><svg class="svg-icon-lg"><use href="#icon-settings"></use></svg></button>
+      </div>
+    </div>
+    <div class="space-group">
+      <div class="space-group-title">
+        <div style="display: flex; align-items: center; gap: 4px;">
+          Spaces
+          <button class="btn-icon" id="btn-reorder-folders" title="Reorder Folders" style="padding: 2px;"><svg class="svg-icon-sm" style="margin:0;"><use href="#icon-drag"></use></svg></button>
+          <button class="btn-icon" id="btn-collapse-all-folders" title="Collapse All Folders" style="padding: 2px;"><svg class="svg-icon-sm" style="margin:0;"><use href="#icon-chevrons-up"></use></svg></button>
+          <button class="btn-icon" id="btn-expand-all-folders" title="Expand All Folders" style="padding: 2px;"><svg class="svg-icon-sm" style="margin:0;"><use href="#icon-chevrons-down"></use></svg></button>
+        </div>
+        <div style="display:flex; gap:2px;"><button class="btn-icon" id="btn-add-folder" title="Create New Folder" style="padding: 2px;"><svg class="svg-icon-sm" style="margin:0;"><use href="#icon-folder-plus"></use></svg></button><button class="btn-icon" id="btn-add-space" style="font-size:18px; padding: 2px;">+</button></div>
+      </div>
+      <div id="space-list"></div>
+    </div>
+    <div id="spacebar-footer" style="margin-top: auto; flex-shrink: 0; display: flex; flex-direction: column;">
+        <div class="space-group" id="archived-spaces-container" style="display: none; border-top: 1px solid var(--border-color); padding-top: 10px;">
+            <details>
+                <summary class="space-group-title details-summary" style="cursor:pointer;"><svg class="svg-icon-sm summary-chevron"><use href="#icon-chevron-right"></use></svg><span>🗄️ Archived</span></summary>
+                <div id="archived-space-list"></div>
+            </details>
+        </div>
+        <div class="space-group" id="trash-spaces-container" style="display: none; border-top: 1px solid var(--border-color); padding-top: 5px;">
+            <details>
+                <summary class="space-group-title details-summary" style="cursor:pointer; color:#dc2626;">
+                    <svg class="svg-icon-sm summary-chevron"><use href="#icon-chevron-right"></use></svg>
+                    <span>🗑️ Trash</span>
+                    <span id="btn-empty-trash" style="font-size:10px; cursor:pointer; margin-left: auto;">(Empty <svg class="svg-icon-sm" style="vertical-align: -2px; color: inherit;"><use href="#icon-trash"></use></svg>)</span>
+                </summary>
+                <div id="trash-space-list"></div>
+            </details>
+        </div>
+    </div>
+  </div>
+
+  <div class="workspace">
+<div class="topbar">
+      <button class="btn-icon" id="btn-toggle-spacebar" style="margin-right: 5px;" title="Toggle Spacebar"><svg class="svg-icon-lg"><use href="#icon-sidebar-toggle"></use></svg></button>
+      <h1 class="workspace-title" id="current-space-title">Loading...</h1>
+      <button class="btn-icon" id="btn-collapse-launchers" title="Toggle Shortcuts" style="margin-right: 10px;">
+        <svg class="svg-icon-sm" style="transition: transform 0.2s;"><use href="#icon-chevron-up"></use></svg>
+      </button>
+      <div id="global-launchers-bar" class="launchers-bar"></div>
+      <div id="utility-group" class="utility-group">
+        <div class="search-container"><svg class="svg-icon-sm" style="color:var(--text-muted);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg><input type="text" id="quick-search-input" placeholder="Search..."></div>
+        <div class="utility-actions-row">
+          <button id="toggle-tools-btn" class="btn btn-outline" style="font-size: 12px; padding: 5px 10px; font-weight: 600;"><svg class="svg-icon-sm" style="margin-right:4px; vertical-align: -2px;"><use href="#icon-tool"></use></svg> Toggle Tools</button>
+          <button class="btn-icon" id="btn-global-refresh" title="Refresh Data" style="display: flex; align-items: center;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 20px; height: 20px;">
+              <polyline points="23 4 23 10 17 10"></polyline>
+              <polyline points="1 20 1 14 7 14"></polyline>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+            </svg>
+          </button>
+          <button class="btn-icon" id="btn-toggle-darkmode" title="Toggle Dark Mode" style="font-size:16px;">☀️</button>
+        </div>
+      </div>
+
+      <button class="btn-icon" id="btn-utility-more" style="display: none;" title="More Options"><svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg></button>
+
+    </div>
+
+    <div id="archived-space-banner" style="display: none; background: #fffbeb; color: #b45309; padding: 10px 30px; text-align: center; font-weight: 600; border-bottom: 1px solid #fde68a; z-index: 990; position: relative;">
+        This is an archived space. <button id="btn-unarchive-from-banner" class="btn" style="background:#fde68a; color:#b45309; padding: 2px 8px; font-size: 12px; margin-left: 10px;">Unarchive to edit</button>
+    </div>
+
+    <div class="tag-bar" id="tag-bar-container"></div>
+
+    <div id="default-dashboard-container" style="display: none;"></div>
+
+    <div class="content-grid" id="main-grid">
+      <div class="card" id="tabs-card">
+        <div class="card-header" id="tabs-header-normal">
+          <div style="display:flex; align-items:center; gap:6px;">
+            <button class="btn-icon" id="btn-collapse-tabs-inline" title="Collapse Tabs" style="padding:2px; opacity:0.7;"><svg xmlns="http://www.w3.org/2000/svg" class="svg-icon-sm" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
+            <label class="google-task-checkbox" style="display:flex; align-items:center; gap:8px; cursor:pointer; margin:0;">
+              <input type="checkbox" id="select-all-tabs">
+              <div class="checkmark-circle">
+                <svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg>
+              </div>
+              <span>📁 <span id="header-tabs-text">Tabs</span></span>
+            </label>
+          </div>
+          <div style="display: flex; gap: 5px;">
+            <button class="btn-icon delete-btn-red" id="btn-clear-tabs" title="Clear All Tabs"><svg class="svg-icon-sm"><use href="#icon-trash"></use></svg></button>
+            <button class="btn btn-outline" id="btn-save-tabs" style="padding: 2px 8px; font-size:12px;">Save</button>
+          </div>
+        </div>
+        <div class="card-header-vertical" id="tabs-header-collapsed" title="Expand Tabs"><span style="font-size: 20px;">📁</span><span class="vertical-text" id="vertical-tabs-text">Tabs</span></div>
+        <div class="card-body" id="tabs-card-body">
+          <button class="btn btn-outline" id="btn-move-to-resource" style="width:100%; margin-bottom: 10px; justify-content:center; background:var(--hover-bg);">Move Selected <svg class="svg-icon-sm" style="margin-left:4px;"><use href="#icon-chevron-down"></use></svg></button>
+          <ul class="item-list" id="tab-list"></ul>
+        </div>
+      </div>
+
+      <div class="card" id="resources-card">
+        <div class="card-header" id="resources-header-normal">
+          <div style="display:flex; align-items:center; gap:6px;">
+            <button class="btn-icon" id="btn-collapse-res-inline" title="Collapse Resources" style="padding:2px; opacity:0.7;"><svg xmlns="http://www.w3.org/2000/svg" class="svg-icon-sm" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
+            <span>🗂️ <span id="header-res-text">Resources</span></span>
+          </div>
+          <div style="display:flex; gap: 5px; position: relative;">
+            <button class="btn-icon" id="btn-add-local-res" title="Add Local Program" style="padding:2px; color:var(--primary-color);">
+              <svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="12" y1="17" x2="12" y2="21"></line><line x1="8" y1="21" x2="16" y2="21"></line><path d="M12 7v6M9 10h6"/></svg>
+            </button>
+            <button class="btn-icon" id="btn-undo-res" disabled title="Undo Delete"><svg class="svg-icon-sm"><use href="#icon-undo"></use></svg></button>
+            <button class="btn-icon" id="btn-res-select-all" title="Select All" style="display: none; color: var(--primary-color);"><svg class="svg-icon-sm"><use href="#icon-check-square"></use></svg></button>
+            <button class="btn-icon" id="btn-res-actions-menu" title="Actions"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg></button>
+            <div id="res-actions-popup" class="dropdown-menu" style="display: none; min-width: 180px; padding: 8px; top: 110%; right: 0; flex-direction: column; gap: 4px;">
+                <button id="btn-multi-open-res" class="btn btn-outline" style="width:100%; justify-content:flex-start; margin-bottom: 4px;">
+                    <svg class="svg-icon-sm" style="margin-right:4px;"><use href="#icon-check-square"></use></svg><span>Select to Open</span>
+                </button>
+                <button id="btn-delete-selected-res" class="btn btn-outline delete-btn-red" style="width:100%; justify-content:flex-start;">
+                    <svg class="svg-icon-sm" style="margin-right:4px;"><use href="#icon-trash"></use></svg><span>Select to Delete</span>
+                </button>
+            </div>
+          </div>
+        </div>
+        <div class="card-header-vertical" id="resources-header-collapsed" title="Expand Resources"><span style="font-size: 20px;">🗂️</span><span class="vertical-text" id="vertical-res-text">Resources</span></div>
+        <div class="card-body" id="resources-card-body" style="padding-top: 0;">
+          <p class="section-label" style="color: #db2777;">🤖 AI Links</p>
+          <ul class="item-list drag-container" id="resource-ai-list"></ul>
+          
+          <p class="section-label">🌐 General Links</p>
+          <ul class="item-list drag-container" id="resource-list"></ul>
+          
+          <p class="section-label">📁 Google Drive Files</p>
+          <ul class="item-list drag-container" id="drive-list"></ul>
+
+          <details id="archived-resources-details" style="margin-top:15px; margin-bottom:15px;">
+            <summary class="section-label details-summary" style="margin:0; padding:5px 0; border:none; cursor:pointer;"><svg class="svg-icon-sm summary-chevron"><use href="#icon-chevron-right"></use></svg><span>Archived Links</span><span id="btn-clear-archived-res" style="color:#dc2626; font-size:12px; cursor:pointer; margin-left: auto;">(Clear <svg class="svg-icon-sm" style="vertical-align: -2px;"><use href="#icon-trash"></use></svg>)</span></summary>
+            <ul class="item-list" id="archived-resource-list"></ul>
+          </details>
+          <details id="trash-resources-details" style="margin-top:5px; display: none;">
+            <summary class="section-label details-summary" style="margin:0; padding:5px 0; border:none; cursor:pointer; color:#dc2626;"><svg class="svg-icon-sm summary-chevron"><use href="#icon-chevron-right"></use></svg><span>Trash Links</span><span id="btn-empty-res-trash" style="color:#dc2626; font-size:12px; cursor:pointer; margin-left: auto;">(Empty <svg class="svg-icon-sm" style="vertical-align: -2px;"><use href="#icon-trash"></use></svg>)</span></summary>
+            <ul class="item-list" id="trash-resource-list"></ul>
+          </details>
+        </div>
+      </div>
+
+      <div class="card" id="tasks-card">
+        <div class="card-header" id="tasks-header-normal">
+          <div style="display:flex; align-items:center; gap:6px;">
+            <button class="btn-icon" id="btn-collapse-tasks-inline" title="Collapse Tasks & Notes" style="padding:2px; opacity:0.7;"><svg xmlns="http://www.w3.org/2000/svg" class="svg-icon-sm" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
+            <span>✅ <span id="header-tasks-text">Tasks & Notes</span></span>
+          </div>
+          <div style="display:flex; align-items:center; gap:10px;">
+             <div style="position: relative;">
+                <button class="btn-icon" id="btn-google-apps-menu" title="Google Integrations" style="padding: 6px;">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M4 8h4V4H4v4zm6 12h4v-4h-4v4zm-6 0h4v-4H4v4zm0-6h4v-4H4v4zm6 0h4v-4h-4v4zm6-10v4h4V4h-4zm-6 4h4V4h-4v4zm6 6h4v-4h-4v4zm0 6h4v-4h-4v4z"/></svg>
+                </button>
+                <div id="google-apps-popup" class="dropdown-menu" style="display: none;">
+                    <!-- Row 1: Keep -->
+                    <div class="app-row">
+                        <span class="app-label label-keep">Keep</span>
+                        <div class="app-controls">
+                            <button id="btn-open-keep" class="btn-icon app-btn" title="Open Keep" style="color:#f59e0b;"><svg viewBox="0 0 24 24" fill="currentColor" style="width:20px;height:20px;"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"></path></svg></button>
+                            <button class="btn-icon app-btn side-view-toggle" id="keep-side-view-btn" title="Toggle Side View"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="15" y1="3" x2="15" y2="21"></line></svg></button>
+                            <button id="btn-keep-tag" class="btn-icon app-btn" title="Filter Label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg></button>
+                        </div>
+                    </div>
+                    <!-- Row 2: Tasks -->
+                    <div class="app-row">
+                        <span class="app-label label-tasks">Tasks</span>
+                        <div class="app-controls">
+                            <button id="btn-open-google-tasks-launcher" class="btn-icon app-btn" title="Open Tasks" style="color:#2684fc;"><svg viewBox="0 0 24 24" fill="currentColor" style="width:20px;height:20px;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"></path></svg></button>
+                            <button class="btn-icon app-btn side-view-toggle" id="tasks-side-view-btn" title="Toggle Side View"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="15" y1="3" x2="15" y2="21"></line></svg></button>
+                            <button id="connect-google-btn" class="btn-icon app-btn" title="Connect Google Tasks"><svg style="width:20px;height:20px;"><use href="#icon-google-minimal"></use></svg></button>
+                        </div>
+                    </div>
+                </div>
+             </div>
+          </div>
+        </div>
+        <div class="card-header-vertical" id="tasks-header-collapsed" title="Expand Tasks & Notes"><span style="font-size: 20px;">✅</span><span class="vertical-text" id="vertical-tasks-text">Tasks & Notes</span></div>
+        <div class="card-body" id="tasks-card-body" style="padding-top: 0;">
+          
+          <div id="todo-list-section-wrapper" style="display: flex; flex-direction: column; order: 1;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:15px; margin-bottom:10px;">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span class="section-label" style="margin:0; border:none; padding:0;">To-Do List</span>
+                <button id="btn-toggle-task-actions" class="btn-icon" title="Toggle Task Actions Visibility" style="padding: 2px; opacity: 0.6;">
+                  <svg class="svg-icon-sm"><use href="#icon-eye"></use></svg>
+                </button>
+                <button id="btn-toggle-prominent-tasks" class="btn-icon" title="Toggle Next Up Visibility" style="padding: 2px; opacity: 0.6;"><svg class="svg-icon-sm"><use href="#icon-flag"></use></svg></button>
+              </div>
+              <div id="google-task-controls" class="google-task-menu" style="display:none;">
+                 <button id="btn-toggle-specific-list" class="btn-icon" title="Space-Specific List" style="margin-right: 4px; padding: 2px;"><svg class="svg-icon-sm"><use href="#icon-lock-minimal"></use></svg></button>
+                 <select id="google-task-list-select" style="background:transparent; border:none; color:var(--text-main); font-size:12px; font-weight:700; outline:none; cursor:pointer;" title="Select List"></select>
+              </div>
+            </div>
+            
+            <div class="task-input-bar">
+              <button id="btn-sync-toggle" class="btn-sync-toggle active" title="Save to Google Tasks"><svg style="width:18px;height:18px;"><use href="#icon-gtask"></use></svg></button>
+              <input type="text" id="new-task-input" class="task-input" placeholder="Type a task...">
+              <div class="date-wrapper">
+                 <input type="date" id="new-task-date" class="task-date-input" title="Set Due Date">
+              </div>
+              <button class="btn btn-primary" id="btn-add-task" style="padding: 5px 12px; flex-shrink: 0; font-size: 13px; margin-left: 4px;">Add</button>
+            </div>
+            
+            <ul class="task-list drag-container" id="task-list"></ul>
+            
+            <details id="archived-tasks-details" style="margin-top:10px; margin-bottom:15px;">
+              <summary class="section-label details-summary" style="margin:0; padding:5px 0; border:none; cursor:pointer;"><svg class="svg-icon-sm summary-chevron"><use href="#icon-chevron-right"></use></svg><span>Archived Tasks</span><span id="btn-clear-archive" style="color:#dc2626; font-size:12px; cursor:pointer; margin-left: auto;">(Clear <svg class="svg-icon-sm" style="vertical-align: -2px;"><use href="#icon-trash"></use></svg>)</span></summary>
+              <ul class="task-list" id="archive-list"></ul>
+            </details>
+            <details id="trash-tasks-details" style="margin-top:5px; display: none;">
+              <summary class="section-label details-summary" style="margin:0; padding:5px 0; border:none; cursor:pointer; color:#dc2626;"><svg class="svg-icon-sm summary-chevron"><use href="#icon-chevron-right"></use></svg><span>Trash Tasks</span><span id="btn-empty-tasks-trash" style="color:#dc2626; font-size:12px; cursor:pointer; margin-left: auto;">(Empty <svg class="svg-icon-sm" style="vertical-align: -2px;"><use href="#icon-trash"></use></svg>)</span></summary>
+              <ul class="task-list" id="trash-task-list"></ul>
+            </details>
+          </div>
+          
+          <div id="quick-note-wrapper" style="transition: all 0.2s ease; order: 2;">
+            <div class="section-label" id="quick-note-header" style="justify-content: space-between; margin-bottom: 5px; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <span>Quick Notes</span>
+                    <div style="display: flex; gap: 2px;">
+                        <button id="btn-order-note-up" class="btn-icon" title="Quick Notes on Top" style="padding: 2px; width: 18px; height: 18px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="width:12px; height:12px;"><polyline points="18 15 12 9 6 15"></polyline></svg></button>
+                        <button id="btn-order-todo-up" class="btn-icon" title="To-Do List on Top" style="padding: 2px; width: 18px; height: 18px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="width:12px; height:12px;"><polyline points="6 9 12 15 18 9"></polyline></svg></button>
+                    </div>
+                </div>
+                <div class="note-controls" style="display:flex; gap:4px;">
+                    <button class="btn-icon" id="quick-note-keep-toggle" title="Toggle Google Keep Mode">💡</button>
+                    <button class="btn-icon" id="quick-note-keep-edit" title="Change Keep Link" style="display: none;"><svg class="svg-icon-sm"><use href="#icon-edit"></use></svg></button>
+                    <button class="btn-icon" id="btn-float-note" title="Float / Dock"><svg class="svg-icon-sm"><use href="#icon-external-link"></use></svg></button>
+                    <button class="btn-icon" id="btn-toggle-note" title="Collapse / Expand"><svg class="svg-icon-sm"><use href="#icon-chevron-down"></use></svg></button>
+                </div>
+            </div>
+            <div class="note-container" id="quick-note-body">
+            <div class="note-toolbar">
+              <button type="button" class="btn-icon" id="btn-undo-note" title="Undo"><svg class="svg-icon-sm"><use href="#icon-undo"></use></svg></button>
+              <span style="color:var(--border-color); margin: 0 5px;">|</span>
+              <select data-cmd="fontSize"><option value="3">Normal Text</option><option value="4">Large Text</option><option value="5">Heading</option></select>
+              <span style="color:var(--border-color); margin: 0 5px;">|</span>
+              <input type="color" class="custom-color-slot" id="quick-color-1">
+              <input type="color" class="custom-color-slot" id="quick-color-2">
+              <input type="color" class="custom-color-slot" id="quick-color-3">
+            </div>
+            <div id="workspace-note" class="note-area" contenteditable="true" placeholder="Start typing... (Auto-saved)"></div>
+            <div id="keep-setup-container" style="display: none; padding: 15px; flex-direction: column; gap: 10px; background: var(--bg-body); border-radius: 8px;">
+                <p style="font-size: 12px; margin: 0; color: var(--text-muted);">Enter a Google Keep Note URL:</p>
+                <input type="url" id="keep-url-input" class="settings-input" placeholder="https://keep.google.com/u/0/#NOTE/...">
+                <button id="save-keep-url-btn" class="btn btn-primary" style="width: 100%;">Save Keep Note</button>
+            </div>
+            <iframe id="keep-iframe" style="display: none;"></iframe>
+          </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 🔴 New Customize Space Modal (Replaces old space modal) -->
+  <div class="modal-overlay" id="customize-space-modal"><div class="modal-content" style="width: 400px; max-height: 90vh; overflow-y: auto;">
+    <h3 style="margin-top:0; font-size:18px; display:flex; align-items:center; gap:8px;">🛠️ Customize Space</h3>
+    
+    <!-- 1. Identity -->
+    <div class="customize-section">
+        <label class="section-label" style="margin-top:0;">Space Identity</label>
+        <div style="display:flex; gap:10px; align-items:flex-start;">
+            <div id="cust-space-icon-preview" style="width:40px; height:40px; border-radius:6px; background:var(--bg-card); border:1px solid var(--border-color); display:flex; align-items:center; justify-content:center; font-size:20px; cursor:pointer;" title="Click to change icon">🚀</div>
+            <div style="flex:1;">
+                <input type="text" id="cust-space-name" class="settings-input" placeholder="Space Name" style="font-weight:600;">
+                <input type="text" id="cust-space-folder" class="settings-input" placeholder="Folder Name (Optional)" style="margin-top:6px; font-size:12px;">
+                <div id="cust-folder-suggestions" style="display:flex; flex-wrap:wrap; gap:5px; margin-top:5px; min-height:5px;"></div>
+                <input type="text" id="cust-space-icon-input" class="settings-input" placeholder="Emoji or Image URL" style="margin-top:6px; font-size:12px;">
+                <input type="file" id="cust-space-icon-file" accept="image/*" style="display:none;">
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. Appearance -->
+    <div class="customize-section">
+        <label class="section-label" style="margin-top:0;">Appearance<button id="btn-reset-appearance" class="btn btn-outline" style="font-size:11px; padding:2px 6px;" title="Reset all colors to default">Reset</button></label>
+        
+        <!-- Group 1: Theme & Cards -->
+        <div style="font-size:12px; font-weight:700; color:var(--primary-color); margin-bottom:8px;">🎨 Theme & Cards</div>
+        <div class="customize-row">
+            <span style="font-size:14px; color:var(--text-main);">Primary Color</span>
+            <input type="color" id="cust-space-color" style="width:28px; height:28px; padding:0; border:none; background:transparent; cursor:pointer;" title="Space specific color">
+        </div>
+        <div class="customize-row">
+            <span style="font-size:14px; color:var(--text-main);">Card Background</span>
+            <input type="color" id="cust-bg-card" style="width:28px; height:28px; padding:0; border:none; background:transparent; cursor:pointer;" title="Card background color">
+        </div>
+        
+        <div style="height:1px; background:var(--border-color); margin: 8px 0; opacity:0.5;"></div>
+
+        <!-- Group 2: Workspace (Main Content) -->
+        <div style="font-size:12px; font-weight:700; color:var(--text-main); margin-bottom:8px;">📄 Workspace</div>
+        <div class="customize-row">
+            <span style="font-size:14px; color:var(--text-main);">Workspace Text Color</span>
+            <input type="color" id="cust-text-main" style="width:28px; height:28px; padding:0; border:none; background:transparent; cursor:pointer;" title="Main text color">
+        </div>
+        <div class="customize-row">
+            <span style="font-size:14px; color:var(--text-main);">Workspace Background</span>
+            <input type="color" id="cust-bg-workspace" style="width:28px; height:28px; padding:0; border:none; background:transparent; cursor:pointer;" title="Main background color">
+        </div>
+        
+        <div style="height:1px; background:var(--border-color); margin: 8px 0; opacity:0.5;"></div>
+
+        <!-- Group 3: Spacebar (Sidebar) -->
+        <div style="font-size:12px; font-weight:700; color:var(--text-muted); margin-bottom:8px;">🗄️ Spacebar</div>
+        <div class="customize-row">
+            <span style="font-size:14px; color:var(--text-main);">Spacebar Text Color</span>
+            <input type="color" id="cust-spacebar-text-color" style="width:28px; height:28px; padding:0; border:none; background:transparent; cursor:pointer;" title="Spacebar text color">
+        </div>
+        <div class="customize-row">
+            <span style="font-size:14px; color:var(--text-main);">Spacebar Background</span>
+            <input type="color" id="cust-bg-spacebar" style="width:28px; height:28px; padding:0; border:none; background:transparent; cursor:pointer;" title="Spacebar background color">
+        </div>
+        
+        <div style="height:1px; background:var(--border-color); margin: 12px 0;"></div>
+        <label class="section-label" style="margin-top:0;">Typography<button id="btn-reset-typography" class="btn btn-outline" style="font-size:11px; padding:2px 6px;" title="Reset fonts to default">Reset</button></label>
+        <div class="customize-row">
+            <span style="font-size:14px; color:var(--text-main);">Workspace Font Family</span>
+            <select id="cust-font-family" class="settings-input" style="width: 160px; padding: 4px; font-size:12px;">
+                <option value="">Default (Global)</option>
+                <option value="'Sarabun', sans-serif">Sarabun</option>
+                <option value="'Prompt', sans-serif">Prompt</option>
+                <option value="'Kanit', sans-serif">Kanit</option>
+                <option value="'Noto Sans Thai', sans-serif">Noto Sans Thai</option>
+                <option value="'Athiti', sans-serif">Athiti</option>
+                <option value="'Sriracha', cursive">Sriracha</option>
+            </select>
+        </div>
+        <div class="customize-row">
+            <span style="font-size:14px; color:var(--text-main);">Workspace Font Size</span>
+            <div style="display:flex; align-items:center; gap:5px;">
+                <input type="number" id="cust-font-size" class="settings-input" style="width: 60px; padding: 4px; text-align:center;" placeholder="15" min="10" max="24">
+                <span style="font-size:12px; color:var(--text-muted);">px</span>
+            </div>
+        </div>
+        <div class="customize-row">
+            <span style="font-size:14px; color:var(--text-main);">Spacebar Font Size</span>
+            <div style="display:flex; align-items:center; gap:5px;">
+                <input type="number" id="cust-spacebar-font-size" class="settings-input" style="width: 60px; padding: 4px; text-align:center;" placeholder="13" min="10" max="20">
+                <span style="font-size:12px; color:var(--text-muted);">px</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. Headers -->
+    <div class="customize-section">
+        <label class="section-label" style="margin-top:0;">Custom Headers<button id="btn-reset-headers" class="btn btn-outline" style="font-size:11px; padding:2px 6px;" title="Reset headers to default">Reset</button></label>
+        <div style="display:grid; grid-template-columns: 100px 1fr; gap:8px; align-items:center; margin-bottom:6px;">
+            <span style="font-size:13px; color:var(--text-muted);">Tab Column:</span>
+            <input type="text" id="cust-header-tabs" class="settings-input" placeholder="Tabs" style="font-size:13px; padding:4px 8px;">
+        </div>
+        <div style="display:grid; grid-template-columns: 100px 1fr; gap:8px; align-items:center; margin-bottom:6px;">
+            <span style="font-size:13px; color:var(--text-muted);">Resource Col:</span>
+            <input type="text" id="cust-header-res" class="settings-input" placeholder="Resources" style="font-size:13px; padding:4px 8px;">
+        </div>
+        <div style="display:grid; grid-template-columns: 100px 1fr; gap:8px; align-items:center;">
+            <span style="font-size:13px; color:var(--text-muted);">Task Column:</span>
+            <input type="text" id="cust-header-tasks" class="settings-input" placeholder="Tasks & Notes" style="font-size:13px; padding:4px 8px;">
+        </div>
+    </div>
+
+    <div class="modal-actions" style="margin-top: 20px; display:flex; justify-content:flex-end;">
+        <div style="display:flex; gap:8px;">
+            <button class="btn btn-outline" id="btn-close-cust-modal">Cancel</button> 
+            <button class="btn btn-primary" id="btn-save-cust-modal">Save Changes</button>
+        </div>
+    </div>
+  </div></div>
+
+  <div class="modal-overlay" id="tag-modal"><div class="modal-content" style="width:280px;"><h3 style="font-size:16px;">Select Tags</h3><div id="modal-tag-list-container" style="max-height:200px; overflow-y:auto; margin-bottom:15px;"></div><div class="modal-actions" style="text-align:right;"><button class="btn btn-outline" id="btn-close-modal">Cancel</button> <button class="btn btn-primary" id="btn-save-item-tags">Save</button></div></div></div>
+  
+  <div class="modal-overlay" id="task-edit-modal"><div class="modal-content" style="width: 320px;">
+    <h3 style="font-size:16px;">✏️ Edit Task</h3>
+    <div class="settings-group"><label>Task Name:</label><input type="text" id="edit-task-name-input" class="settings-input" style="font-family:var(--note-font),sans-serif;"></div>
+    <div class="settings-group"><label>Due Date:</label><input type="date" id="edit-task-date-input" class="settings-input"></div>
+
+    <div class="settings-group" id="task-sync-row" style="display:flex; align-items:center; gap:8px; margin-top:20px; background:var(--hover-bg); padding:10px; border-radius:6px; cursor:pointer;">
+        <label class="google-task-checkbox">
+            <input type="checkbox" id="edit-task-sync-check">
+            <div class="checkmark-circle">
+                <svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg>
+            </div>
+        </label>
+        <label style="margin:0; cursor:pointer; font-weight:600; flex:1;">Sync with Google Tasks</label>
+        <svg style="width:18px;height:18px;"><use href="#icon-gtask"></use></svg>
+    </div>
+    <div class="modal-actions" style="margin-top: 20px; text-align:right;"><button class="btn btn-outline" id="btn-close-task-edit">Cancel</button> <button class="btn btn-primary" id="btn-save-task-edit">Save</button></div>
+  </div></div>
+
+  <div class="modal-overlay" id="task-link-modal"><div class="modal-content" style="width: 320px;">
+    <h3 style="font-size:16px;">🔗 Task Link</h3>
+    <div class="settings-group">
+        <label>URL:</label>
+        <input type="url" id="task-link-input" class="settings-input" placeholder="https://example.com">
+    </div>
+    <div class="settings-group" style="display:flex; align-items:center; gap:8px; margin-top:10px;">
+        <label class="google-task-checkbox">
+            <input type="checkbox" id="task-link-sideview">
+            <div class="checkmark-circle">
+                <svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg>
+            </div>
+        </label>
+        <label for="task-link-sideview" style="margin:0; cursor:pointer; font-weight:600;">Open in Sideview</label>
+    </div>
+    <div class="modal-actions" style="margin-top: 20px; text-align:right;"><button class="btn btn-outline" id="btn-close-link-modal">Cancel</button> <button class="btn btn-primary" id="btn-save-task-link">Save</button></div>
+  </div></div>
+
+  <div class="modal-overlay" id="settings-modal"><div class="modal-content">
+    <h3 style="font-size:16px; display:flex; align-items:center; gap:8px;"><svg class="svg-icon-lg"><use href="#icon-settings"></use></svg> App Settings</h3>
+    <div class="settings-group" style="background: var(--hover-bg); padding: 10px; border-radius: 6px;">
+      <label style="display:flex; align-items:center; gap:6px;"><svg class="svg-icon-sm"><use href="#icon-floppy"></use></svg> Data Management:</label>
+      <div style="display:flex; flex-direction:column; gap:8px; margin-top: 8px;">
+        <div style="display:flex; gap:5px;">
+          <input type="text" id="export-subfolder" class="settings-input" style="flex:2; font-size:12px;" placeholder="Backup Subfolder (e.g., MyBackups)">
+          <select id="auto-export-days" class="settings-input" style="flex:1; font-size:12px;">
+            <option value="0">Auto: Off</option>
+            <option value="1">Every 1 Day</option>
+            <option value="3">Every 3 Days</option>
+            <option value="7">Every 7 Days</option>
+          </select>
+        </div>
+        <div style="display:flex; gap:10px;">
+          <button class="btn btn-outline" id="btn-manual-export" style="flex:1; font-size:12px;">Export Now</button>
+          <button class="btn btn-primary" id="btn-import-data" style="flex:1; font-size:12px;">Import Data</button>
+          <input type="file" id="file-import-data" accept=".json" style="display:none;">
+        </div>
+      </div>
+    </div>
+    <div class="settings-group"><label>App Name:</label><input type="text" id="setting-title" class="settings-input"></div>
+    
+    <div class="settings-group">
+      <label>App Icon:</label>
+      <div style="display: flex; gap: 15px; align-items: flex-start; margin-top: 5px;">
+        <!-- ส่วนแสดงตัวอย่าง (Preview) -->
+        <div id="setting-icon-preview" style="width: 60px; height: 60px; border-radius: 10px; border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; font-size: 32px; background: var(--bg-body); overflow: hidden; flex-shrink: 0; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">🚀</div>
+        
+        <div style="flex:1;">
+          <div style="display:flex; gap:5px; margin-bottom:8px;"><button class="btn-icon emoji-pick">🚀</button><button class="btn-icon emoji-pick">💻</button><button class="btn-icon emoji-pick">📅</button><button class="btn-icon emoji-pick">📝</button><button class="btn-icon emoji-pick">⚡</button></div>
+          <div style="display: flex; gap: 5px;"><input type="text" id="setting-icon" class="settings-input" placeholder="Emoji or Image URL..." style="flex:1;"><button class="btn btn-outline" id="btn-trigger-icon-upload" title="Upload Image">📂 Upload</button></div>
+          <input type="file" id="setting-icon-file" accept="image/*" style="display:none;">
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-group"><label>Primary Color:</label><input type="color" id="setting-color" style="width:100%; height:30px; border:none; cursor:pointer;"></div>
+
+    <div class="settings-group">
+      <label>App Font (Global):</label>
+      <select id="setting-app-font" class="settings-input">
+        <option value="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" selected>System</option>
+        <option value="'Sarabun', sans-serif">Sarabun</option>
+        <option value="'Prompt', sans-serif">Prompt</option>
+        <option value="'Kanit', sans-serif">Kanit</option>
+        <option value="'Noto Sans Thai', sans-serif">Noto Sans Thai</option>
+        <option value="'Athiti', sans-serif">Athiti</option>
+        <option value="'Sriracha', cursive">Sriracha</option>
+      </select>
+    </div>
+
+    <div class="settings-group" style="border-top: 1px solid var(--border-color); padding-top: 15px;">
+      <label style="display:flex; align-items:center; gap:6px; color:#dc2626;">🗑️ Auto-Delete Trash:</label>
+      <div style="display:flex; align-items:center; gap:10px; margin-top:5px;">
+        <input type="number" id="setting-auto-delete-days" class="settings-input" style="width:80px;" min="1" max="365">
+        <span style="font-size:12px; color:var(--text-muted);">Days until items are permanently removed.</span>
+      </div>
+    </div>
+
+    <div class="modal-actions" style="margin-top: 20px; text-align:right;"><button class="btn btn-outline" id="btn-close-settings">ปิด</button> <button class="btn btn-primary" id="btn-save-settings">บันทึก</button></div>
+  </div></div>
+
+  <div class="modal-overlay" id="launcher-modal"><div class="modal-content" style="width: 350px;">
+    <h3 style="font-size:16px; display:flex; align-items:center; gap:8px;"><svg class="svg-icon-lg"><use href="#icon-link"></use></svg> Manage Launcher</h3>
+    <div class="settings-group">
+        <label>Type:</label>
+        <select id="launcher-type" class="settings-input" style="padding: 6px;">
+            <option value="web">Web URL</option>
+            <option value="local">Local Program</option>
+        </select>
+    </div>
+    <div class="settings-group"><label>Name / Tooltip:</label><input type="text" id="launcher-name-input" class="settings-input" placeholder="Name..."></div>
+    <div class="settings-group">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+            <label style="margin:0;">Group Tag:</label>
+            <div style="display:flex; align-items:center; gap:5px;">
+                 <span style="font-size:10px; color:var(--text-muted);">Color:</span>
+                 <input type="color" id="launcher-tag-color" value="#555555" style="width:20px; height:20px; padding:0; border:none; background:transparent; cursor:pointer;">
+                 <button id="btn-random-tag-color" class="btn-icon" style="padding:0 4px; color:var(--text-muted);" title="Random Color"><svg class="svg-icon-sm"><use href="#icon-dice"></use></svg></button>
+            </div>
+        </div>
+        <div style="display:flex; gap:5px;">
+            <input type="text" id="launcher-tag-input" class="settings-input" placeholder="e.g. Work">
+            <button id="btn-add-new-tag" class="btn btn-outline" style="padding:0 10px; font-weight:bold;" title="New Tag">+</button>
+        </div>
+        <div id="launcher-tag-suggestions" style="display:flex; flex-wrap:wrap; gap:5px; margin-top:5px; min-height:5px;"></div>
+    </div>
+    <div class="settings-group"><label>URL / Path:</label><input type="text" id="launcher-url-input" class="settings-input" placeholder="https://example.com or C:\Program Files\..."></div>
+    
+    <div class="settings-group" id="group-launcher-web-opt" style="display:none; flex-direction:column; gap:8px; margin-top:10px;">
+        <div style="display:flex; align-items:center; gap:8px;">
+            <label class="google-task-checkbox">
+                <input type="checkbox" id="launcher-side-view">
+                <div class="checkmark-circle">
+                    <svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg>
+                </div>
+            </label>
+            <label for="launcher-side-view" style="margin:0; cursor:pointer;">Open in Side Panel</label>
+        </div>
+        <div style="display:flex; align-items:center; gap:15px; flex-wrap: wrap;">
+            <div style="display:flex; align-items:center; gap:8px;">
+                <label class="google-task-checkbox">
+                    <input type="checkbox" id="launcher-web-split">
+                    <div class="checkmark-circle">
+                        <svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg>
+                    </div>
+                </label>
+                <label for="launcher-web-split" style="margin:0; cursor:pointer;">Half Screen</label>
+            </div>
+            <div id="wrapper-web-new-window" style="display:flex; align-items:center; gap:8px; opacity: 0.5; pointer-events: none;">
+                <label class="google-task-checkbox">
+                    <input type="checkbox" id="launcher-web-new-window">
+                    <div class="checkmark-circle">
+                        <svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg>
+                    </div>
+                </label>
+                <label for="launcher-web-new-window" style="margin:0; cursor:pointer;">Open in New Window</label>
+            </div>
+            <div id="wrapper-web-pos-selection" style="display:none; align-items:center; gap:8px; margin-left: 10px; border-left: 1px solid var(--border-color); padding-left: 10px;">
+                <span style="font-size:11px; color:var(--text-muted); font-weight: 600;">Side:</span>
+                <label style="display:flex; align-items:center; gap:4px; cursor:pointer; font-size:11px;">
+                    <input type="radio" name="launcher-web-pos" value="right" checked> Right
+                </label>
+                <label style="display:flex; align-items:center; gap:4px; cursor:pointer; font-size:11px;">
+                    <input type="radio" name="launcher-web-pos" value="left"> Left
+                </label>
+            </div>
+        </div>
+    </div>
+    <div class="settings-group" id="group-launcher-local-opt" style="display:none; flex-direction:column; gap:8px; margin-top:10px;">
+        <div style="display:flex; align-items:center; gap:15px; flex-wrap: wrap;">
+            <div style="display:flex; align-items:center; gap:8px;">
+                <label class="google-task-checkbox">
+                    <input type="checkbox" id="launcher-split-windows">
+                    <div class="checkmark-circle">
+                        <svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg>
+                    </div>
+                </label>
+                <label for="launcher-split-windows" style="margin:0; cursor:pointer;">Half Screen</label>
+            </div>
+            <div id="wrapper-local-pos-selection" style="display:none; align-items:center; gap:8px; margin-left: 10px; border-left: 1px solid var(--border-color); padding-left: 10px;">
+                <span style="font-size:11px; color:var(--text-muted); font-weight: 600;">App Side:</span>
+                <label style="display:flex; align-items:center; gap:4px; cursor:pointer; font-size:11px;">
+                    <input type="radio" name="launcher-local-pos" value="right" checked> Right
+                </label>
+                <label style="display:flex; align-items:center; gap:4px; cursor:pointer; font-size:11px;">
+                    <input type="radio" name="launcher-local-pos" value="left"> Left
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <div class="settings-group">
+      <label>Icon & Color:</label>
+      <div style="display:flex; gap:15px; align-items:center; margin-top:5px;">
+         <div id="launcher-preview-box" style="width:40px; height:40px; border-radius:8px; display:flex; align-items:center; justify-content:center; border:1px solid var(--border-color); cursor:pointer; overflow:hidden;" title="Click to upload icon"></div>
+         <input type="file" id="launcher-icon-file" accept="image/*" style="display:none;">
+         <input type="color" id="launcher-color-picker" value="#ffffff" style="width:40px; height:40px; border:none; padding:0; background:transparent; cursor:pointer;">
+         <button class="btn btn-outline" id="btn-reset-launcher-icon" style="font-size:12px;">Reset Icon</button>
+      </div>
+    </div>
+
+    <!-- NEW: Visibility Settings -->
+    <div class="settings-group">
+        <label>Visibility:</label>
+        <div style="display:flex; gap: 15px; margin-bottom: 8px;">
+            <label style="display:flex; align-items:center; gap: 5px; cursor:pointer;"><input type="radio" name="launcherVisibility" value="all" checked> All Spaces</label>
+            <label style="display:flex; align-items:center; gap: 5px; cursor:pointer;"><input type="radio" name="launcherVisibility" value="specific"> Specific Spaces</label>
+        </div>
+        <div id="launcher-space-selection-container" style="display:none; max-height: 120px; overflow-y: auto; background: var(--bg-body); padding: 8px; border-radius: 6px; border: 1px solid var(--border-color);">
+            <!-- Checkboxes will be dynamically inserted here -->
+        </div>
+    </div>
+    <div class="modal-actions" style="margin-top: 20px; display:flex; justify-content:space-between;"><button class="btn delete-btn-red" id="btn-delete-launcher" style="display:none;">Delete Launcher</button> <div style="display:flex; gap:8px;"><button class="btn btn-outline" id="btn-close-launcher">Cancel</button> <button class="btn btn-primary" id="btn-save-launcher">Save</button></div></div>
+  </div></div>
+
+  <!-- Modal สำหรับแก้ไข Resource / Drive / Task -->
+  <div class="modal-overlay" id="modal-edit-res">
+    <div class="modal-content" style="width: 400px; padding: 30px;">
+        <h3 style="margin-top:0; margin-bottom: 20px; font-size:20px; display:flex; align-items:center; gap:8px;">🔗 Edit Link Properties</h3>
+        
+        <input type="hidden" id="edit-res-type">
+        <input type="hidden" id="edit-res-index">
+
+        <div class="customize-section">
+            <label class="section-label">Identity & Icon</label>
+            <div style="display:flex; gap:15px; align-items:flex-start;">
+                <div id="edit-res-icon-preview" class="icon-preview-circle" title="Click to upload custom icon"></div>
+                <input type="file" id="edit-res-icon-file" accept="image/*" style="display:none;">
+                <div style="flex:1; display:flex; flex-direction:column; gap:8px;">
+                    <input type="text" id="edit-res-title" class="settings-input" placeholder="Title" style="font-weight:600;">
+                    <div id="edit-res-url-container">
+                        <input type="text" id="edit-res-url" class="settings-input" placeholder="URL (https://...)">
+                    </div>
+                </div>
+            </div>
+            <button class="btn btn-outline" id="btn-fetch-favicon" style="width:100%; margin-top:10px; font-size:11px; justify-content:center;">✨ Restore Default Favicon</button>
+        </div>
+
+        <div class="customize-section">
+            <label class="section-label">Organization</label>
+            <div class="settings-group" style="margin-bottom:0;">
+                <label style="font-size:11px; color:var(--text-muted);">Tags (comma separated):</label>
+                <input type="text" id="edit-res-tags" class="settings-input" placeholder="e.g. Work, Urgent">
+            </div>
+        </div>
+
+        <div class="modal-actions" style="margin-top: 20px; display:flex; justify-content:flex-end; gap:8px;">
+            <button class="btn btn-outline" onclick="document.getElementById('modal-edit-res').style.display='none'">Cancel</button> 
+            <button class="btn btn-primary" id="modal-edit-res-save">Save Changes</button>
+        </div>
+    </div>
+  </div>
+
+  <script type="module" src="dashboard.js"></script>
+</body>
+</html>

@@ -1,0 +1,627 @@
+import { getSpaces, getAppSettings } from '../core/storage.js';
+import { getGoogleStatus, fetchGoogleLists } from './googleTasks.js';
+import { updateKeepTagButtonState, openKeepWithTag } from './googleKeep.js';
+import { openGoogleTasks } from './googleTasksLauncher.js';
+import { renderMasterTodoList, renderMasterHeaderControls } from './masterTodoList.js';
+
+export function renderDefaultDashboard() {
+    const container = document.getElementById('default-dashboard-container');
+    if (!container) return;
+
+    const allSpaces = getSpaces().filter(s => !s.isArchived);
+    
+    // 1. Render Dashboard Wrapper
+    container.innerHTML = `
+        <div class="dashboard-grid">
+            <div class="card widget-card">
+                <div class="card-header" style="display: flex; align-items: center; gap: 15px; padding: 10px 20px;">
+                    <div id="master-header-controls-container" style="display: contents;">
+                        ${renderMasterHeaderControls()}
+                    </div>
+                    ${renderGoogleIntegrations()}
+                </div>
+                <div id="master-todo-list-container" class="card-body"></div>
+            </div>
+        </div>
+    `;
+
+    // 2. Delegate Rendering of the Master Todo List
+    renderMasterTodoList(document.getElementById('master-todo-list-container'));
+
+    // 3. Global Dashboard UI Updates
+    updateKeepTagButtonState(); // อัปเดตสถานะปุ่ม Tag ทันทีที่เรนเดอร์
+    if (getGoogleStatus().googleAuthToken) { fetchGoogleLists(renderDefaultDashboard); }
+    
+    // Attached to window for masterTodoList.js callbacks
+    window.renderDefaultDashboard = renderDefaultDashboard;
+}
+
+/**
+ * Helper: Google Integrations Dropdown
+ */
+function renderGoogleIntegrations() {
+    return `
+        <div style="position: relative; display:flex; align-items:center; gap:8px; flex-shrink: 0;">
+            <button class="btn-icon" id="master-btn-google-apps-menu" title="Google Integrations" style="padding: 6px;">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M4 8h4V4H4v4zm6 12h4v-4h-4v4zm-6 0h4v-4H4v4zm0-6h4v-4H4v4zm6 0h4v-4h-4v4zm6-10v4h4V4h-4zm-6 4h4V4h-4v4zm6 6h4v-4h-4v4zm0 6h4v-4h-4v4z"/></svg>
+            </button>
+            <div id="master-google-apps-popup" class="dropdown-menu" style="display: none; top: 110%; right: 0;">
+                <div class="app-row">
+                    <span class="app-label label-keep">Keep</span>
+                    <div class="app-controls">
+                        <button id="master-btn-open-keep" class="btn-icon app-btn" title="Open Keep" style="color:#f59e0b;"><svg viewBox="0 0 24 24" fill="currentColor" style="width:20px;height:20px;"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"></path></svg></button>
+                        <button class="btn-icon app-btn side-view-toggle" id="master-keep-side-view-btn" title="Toggle Side View"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="15" y1="3" x2="15" y2="21"></line></svg></button>
+                        <button id="master-btn-keep-tag" class="btn-icon app-btn" title="Filter Label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg></button>
+                    </div>
+                </div>
+                <div class="app-row">
+                    <span class="app-label label-tasks">Tasks</span>
+                    <div class="app-controls">
+                        <button id="master-btn-open-tasks" class="btn-icon app-btn" title="Open Tasks" style="color:#2684fc;"><svg viewBox="0 0 24 24" fill="currentColor" style="width:20px;height:20px;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"></path></svg></button>
+                        <button class="btn-icon app-btn side-view-toggle" id="master-tasks-side-view-btn" title="Toggle Side View"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="15" y1="3" x2="15" y2="21"></line></svg></button>
+                        <button id="master-connect-google-btn" class="btn-icon app-btn" title="Connect Google Tasks"><svg style="width:20px;height:20px;"><use href="#icon-google-minimal"></use></svg></button>
+                    </div>
+                </div>
+            </div>
+            <div style="width:1px; height:16px; background:var(--border-color); margin:0 4px;"></div>
+        </div>
+    `;
+}
+
+function initMasterEvents() {
+    // 1. Add Task Logic
+    const addBtn = document.getElementById('btn-master-add-task');
+    const taskInput = document.getElementById('master-task-input');
+    const spaceSelect = document.getElementById('master-space-selector');
+    const groupContainer = document.getElementById('master-groups-container');
+
+    // Toggle แสดง/ซ่อน Progress
+    const toggleProgressBtn = document.getElementById('btn-master-toggle-progress');
+    if (toggleProgressBtn) {
+        toggleProgressBtn.onclick = () => {
+            commandCenterState.isProgressVisible = !commandCenterState.isProgressVisible;
+            renderDefaultDashboard();
+        };
+    }
+
+    // Toggle Master Task Actions Visibility
+    const toggleMasterTaskActionsBtn = document.getElementById('btn-master-toggle-task-actions');
+    if (toggleMasterTaskActionsBtn) {
+        toggleMasterTaskActionsBtn.onclick = () => {
+            commandCenterState.showMasterTaskActions = !commandCenterState.showMasterTaskActions;
+            renderDefaultDashboard();
+        };
+    }
+
+    // Toggle กรองงานติดธง
+    const filterFlagBtn = document.getElementById('btn-master-filter-flagged');
+    if (filterFlagBtn) {
+        filterFlagBtn.onclick = () => {
+            commandCenterState.showOnlyFlagged = !commandCenterState.showOnlyFlagged;
+            renderDefaultDashboard();
+        };
+    }
+
+    // Toggle โหมดการเลือก (Single/Multi)
+    const toggleSelectBtn = document.getElementById('btn-master-toggle-select-mode');
+    if (toggleSelectBtn) {
+        toggleSelectBtn.onclick = () => {
+            commandCenterState.isSingleSelectMode = !commandCenterState.isSingleSelectMode;
+            renderDefaultDashboard();
+        };
+    }
+
+    const handleAdd = async () => {
+        const text = taskInput.value.trim();
+        const spaceId = parseInt(spaceSelect.value);
+        if (!text) return;
+
+        taskInput.disabled = true;
+        const spaces = getSpaces();
+        const targetSpace = spaces.find(s => s.id === spaceId);
+        
+        if (targetSpace) {
+            if (!targetSpace.tasks) targetSpace.tasks = [];
+            
+            let newTask = { text, completed: false, createdAt: Date.now(), isProminent: false, tags: [], googleTaskId: null };
+
+            // Google Tasks Integration
+            const status = getGoogleStatus();
+            if (status.isGoogleSyncEnabled && status.googleAuthToken) {
+                taskInput.placeholder = "Syncing with Google...";
+                const gTitle = `${text} (S: ${targetSpace.name})`;
+                const gTask = await fetchGoogleAPI(`/lists/${status.currentGoogleListId}/tasks`, 'POST', { title: gTitle });
+                if (gTask && gTask.id) newTask.googleTaskId = gTask.id;
+            }
+
+            targetSpace.tasks.push(newTask);
+            taskInput.value = '';
+            taskInput.disabled = false;
+            taskInput.placeholder = "Quick add task...";
+            saveData();
+            renderDefaultDashboard();
+        }
+    };
+
+    addBtn.onclick = handleAdd;
+    taskInput.onkeypress = (e) => { if (e.key === 'Enter') handleAdd(); };
+
+    // Subtask Keyboard Logic for Command Center
+    const handleMasterSubtaskKey = (e) => {
+        const input = e.target;
+        if (!input.classList.contains('subtask-add-input')) return;
+
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const pIdx = parseInt(input.getAttribute('data-parent'));
+            const value = input.value.trim();
+            const space = getSpaces().find(s => s.id === commandCenterState.addingSubtaskToSpace);
+
+            if (value && space && space.tasks[pIdx]) {
+                if (!space.tasks[pIdx].subtasks) space.tasks[pIdx].subtasks = [];
+                space.tasks[pIdx].subtasks.push({ id: Date.now(), text: value, completed: false });
+                saveData();
+            } else {
+                commandCenterState.addingSubtaskToIndex = null;
+                commandCenterState.addingSubtaskToSpace = null;
+            }
+
+            renderDefaultDashboard();
+
+            if (commandCenterState.addingSubtaskToIndex !== null) {
+                setTimeout(() => {
+                    const newInput = document.querySelector(`.subtask-add-input[data-parent="${pIdx}"]`);
+                    if (newInput) newInput.focus();
+                }, 50);
+            }
+        } else if (e.key === 'Escape') {
+            addingSubtaskToIndex = null;
+            commandCenterState.addingSubtaskToIndex = null;
+            commandCenterState.addingSubtaskToSpace = null;
+            renderDefaultDashboard();
+        }
+    };
+
+    const handleMasterSubtaskBlur = (e) => {
+        if (e.target.classList.contains('subtask-add-input')) {
+            setTimeout(() => {
+                // Abort closing if we are currently auto-creating the next subtask
+                if (document.activeElement && document.activeElement.classList.contains('subtask-add-input')) {
+                    return;
+                }
+                commandCenterState.addingSubtaskToIndex = null;
+                commandCenterState.addingSubtaskToSpace = null;
+                renderDefaultDashboard();
+            }, 100);
+        }
+    };
+
+    if (groupContainer) {
+        groupContainer.addEventListener('keydown', handleMasterSubtaskKey);
+        // เพิ่มการตรวจจับ Enter ใน Command Center เพื่อสร้าง Subtask ต่อเนื่อง
+        groupContainer.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && e.target.classList.contains('task-actual-text')) {
+                const li = e.target.closest('li');
+                if (li && li.dataset.type === 'subtask') {
+                    const subList = li.closest('.subtask-list');
+                    if (subList) {
+                        commandCenterState.addingSubtaskToIndex = parseInt(subList.dataset.parentIndex);
+                        commandCenterState.addingSubtaskToSpace = parseInt(li.getAttribute('data-space-id'));
+                    }
+                }
+            }
+        });
+        groupContainer.addEventListener('focusout', handleMasterSubtaskBlur);
+        groupContainer.addEventListener('contextmenu', (e) => {
+            const linkBtn = e.target.closest('.task-link-btn');
+            if (linkBtn) {
+                e.preventDefault();
+                const idx = parseInt(linkBtn.getAttribute('data-index'));
+                const pIdxAttr = linkBtn.getAttribute('data-parent-index');
+                const pIdx = pIdxAttr !== null ? parseInt(pIdxAttr) : null;
+                const sid = parseInt(linkBtn.getAttribute('data-space-id'));
+                openTaskLinkModal(idx, pIdx !== null, pIdx, sid);
+            }
+        });
+    }
+
+    // Add listener for background sync completion
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+        if (message.type === 'GOOGLE_TASKS_SYNC_COMPLETE') {
+            renderDefaultDashboard(); // Trigger re-render of the entire dashboard
+        }
+    });
+
+
+    // All Spaces Filter
+    const allPill = document.getElementById('btn-master-filter-all');
+    if (allPill) {
+        allPill.onclick = (e) => {
+            e.stopPropagation();
+            commandCenterState.activeSpaceFilters.clear();
+            renderDefaultDashboard();
+        };
+    }
+
+    // 1.5 Google Apps Menu logic
+    const menuBtn = document.getElementById('master-btn-google-apps-menu');
+    const popup = document.getElementById('master-google-apps-popup');
+    if (menuBtn && popup) {
+        menuBtn.onclick = (e) => {
+            e.stopPropagation();
+            popup.style.display = popup.style.display === 'none' ? 'block' : 'none';
+        };
+        document.addEventListener('click', (e) => {
+            if (!popup.contains(e.target) && e.target !== menuBtn) popup.style.display = 'none';
+        });
+    }
+
+    const mkSide = document.getElementById('master-keep-side-view-btn');
+    const mtSide = document.getElementById('master-tasks-side-view-btn');
+
+    const mOpenTasks = document.getElementById('master-btn-open-tasks');
+    if (mOpenTasks) mOpenTasks.onclick = () => {
+        const isSide = mtSide && mtSide.classList.contains('active-side-view');
+        openGoogleTasks(isSide);
+    };
+
+    const mOpenKeep = document.getElementById('master-btn-open-keep');
+    if (mOpenKeep) mOpenKeep.onclick = () => {
+        const isSide = mkSide && mkSide.classList.contains('active-side-view');
+        // ใช้ฟังก์ชันมาตรฐานเพื่อให้ Filter Tag ติดไปด้วย
+        const btnTag = document.getElementById('master-btn-keep-tag');
+        const currentTag = btnTag && btnTag.classList.contains('active') 
+            ? btnTag.title.replace('Keep Filter: #', '') 
+            : null;
+        openKeepWithTag(currentTag, isSide);
+    };
+
+    const mConnectBtn = document.getElementById('master-connect-google-btn');
+    if (mConnectBtn) {
+        const status = getGoogleStatus();
+        if (status.googleAuthToken) {
+            mConnectBtn.style.background = '#34a853';
+            mConnectBtn.style.color = '#ffffff';
+        }
+        mConnectBtn.onclick = () => document.getElementById('connect-google-btn')?.click();
+    }
+
+    if (groupContainer) {
+        // 2.1 Event Delegation สำหรับ Actions (Edit, Delete, Tags)
+        // 2. Toggle Completion (Delegated)
+        groupContainer.addEventListener('change', (e) => {
+            if (e.target.classList.contains('master-task-checkbox')) {
+                const sid = parseInt(e.target.dataset.space);
+                const idx = parseInt(e.target.dataset.idx);
+                const isChecked = e.target.checked;
+                const taskItem = e.target.closest('.task-item');
+
+                // แสดง Animation ขีดฆ่าก่อนหายไป
+                if (isChecked && taskItem) {
+                    taskItem.classList.add('completed-hold');
+                }
+                
+                const spaces = getSpaces();
+                const space = spaces.find(s => s.id === sid);
+                if (space && space.tasks[idx]) {
+                    const task = space.tasks[idx];
+                    
+                    // Sync กับ Google Tasks API
+                    const status = getGoogleStatus();
+                    if (task.googleTaskId && status.googleAuthToken && status.isGoogleSyncEnabled) {
+                        fetchGoogleAPI(`/lists/${status.currentGoogleListId}/tasks/${task.googleTaskId}`, 'PATCH', { 
+                            status: isChecked ? 'completed' : 'needsAction' 
+                        });
+                    }
+
+                    task.completed = isChecked;
+                    task.completedAt = isChecked ? Date.now() : null;
+                    if (isChecked) task.isProminent = false;
+
+                    // อัปเดตสถานะงานย่อยทั้งหมด
+                    if (task.subtasks && task.subtasks.length > 0) {
+                        task.subtasks.forEach(sub => {
+                            if (!sub) return;
+                            sub.completed = isChecked;
+                            if (sub.googleTaskId && status.googleAuthToken && status.isGoogleSyncEnabled) {
+                                fetchGoogleAPI(`/lists/${status.currentGoogleListId}/tasks/${sub.googleTaskId}`, 'PATCH', { 
+                                    status: isChecked ? 'completed' : 'needsAction' 
+                                });
+                            }
+                        });
+                    }
+
+                    saveData();
+                    
+                    // หน่วงเวลา Re-render เพื่อให้ผู้ใช้เห็น Animation
+                    setTimeout(() => {
+                        renderDefaultDashboard();
+                    }, isChecked ? 800 : 0);
+                }
+            }
+        });
+
+        groupContainer.addEventListener('click', async (e) => {
+            const target = e.target;
+            
+            // Collapsible Toggle Logic
+            const toggleBtn = target.closest('.toggle-actions-btn');
+            if (toggleBtn) {
+                const container = toggleBtn.parentElement.querySelector('.collapsible-actions');
+                if (container) {
+                    const isHidden = container.style.display === 'none';
+                    container.style.display = isHidden ? 'flex' : 'none';
+                    toggleBtn.classList.toggle('expanded');
+                }
+            }
+
+            // ปุ่ม Toggle Visibility ราย Space (ที่อยู่หน้าชื่อ Space ใน Command Center)
+            const visibilityBtn = target.closest('.btn-master-space-toggle-prominent');
+            if (visibilityBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                const sid = parseInt(visibilityBtn.dataset.spaceId);
+                const space = getSpaces().find(s => s.id === sid);
+                if (space) {
+                    space.hideProminentTasks = !space.hideProminentTasks;
+                    saveData();
+                    renderDefaultDashboard();
+                }
+                return;
+            }
+
+            // ปุ่ม Open Space (สลับไปยัง Space นั้นๆ)
+            const gotoBtn = target.closest('.btn-master-goto-space');
+            if (gotoBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                const sid = parseInt(gotoBtn.dataset.spaceId);
+
+                // 🟢 ตรวจสอบและคลายโฟลเดอร์ที่ซ่อนอยู่ก่อนจะสลับ Space
+                const spaces = getSpaces();
+                const targetSpace = spaces.find(s => s.id === sid);
+                if (targetSpace) {
+                    const folderName = targetSpace.folder || 'General';
+                    const settings = getAppSettings();
+                    if (settings.collapsedFolders && settings.collapsedFolders.includes(folderName)) {
+                        settings.collapsedFolders = settings.collapsedFolders.filter(f => f !== folderName);
+                        saveData();
+                        renderSidebar();
+                    }
+                }
+
+                // ใช้การจำลองการคลิกที่รายการใน Sidebar เพื่อรัน logic การเปลี่ยน Space ตัวกลาง
+                const sidebarItem = document.querySelector(`#spacebar .space-item[data-id="${sid}"]`);
+                if (sidebarItem) sidebarItem.click();
+                return;
+            }
+
+            // Add Subtask Button
+            if (target.closest('.add-subtask-btn')) {
+                const idx = parseInt(target.closest('.add-subtask-btn').getAttribute('data-index'));
+                const taskItem = target.closest('.task-item');
+                const spaceId = parseInt(taskItem.getAttribute('data-space-id'));
+
+                if (isNaN(spaceId)) return; // Ensure spaceId is valid
+                addingSubtaskToIndex = idx;
+                addingSubtaskToSpace = spaceId;
+                renderDefaultDashboard();
+                setTimeout(() => {
+                    const input = document.querySelector(`.subtask-add-input[data-parent="${idx}"]`);
+                    if (input) input.focus();
+                }, 10);
+                return;
+            }
+
+                        // Sub-task Sync Toggle
+            if (target.closest('.subtask-sync-toggle-btn')) {
+                const btn = target.closest('.subtask-sync-toggle-btn');
+                const pIdx = parseInt(btn.getAttribute('data-parent-index'));
+                const sIdx = parseInt(btn.getAttribute('data-sub-index'));
+                const sid = parseInt(btn.getAttribute('data-space-id'));
+                
+                const space = getSpaces().find(s => s.id === sid);
+                const parentTask = space?.tasks?.[pIdx];
+                const subtask = parentTask?.subtasks?.[sIdx];
+
+                if (subtask) {
+                    const status = getGoogleStatus();
+                    
+                    if (!status.googleAuthToken) {
+                        alert("Please connect to Google first");
+                        return;
+                    }
+
+                    if (subtask.googleTaskId) {
+                        await fetchGoogleAPI(`/lists/${status.currentGoogleListId}/tasks/${subtask.googleTaskId}`, 'DELETE');
+                        subtask.googleTaskId = null;
+                    } else {
+                        if (!parentTask.googleTaskId) {
+                            alert("Please sync the main task first to nest this subtask in Google Tasks.");
+                            return;
+                        }
+
+                        const gTitle = `${subtask.text} (S: ${space.name})`;
+                        let gBody = { title: gTitle };
+                        if (subtask.dueDate) { gBody.due = new Date(subtask.dueDate).toISOString(); }
+                        const gTask = await createGoogleTask(status.currentGoogleListId, gBody, parentTask.googleTaskId);
+                        if (gTask && gTask.id) {
+                            subtask.googleTaskId = gTask.id;
+                        }
+                    }
+                    saveData();
+                    renderDefaultDashboard();
+                }
+                return;
+            }
+
+
+
+
+            const taskItem = target.closest('.task-item');
+            if (!taskItem) return;
+
+            const spaceId = parseInt(taskItem.dataset.spaceId);
+            const taskIndex = parseInt(taskItem.dataset.index);
+
+            // ปุ่มปักธง (Flag)
+            if (target.closest('.btn-prominent-task')) {
+                const space = getSpaces().find(s => s.id === spaceId);
+                const task = space.tasks[taskIndex];
+                if (task.isProminent) {
+                    task.isProminent = false;
+                    if (typeof task.originalIndex === 'number') {
+                        const [movedTask] = space.tasks.splice(taskIndex, 1);
+                        const finalIndex = Math.min(task.originalIndex, space.tasks.length);
+                        space.tasks.splice(finalIndex, 0, movedTask);
+                        delete task.originalIndex;
+                    }
+                } else {
+                    task.isProminent = true;
+                    task.originalIndex = taskIndex;
+                    const [movedTask] = space.tasks.splice(taskIndex, 1);
+                    space.tasks.unshift(movedTask);
+                }
+                saveData();
+                renderDefaultDashboard();
+                return;
+            }
+
+            // ตั้งค่า Space ID ชั่วคราวเพื่อให้ Modal ดึงข้อมูลป้ายกำกับของ Space นั้นๆ มาแสดง
+            if (
+                target.closest('.btn-edit-tags') || 
+                target.closest('.edit-task-btn') || 
+                target.closest('.delete-task-btn') ||
+                target.closest('.edit-subtask-btn') ||
+                target.closest('.delete-subtask-btn')
+            ) {
+                setCurrentSpaceId(spaceId);
+                window._isModalOpenedFromCommandCenter = true; // Set flag for modals
+            }
+
+            if (target.closest('.btn-edit-tags')) {
+                handleMiniTagClick(target.closest('.btn-edit-tags'), renderDefaultDashboard); // onRender is not directly used by modal save, but for prompt fallback
+            } else if (target.closest('.edit-subtask-btn')) {
+                const pIdx = parseInt(target.closest('.edit-subtask-btn').getAttribute('data-parent-index'));
+                const sId = parseInt(target.closest('.edit-subtask-btn').getAttribute('data-id'));
+                openTaskEditModal(pIdx, true, sId);
+            } else if (target.closest('.edit-task-btn')) {
+                openTaskEditModal(taskIndex, true); // Pass true to indicate it's from Command Center
+            } else if (target.closest('.delete-task-btn')) {
+                if (confirm("Delete this task?")) {
+                    const space = getSpaces().find(s => s.id === spaceId);
+                    if (space) {
+                        space.tasks.splice(taskIndex, 1);
+                        saveData();
+                        setCurrentSpaceId(0);
+                        renderDefaultDashboard();
+                    }
+                } else { setCurrentSpaceId(0); }
+            }
+        });
+    }
+
+    // 3. Space Filter Pills
+    document.querySelectorAll('.space-pill').forEach(pill => {
+        if (pill.id === 'btn-master-filter-all') return; // ข้ามป้าย All เพราะมี Logic แยก
+        pill.onclick = (e) => {
+            e.stopPropagation();
+            const sid = parseInt(pill.dataset.spaceId);
+            
+            if (commandCenterState.isSingleSelectMode) {
+                const isVisible = !commandCenterState.activeSpaceFilters.has(sid);
+                const allSpaces = getSpaces().filter(s => !s.isArchived);
+                const visibleCount = allSpaces.length - commandCenterState.activeSpaceFilters.size;
+
+                if (isVisible && visibleCount === 1) {
+                    // ถ้าเหลือตัวเดียวแล้วกดซ้ำ ให้กลับไปแสดงทั้งหมด (All)
+                    commandCenterState.activeSpaceFilters.clear();
+                } else {
+                    // เลือกแสดงแค่ตัวนี้ตัวเดียว (ซ่อนตัวอื่นทั้งหมด)
+                    commandCenterState.activeSpaceFilters = new Set(allSpaces.map(s => s.id).filter(id => id !== sid));
+                }
+            } else {
+                // โหมด Multi (ปกติ)
+                if (commandCenterState.activeSpaceFilters.has(sid)) {
+                    commandCenterState.activeSpaceFilters.delete(sid);
+                } else {
+                    commandCenterState.activeSpaceFilters.add(sid);
+                }
+            }
+            renderDefaultDashboard();
+        };
+    });
+
+        // 4. Cross-Space Drag and Drop
+        const initNestedSortable = (el) => {
+            Sortable.create(el, {
+                group: 'nested-tasks',
+                animation: 150,
+                handle: '.drag-handle',
+                ghostClass: 'sortable-ghost',
+                onEnd: (evt) => {
+                    const { from, to, item, oldIndex, newIndex } = evt;
+                    if (from === to && oldIndex === newIndex) return;
+
+                    const fromIsSub = from.classList.contains('subtask-list');
+                    const toIsSub = to.classList.contains('subtask-list');
+                    
+                    const getSpaceId = (list) => parseInt(list.closest('.task-group-details')?.dataset.spaceId || list.dataset.spaceId);
+                    const fromSpaceId = getSpaceId(from);
+                    const toSpaceId = getSpaceId(to);
+
+                    const spaces = getSpaces();
+                    const fromSpace = spaces.find(s => s.id === fromSpaceId);
+                    const toSpace = spaces.find(s => s.id === toSpaceId);
+                    if (!fromSpace || !toSpace) return;
+
+                    // 1. นำข้อมูลออกจากต้นทาง (Source)
+                    let movedTask;
+                    if (fromIsSub) {
+                        const pIdx = parseInt(from.dataset.parentIndex);
+                        movedTask = fromSpace.tasks[pIdx].subtasks.splice(oldIndex, 1)[0];
+                    } else {
+                        const actualIdx = parseInt(item.dataset.index);
+                        movedTask = fromSpace.tasks.splice(actualIdx, 1)[0];
+                    }
+
+                    // 2. แทรกข้อมูลลงในปลายทาง (Target)
+                    if (toIsSub) {
+                        const pIdx = parseInt(to.dataset.parentIndex);
+                        if (!toSpace.tasks[pIdx].subtasks) toSpace.tasks[pIdx].subtasks = [];
+                        
+                        const subtaskData = {
+                            id: movedTask.id || Date.now(),
+                            text: movedTask.text,
+                            completed: movedTask.completed
+                        };
+                        toSpace.tasks[pIdx].subtasks.splice(newIndex, 0, subtaskData);
+                    } else {
+                        const nextEl = item.nextElementSibling;
+                        let insertIdx;
+                        if (nextEl && nextEl.dataset.index) {
+                            insertIdx = parseInt(nextEl.dataset.index);
+                            if (fromSpaceId === toSpaceId && !fromIsSub && insertIdx > parseInt(item.dataset.index)) {
+                                insertIdx--;
+                            }
+                        } else {
+                            insertIdx = toSpace.tasks.findIndex(t => t.completed);
+                            if (insertIdx === -1) insertIdx = toSpace.tasks.length;
+                        }
+
+                        toSpace.tasks.splice(insertIdx, 0, {
+                            ...movedTask,
+                            subtasks: movedTask.subtasks || [],
+                            createdAt: movedTask.createdAt || Date.now()
+                        });
+                    }
+
+                    saveData();
+                    renderDefaultDashboard();
+                }
+            });
+        };
+
+        document.querySelectorAll('.master-group-list').forEach(initNestedSortable);
+        document.querySelectorAll('.subtask-list').forEach(initNestedSortable);
+    }

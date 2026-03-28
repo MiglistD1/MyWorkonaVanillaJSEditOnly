@@ -1,0 +1,9 @@
+{
+  "name": "com.myworkona.launcher",
+  "description": "MyWorkona Native Host",
+  "path": "app_bridge.bat",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://gnlnbpjmfjbpckohbahdmjmajmjmpnmk/"
+  ]
+}

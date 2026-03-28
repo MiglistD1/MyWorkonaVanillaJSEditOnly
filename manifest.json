@@ -1,0 +1,45 @@
+{
+  "manifest_version": 3,
+  "name": "My Workspace 2.0",
+  "version": "1.0",
+  "description": "Personal Task Dashboard",
+  "action": {}, 
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "permissions": [
+    "storage",
+    "tabs",
+    "downloads",
+    "alarms",
+    "identity",
+    "favicon",
+    "sidePanel",
+    "nativeMessaging",
+    "windows",
+    "declarativeNetRequest",
+    "declarativeNetRequestWithHostAccess"
+  ],
+  "host_permissions": [
+    "*://keep.google.com/*"
+  ],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "keep_rules",
+        "enabled": true,
+        "path": "rules.json"
+      }
+    ]
+  },
+  "side_panel": {
+    "default_path": "dashboard.html"
+  },
+  "oauth2": {
+      "client_id": "586837492075-10190s3r8iqqhccc90vsuvvb5jqml05a.apps.googleusercontent.com",
+      "scopes": [
+        "https://www.googleapis.com/auth/tasks"
+      ]
+    }
+}
