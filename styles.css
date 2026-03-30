@@ -736,6 +736,147 @@ input:checked + .slider:before { transform: translateX(16px); }
     padding: 12px;
     margin-bottom: 12px;
 }
+
+/* 🌟 Quest Loot System Styles */
+#reward-modal {
+    background: transparent !important;
+    pointer-events: none; /* เพื่อให้คลิกทะลุไปยัง Space ด้านหลังได้ */
+    backdrop-filter: none !important; /* ลบเอฟเฟกต์เบลอ */
+}
+
+.reward-modal-content {
+    pointer-events: auto; /* ให้ตัวหน้าต่างรับการคลิกได้ปกติ */
+    position: fixed !important;
+    width: 420px;
+    max-height: 85vh;
+    padding: 0 !important;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    border-radius: 16px !important;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.2) !important;
+    border: 1px solid var(--border-color);
+    background: var(--bg-card);
+    transition: none; /* ปิด transition เพื่อให้ลากได้ลื่นไหล */
+}
+
+.reward-tabs {
+    display: flex;
+    background: var(--bg-spacebar);
+    padding: 5px;
+    gap: 5px;
+}
+
+.reward-tab-btn {
+    flex: 1;
+    padding: 12px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 12px;
+    color: var(--text-muted);
+    border-radius: 10px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.reward-tab-btn.active {
+    color: var(--primary-color);
+    background: var(--bg-card);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.reward-pane {
+    padding: 25px;
+    flex: 1;
+    overflow-y: auto;
+}
+
+.wallets-container {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 25px;
+}
+
+.wallet-card {
+    flex: 1;
+    background: var(--bg-body);
+    padding: 18px;
+    border-radius: 16px;
+    border: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.special-loot-glow {
+    background: linear-gradient(135deg, rgba(251, 191, 36, 0.12), rgba(255, 255, 255, 0)) !important;
+    border: 1px solid rgba(251, 191, 36, 0.4) !important;
+    box-shadow: 0 8px 20px rgba(251, 191, 36, 0.15);
+}
+
+.loot-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    margin-bottom: 10px;
+    transition: transform 0.2s;
+}
+
+.mission-form {
+    background: var(--bg-body);
+    padding: 20px;
+    border-radius: 16px;
+    margin-bottom: 25px;
+    border: 1px solid var(--border-color);
+}
+
+/* 🏷️ Categories Popup */
+.sf-sub-popup {
+    position: fixed;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    padding: 15px;
+    width: 280px;
+    z-index: 12000;
+    box-sizing: border-box; /* 🟢 บังคับให้คำนวณความกว้างรวม Padding */
+    max-height: 80vh; /* 🟢 จำกัดความสูงไม่ให้เกิน 80% ของหน้าจอ */
+    overflow-y: auto;  /* 🟢 เพิ่ม Scrollbar ถ้าเนื้อหายาวเกินไป */
+    animation: fadeIn 0.2s ease;
+}
+
+.reward-modal-content.is-interacting {
+    opacity: 0.9;
+    cursor: grabbing;
+}
+
+/* 🎁 Loot Drop Animation */
+@keyframes lootDropPop {
+    0% { transform: translateY(0) scale(0.5); opacity: 0; }
+    30% { transform: translateY(-60px) scale(1.2); opacity: 1; }
+    100% { transform: translateY(-100px) scale(1); opacity: 0; }
+}
+
+.loot-drop-item {
+    position: fixed;
+    pointer-events: none;
+    z-index: 20000;
+    font-weight: 900;
+    font-size: 20px;
+    text-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    animation: lootDropPop 1.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+    display: flex;
+    align-items: center;
+}
 .customize-section label.section-label {
     margin-top: 0;
     margin-bottom: 10px;
@@ -1740,4 +1881,98 @@ details[open] > .details-summary .summary-chevron {
     border-bottom: 1px solid rgba(0, 0, 0, 0.05);
     padding-bottom: 4px; /* ปรับระยะเส้นแบ่งให้สมดุล */
     margin-bottom: 4px; 
+}
+
+/* 🏷️ Syntax Highlighting */
+.hl-tag {
+    display: inline-block;
+    background: rgba(47, 128, 237, 0.1);
+    color: var(--primary-color);
+    padding: 0 6px;
+    border-radius: 4px;
+    border: 1px solid rgba(47, 128, 237, 0.2);
+    font-weight: 600;
+    margin: 0 2px;
+    vertical-align: baseline;
+}
+
+.hl-reward {
+    display: inline-flex;
+    align-items: center;
+    background: rgba(245, 158, 11, 0.12);
+    color: #d97706;
+    padding: 0 6px;
+    border-radius: 4px;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    font-weight: 700;
+    text-decoration: none !important;
+    margin: 0 2px;
+    vertical-align: baseline;
+}
+
+.hl-reward::before { margin-right: 4px; font-size: 14px; }
+.hl-reward[data-type="b"]::before { content: "💰"; }
+.hl-reward[data-type="t"]::before { content: "⏳"; }
+.hl-reward[data-type="i"]::before { content: "🎁"; }
+.hl-reward[data-type="big"]::before { content: "🏆"; }
+
+/* 🎯 Focused Task Highlight */
+@keyframes sf-focus-shine {
+    0% { box-shadow: 0 0 10px rgba(16, 185, 129, 0.4); border-color: rgba(16, 185, 129, 0.7); }
+    50% { box-shadow: 0 0 25px rgba(16, 185, 129, 0.8); border-color: rgba(16, 185, 129, 1); }
+    100% { box-shadow: 0 0 10px rgba(16, 185, 129, 0.4); border-color: rgba(16, 185, 129, 0.7); }
+}
+
+.task-item.is-focus-active {
+    position: relative; /* 🟢 สำคัญ: เพื่อให้แสดงผลขอบทับงานอื่นได้ */
+    border: 3px solid #10b981 !important; 
+    background-color: rgba(16, 185, 129, 0.08) !important;
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.6), inset 0 0 10px rgba(16, 185, 129, 0.1) !important;
+    animation: sf-focus-shine 2s infinite ease-in-out;
+    transform: scale(1.01);
+    z-index: 10; /* 🟢 อยู่เหนือรายการปกติ */
+    margin: 4px 0 !important; /* 🟢 เพิ่มพื้นที่เพื่อให้ขอบไม่โดนทับ */
+    border-radius: 8px !important;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* 🟢 Focus Mode Button Trigger */
+.focus-trigger-container {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.btn-focus-task {
+    position: absolute;
+    left: -22px; /* 🟢 ย้ายมาแสดงด้านซ้ายของปุ่มธง */
+    top: 50%;
+    transform: translateY(-50%) scale(0);
+    opacity: 0;
+    background: #10b981;
+    color: white;
+    border-radius: 50%;
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    transition-delay: 0.5s; /* 🟢 หน่วงเวลาตอนหายไป เพื่อให้มีเวลากดปุ่ม */
+}
+
+.btn-prominent-task.active:hover + .btn-focus-task,
+.btn-focus-task:hover {
+    transform: translateY(-50%) scale(1.15); /* ขยายใหญ่ขึ้นเล็กน้อยตอน Hover */
+    opacity: 1;
+    transition-delay: 0s; /* 🟢 แสดงผลทันทีเมื่อนำเมาส์ไปชี้ */
+}
+
+.btn-focus-task.active {
+    background: #ef4444; /* สีแดงสำหรับปุ่มปิดโฟกัส */
+}
 }

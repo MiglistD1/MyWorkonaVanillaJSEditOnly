@@ -255,6 +255,28 @@ export function initTodoManager(callbacks) {
         const space = getCurrentSpace();
         if (!space) return;
         
+        // 🔘 0. Focus Task Button Logic (Correct Location)
+        const focusBtn = e.target.closest('.btn-focus-task');
+        if (focusBtn) {
+            const idx = parseInt(focusBtn.getAttribute('data-index'));
+            const sid = parseInt(focusBtn.getAttribute('data-space-id'));
+            const settings = getAppSettings();
+            const targetSpace = (sid === space.id) ? space : getSpaces().find(s => s.id === sid);
+            const task = targetSpace?.tasks[idx];
+
+            if (task) {
+                const isCurrentlyFocused = settings.focusedTask && 
+                                           settings.focusedTask.spaceId === sid && 
+                                           settings.focusedTask.createdAt === task.createdAt;
+
+                // 🟢 สลับการโฟกัสทันทีอย่างอิสระ
+                settings.focusedTask = isCurrentlyFocused ? null : { spaceId: sid, createdAt: task.createdAt };
+                saveData();
+                onRenderCallback();
+            }
+            return;
+        }
+
         // NEW: Toggle Subtasks Visibility
         const toggleSubtasksBtn = e.target.closest('.toggle-subtasks-btn');
         if (toggleSubtasksBtn) {
@@ -513,6 +535,12 @@ export function initTodoManager(callbacks) {
 
             if (task.isProminent) {
                 task.isProminent = false;
+                // Clear focus if unflagged
+                const settings = getAppSettings();
+                if (settings.focusedTask && settings.focusedTask.spaceId === space.id && settings.focusedTask.createdAt === task.createdAt) {
+                    settings.focusedTask = null;
+                }
+
                 // ย้ายกลับไปยังตำแหน่งเดิมหากมีการบันทึกไว้
                 if (typeof task.originalIndex === 'number') {
                     const targetIndex = task.originalIndex;
@@ -526,10 +554,21 @@ export function initTodoManager(callbacks) {
                 // อนุญาตให้เลือกเน้นงานได้หลายงานพร้อมกัน
                 task.isProminent = true;
 
-                // เลื่อนขึ้นบนสุด
-                task.originalIndex = index; // บันทึกตำแหน่งปัจจุบันไว้ก่อนย้าย
+                // บันทึกตำแหน่งเดิมไว้ก่อนย้าย (เพื่อเอากลับมาที่เดิมเมื่อเลิกติดธง)
+                task.originalIndex = index; 
                 const [movedTask] = space.tasks.splice(index, 1);
-                space.tasks.unshift(movedTask);
+                
+                // 🟢 ค้นหาตำแหน่งสุดท้ายของกลุ่มงานที่ติดธงอยู่แล้ว
+                let lastProminentIdx = -1;
+                for (let i = 0; i < space.tasks.length; i++) {
+                    if (space.tasks[i].isProminent && space.tasks[i] !== movedTask) {
+                        lastProminentIdx = i;
+                    } else if (!space.tasks[i].isProminent) {
+                        break; // งานติดธงจะอยู่บนสุดเสมอ จึงหยุดหาได้ทันทีที่เจองานปกติ
+                    }
+                }
+                // แทรกต่อท้ายกลุ่มงานที่ติดธงล่าสุด
+                space.tasks.splice(lastProminentIdx + 1, 0, movedTask);
             }
             saveData();
             onRenderCallback();
@@ -569,12 +608,25 @@ export function initTodoManager(callbacks) {
             // Animation 4: Hold & Vanish Effect
             if (isChecked && taskItem) {
                 taskItem.classList.add('completed-hold');
+
+                // 🌟 Quest Loot Scanner
+                const space = getCurrentSpace();
+                if (window.processRewardScanner && space?.tasks[index]) {
+                    // ดึงตำแหน่งเมาส์ล่าสุดจาก Event e
+                    window.processRewardScanner(space.tasks[index].text, false, { x: e.clientX, y: e.clientY }, 'task', space.id);
+                }
             }
 
             setTimeout(() => {
                 const space = getCurrentSpace(); 
                 const task = space.tasks[index];
                 if (isChecked) {
+                    // Clear focus if completed
+                    const settings = getAppSettings();
+                    if (settings.focusedTask && settings.focusedTask.spaceId === space.id && settings.focusedTask.createdAt === task.createdAt) {
+                        settings.focusedTask = null;
+                    }
+
                     task.isDeleted = true;
                     task.deletedAt = Date.now();
                     const days = getAppSettings().autoDeleteDays || 30;

@@ -1,9 +1,9 @@
 // features/habitSheet.js
 import { saveData, getAppSettings, getCurrentSpace, setFilterTags, setFilterMode, getFilterTags } from '../core/storage.js';
 import { renderTasks } from './todoManager.js';
+import { generateMiniTagsBtn, handleTagAutocomplete, applySyntaxHighlighting } from '../core/ui-helpers.js';
 import Sortable from '../sortable.esm.js';
 import { svgTrashRed } from '../core/icons.js';
-import { generateMiniTagsBtn } from '../core/ui-helpers.js';
 import { renderAll } from '../core/contentManager.js';
 
 // --- 1. เติม export เพื่อให้หน้าจอหลัก (todoManager) เรียกใช้ได้ ---
@@ -316,6 +316,12 @@ export function renderHabitList(space) {
         nameTextEl.addEventListener('touchend', cancelPress);
         nameTextEl.addEventListener('touchcancel', cancelPress);
 
+        // --- 🟢 Event: Autocomplete for Habits ---
+        nameTextEl.addEventListener('input', (e) => {
+            handleTagAutocomplete(e, () => space?.tags || []);
+            applySyntaxHighlighting(nameTextEl); // 🟢 เพิ่มการไฮไลท์ใน Habit Tracker
+        });
+
         // --- ⌨️ Inline Edit Events ---
         nameTextEl.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
@@ -355,6 +361,11 @@ export function renderHabitList(space) {
             const isChecked = e.target.checked;
             
             if (isChecked) el.classList.add('completed-hold'); // แสดงผลขีดฆ่าทันที
+
+            // 🌟 Quest Loot Scanner
+            if (window.processRewardScanner) {
+                window.processRewardScanner(habit.text, false, { x: e.clientX, y: e.clientY }, 'habit', space.id);
+            }
 
             habit.completed = isChecked;
             

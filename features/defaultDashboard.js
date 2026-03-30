@@ -38,6 +38,7 @@ export async function renderDefaultDashboard() {
             <button class="btn-icon btn-dashboard-note-toggle" title="Dashboard Quick Note" style="margin-right: 10px; ${settings.dashboardQuickNote?.isOpen ? 'color: var(--primary-color); border: 1px solid var(--primary-color); background: rgba(47, 128, 237, 0.1);' : ''}">
                 <svg class="svg-icon-sm"><use href="#icon-pencil"></use></svg>
             </button>
+            <button id="btn-master-open-rewards" class="btn-icon" title="🌟 Quest Loot & Rewards" style="color: #f59e0b; font-size: 16px; width: 32px; height: 32px; margin-right: 10px;">🌟</button>
             ${isMinimized('todo') ? `<div class="minimized-bubble" data-id="todo" title="Restore Todo List">✅</div>` : ''}
             ${isMinimized('flow') ? `<div class="minimized-bubble" data-id="flow" title="Restore Smart Flow">🚀</div>` : ''}
         </div>

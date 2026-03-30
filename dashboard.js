@@ -12,6 +12,7 @@ import { setupSpaceModals, setupItemModals, setupTagModal, setupSettingsModal, s
 import { initDragAndDrop } from './core/drag-and-drop.js';
 import { applyAppSettings, initSettingsManager } from './core/settings-manager.js';
 import { initSearchManager } from './core/searchManager.js';
+import { initRewardSystem } from './features/rewardSystem.js';
 import { initContentManager, renderMainContent, renderAll } from './core/contentManager.js';
 import { openOrFocusTab } from './core/ui-helpers.js';
 import { initDashboardQuickNote } from './features/dashboardQuickNote.js';
@@ -133,6 +134,7 @@ document.addEventListener('DOMContentLoaded', () => {
         initGoogleTasksLauncher();
         initCustomLaunchers();
         initDashboardQuickNote();
+        initRewardSystem();
         
         const unarchiveBtn = document.getElementById('btn-unarchive-from-banner');
         if (unarchiveBtn) {

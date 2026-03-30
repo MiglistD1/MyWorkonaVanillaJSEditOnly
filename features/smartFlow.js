@@ -2,6 +2,7 @@ import { getSpaces, saveData, getAppSettings } from '../core/storage.js';
 import Sortable from '../sortable.esm.js';
 import { renderSidebar } from '../components/sidebar.js';
 import { svgArchive, svgUnarchive, svgTrashRed } from '../core/icons.js';
+import { handleTagAutocomplete, applySyntaxHighlighting } from '../core/ui-helpers.js';
 
 const svgMenu = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.7;"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>`;
 
@@ -253,7 +254,7 @@ export async function initSmartFlow() {
     isFlowDataLoaded = true;
 }
 
-async function saveFlow() {
+export async function saveFlow() {
     await chrome.storage.local.set({ 
         'smartFlowItems': flowItems,
         'smartFlowTags': flowState.managedTags,
@@ -952,7 +953,7 @@ function checkDependencies(item) {
 function attachFlowEvents(listEl) {
     // 1. Completion Toggle
     listEl.querySelectorAll('.smart-flow-action-btn').forEach(btn => {
-        btn.onclick = () => {
+        btn.onclick = (e) => {
             const id = btn.dataset.id;
             const item = flowItems.find(fi => fi.id === id);
             if (!item) return;
@@ -971,6 +972,11 @@ function attachFlowEvents(listEl) {
             if (item.isCompleted) {
                 // Reorder: Move to bottom
                 const idx = flowItems.indexOf(item);
+                
+                // 🌟 Quest Loot Scanner
+                if (window.processRewardScanner) {
+                    window.processRewardScanner(item.title, false, { x: e.clientX, y: e.clientY }, 'flow');
+                }
                 flowItems.splice(idx, 1);
                 flowItems.push(item);
 
@@ -1021,6 +1027,12 @@ function attachFlowEvents(listEl) {
 
     // 2. Inline Title Edit
     listEl.querySelectorAll('.smart-flow-title').forEach(el => {
+        // 🟢 เพิ่ม Autocomplete ขณะแก้ไขชื่อใน Smart Flow
+        el.oninput = (e) => {
+            handleTagAutocomplete(e, () => flowState.managedTags || []);
+            applySyntaxHighlighting(el); // 🟢 เพิ่มการไฮไลท์ใน Smart Flow
+        };
+
         el.onblur = () => {
             const id = el.dataset.id;
             const item = flowItems.find(fi => fi.id === id);

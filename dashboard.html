@@ -691,6 +691,27 @@
     </div>
   </div>
 
+  <!-- 🌟 Quest Loot System Modal -->
+  <div class="modal-overlay" id="reward-modal">
+    <div class="modal-content reward-modal-content">
+        <div style="padding: 20px 25px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color);">
+            <h3 style="margin:0; font-size: 18px; font-weight: 800;">🌟 Quest Loot System</h3>
+            <div style="display:flex; gap:8px; align-items:center;">
+                <button class="btn-icon" id="btn-refresh-reward-modal" title="Refresh Rewards" style="padding:4px; opacity:0.6;">
+                    <svg class="svg-icon-sm"><use href="#icon-refresh"></use></svg>
+                </button>
+                <button class="btn-icon" id="btn-lock-reward-modal" title="Lock/Unlock Positioning" style="padding:4px; opacity:0.6;">
+                    <svg class="svg-icon-sm"><use href="#icon-unlock-minimal"></use></svg>
+                </button>
+                <button class="btn-icon" id="btn-close-reward-modal" style="font-size: 20px; opacity: 0.5;">✕</button>
+            </div>
+        </div>
+        <div id="reward-modal-body" style="flex: 1; overflow: hidden; display: flex; flex-direction: column;">
+            <!-- Content injected by rewardSystem.js -->
+        </div>
+    </div>
+  </div>
+
   <script type="module" src="dashboard.js"></script>
 </body>
 </html>

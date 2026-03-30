@@ -59,7 +59,8 @@ let appSettings = {
     w: 250,
     h: 150,
     collapsed: false
-  }
+  },
+  focusedTask: null // 🟢 { spaceId, createdAt } เก็บงานที่กำลังโฟกัสอยู่เพียงหนึ่งเดียว
 };
 
 // URL Params Logic

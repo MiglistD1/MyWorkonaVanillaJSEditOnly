@@ -420,7 +420,17 @@ function initMasterEvents() {
                 const sid = parseInt(e.target.dataset.space);
                 const idx = parseInt(e.target.dataset.idx);
                 const isChecked = e.target.checked;
+                const taskItem = e.target.closest('.task-item');
                 const space = getSpaces().find(s => s.id === sid);
+
+                // 🌟 แสดง Animation ขีดฆ่า และเรียก Reward Scanner
+                if (isChecked && taskItem && space && space.tasks[idx]) {
+                    taskItem.classList.add('completed-hold');
+                    if (window.processRewardScanner) {
+                        window.processRewardScanner(space.tasks[idx].text, false, { x: e.clientX, y: e.clientY }, 'task', space.id);
+                    }
+                }
+
                 if (space && space.tasks[idx]) {
                     const task = space.tasks[idx];
                     const status = getGoogleStatus();
@@ -585,6 +595,28 @@ function initMasterEvents() {
                 return;
             }
 
+            // 🔘 9. Focus Task Button Logic (Command Center)
+            const focusBtn = target.closest('.btn-focus-task');
+            if (focusBtn) {
+                const idx = parseInt(focusBtn.getAttribute('data-index'));
+                const sid = parseInt(focusBtn.getAttribute('data-space-id'));
+                const settings = getAppSettings();
+                const targetSpace = getSpaces().find(s => s.id === sid);
+                const task = targetSpace?.tasks[idx];
+
+                if (task) {
+                    const isCurrentlyFocused = settings.focusedTask && 
+                                               settings.focusedTask.spaceId === sid && 
+                                               settings.focusedTask.createdAt === task.createdAt;
+
+                    // 🟢 สลับการโฟกัสทันทีโดยไม่ต้อง Alert
+                    settings.focusedTask = isCurrentlyFocused ? null : { spaceId: sid, createdAt: task.createdAt };
+                    saveData();
+                    onRefresh();
+                }
+                return;
+            }
+
             // 🔘 5. Add Subtask Button
             if (target.closest('.add-subtask-btn')) {
                 const idx = parseInt(target.closest('.add-subtask-btn').dataset.index);
@@ -622,15 +654,32 @@ function initMasterEvents() {
                 const task = space.tasks[taskIndex];
                 if (task.isProminent) {
                     task.isProminent = false;
+                    const settings = getAppSettings();
+                    if (settings.focusedTask && settings.focusedTask.spaceId === spaceId && settings.focusedTask.createdAt === task.createdAt) {
+                        settings.focusedTask = null;
+                    }
+
                     if (typeof task.originalIndex === 'number') {
                         const [movedTask] = space.tasks.splice(taskIndex, 1);
                         space.tasks.splice(Math.min(task.originalIndex, space.tasks.length), 0, movedTask);
                         delete task.originalIndex;
                     }
                 } else {
-                    task.isProminent = true; task.originalIndex = taskIndex;
+                    task.isProminent = true; 
+                    task.originalIndex = taskIndex;
                     const [movedTask] = space.tasks.splice(taskIndex, 1);
-                    space.tasks.unshift(movedTask);
+                    
+                    // 🟢 FIFO Flagging: ค้นหาตำแหน่งสุดท้ายของกลุ่มงานที่ติดธงอยู่แล้ว
+                    let lastProminentIdx = -1;
+                    for (let i = 0; i < space.tasks.length; i++) {
+                        if (space.tasks[i].isProminent && space.tasks[i] !== movedTask) {
+                            lastProminentIdx = i;
+                        } else if (!space.tasks[i].isProminent) {
+                            break;
+                        }
+                    }
+                    // แทรกต่อท้ายกลุ่มงานที่ติดธงล่าสุด
+                    space.tasks.splice(lastProminentIdx + 1, 0, movedTask);
                 }
                 saveData(); onRefresh(); return;
             }

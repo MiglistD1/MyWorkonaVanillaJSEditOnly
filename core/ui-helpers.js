@@ -136,9 +136,14 @@ export function generateTaskHTML(task, index, {
     const isCompletedOrDeleted = task.completed; // For line-through if completed
     const isActuallyDeleted = task.isDeleted; // For trash-specific styling and buttons
 
+    const appSettings = getAppSettings();
+    const focusedTask = appSettings.focusedTask;
+    const isFocused = focusedTask && focusedTask.spaceId === spaceId && focusedTask.createdAt === task.createdAt; // 🟢 ตรวจสอบ createdAt ที่ถูกต้อง
+    const focusActiveClass = isFocused ? 'is-focus-active' : '';
+
     // NEW: Toggle Subtasks Button HTML
     let toggleSubtaskBtnHTML = '';
-    if (!isSubtask && task.subtasks && task.subtasks.length > 0) {
+    if (!isSubtask && task.subtasks && task.subtasks.length > 0 && !isActuallyDeleted) {
         const isSubtasksHidden = task.subtasksHidden || false;
         const icon = isSubtasksHidden ? '#icon-chevron-down' : '#icon-chevron-up'; // Minimal icons
         const title = isSubtasksHidden ? 'Show Subtasks' : 'Hide Subtasks';
@@ -292,14 +297,24 @@ export function generateTaskHTML(task, index, {
         actionButtons += `<div class="collapsible-actions" style="display: none; align-items: center; gap: 6px;">${collapsibleActionsContent}</div>`;
     }
 
+    const focusBtnHTML = (task.isProminent && !isSubtask && !isActuallyDeleted && !task.completed) ? `
+        <button class="btn-focus-task ${isFocused ? 'active' : ''}" data-index="${index}" data-space-id="${spaceId}" title="${isFocused ? 'Stop Focusing' : 'Focus this task'}">
+            <svg class="svg-icon-sm" style="width:12px;height:12px;"><use href="#icon-${isFocused ? 'eye-off' : 'target'}"></use></svg>
+        </button>
+    ` : '';
+
     const itemType = isSubtask ? 'subtask' : 'task';
     return ` 
-    <li class="${isSubtask ? 'subtask-item' : 'task-item'} ${draggableClass} ${prominentClass}" data-index="${index}" data-type="${itemType}" ${isMasterView ? `data-space-id="${spaceId}"` : ''} style="list-style: none; width: 100%; margin-bottom: 0px; border-bottom: 1px solid transparent; opacity: ${isActuallyDeleted ? '0.7' : '1'};">
+    <li class="${isSubtask ? 'subtask-item' : 'task-item'} ${draggableClass} ${prominentClass} ${focusActiveClass}" data-index="${index}" data-type="${itemType}" ${isMasterView ? `data-space-id="${spaceId}"` : ''} style="list-style: none; width: 100%; margin-bottom: 0px; border-bottom: 1px solid transparent; opacity: ${isActuallyDeleted ? '0.7' : '1'};">
         <div class="item-main-row" style="display: flex; align-items: center; gap: 6px; padding: 2px 0; width: 100%; min-height: 28px;">
             ${handleHTML}
-            ${!isSubtask ? `<button class="btn-icon btn-prominent-task ${task.isProminent ? 'active' : ''}" data-index="${index}" ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="Mark as Next Up" style="margin: 0; padding: 2px; flex-shrink: 0; color: ${task.isProminent ? 'var(--primary-color)' : 'var(--text-muted)'}; display: ${isProminentHidden ? 'none' : 'inline-flex'};">
-                <svg class="svg-icon-sm"><use href="#icon-flag"></use></svg>
-            </button>` : ''}
+            ${!isSubtask ? `
+                <div class="focus-trigger-container">
+                    <button class="btn-icon btn-prominent-task ${task.isProminent ? 'active' : ''}" data-index="${index}" ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="Mark as Next Up" style="margin: 0; padding: 2px; flex-shrink: 0; color: ${task.isProminent ? 'var(--primary-color)' : 'var(--text-muted)'}; display: ${isProminentHidden ? 'none' : 'inline-flex'};">
+                        <svg class="svg-icon-sm"><use href="#icon-flag"></use></svg>
+                    </button>
+                    ${focusBtnHTML}
+                </div>` : ''}
 
             <label class="google-task-checkbox">
                 <input type="checkbox" class="${checkboxClass}" ${checkboxDataAttrs} ${isActuallyDeleted ? 'checked' : (task.completed ? 'checked' : '')}>
@@ -346,6 +361,11 @@ export function attachSubtaskEventListeners(container, space, onRenderCallback, 
                 const subtask = space.tasks[pIdx].subtasks[sIdx];
                 subtask.completed = e.target.checked;
 
+                // 🌟 Trigger Quest Loot Scanner สำหรับ Sub-task
+                if (subtask.completed && window.processRewardScanner) {
+                    window.processRewardScanner(subtask.text, false, { x: e.clientX, y: e.clientY }, 'task', space.id);
+                }
+
                 // Sync with Google Tasks API if enabled and subtask has a Google Task ID
                 if (subtask.googleTaskId && googleApiCallbacks.isGoogleSyncEnabled() && googleApiCallbacks.getGoogleAuthToken()) {
                     googleApiCallbacks.fetchGoogleAPI(`/lists/${googleApiCallbacks.getCurrentGoogleListId()}/tasks/${subtask.googleTaskId}`, 'PATCH', { status: subtask.completed ? 'completed' : 'needsAction' });
@@ -377,6 +397,15 @@ export function attachSubtaskEventListeners(container, space, onRenderCallback, 
  */
 export function attachTaskInlineEditListeners(container, getSpaceFn, callbacks = {}) {
     const { fetchGoogleAPI, getGoogleAuthToken, getCurrentGoogleListId, saveData, onUpdate } = callbacks;
+
+    // 🟢 0. Handle Autocomplete during inline typing
+    container.addEventListener('input', (e) => {
+        if (e.target.classList.contains('task-actual-text')) {
+            const space = getSpaceFn(e.target.closest('li'));
+            handleTagAutocomplete(e, () => space?.tags || []);
+            applySyntaxHighlighting(e.target); // 🟢 เพิ่มการไฮไลท์ขณะพิมพ์งานปกติ
+        }
+    });
 
     // Handle Enter and Escape keys
     container.addEventListener('keydown', (e) => {
@@ -478,16 +507,133 @@ export function attachTaskInlineEditListeners(container, getSpaceFn, callbacks =
 }
 
 /**
+ * 🎨 Apply syntax highlighting to contenteditable elements (@reward and #tag)
+ * @param {HTMLElement} el 
+ */
+export function applySyntaxHighlighting(el) {
+    if (!el || !el.isContentEditable) return;
+
+    const selection = window.getSelection();
+    if (selection.rangeCount === 0) return;
+    
+    const range = selection.getRangeAt(0);
+    const preCaretRange = range.cloneRange();
+    preCaretRange.selectNodeContents(el);
+    preCaretRange.setEnd(range.endContainer, range.endOffset);
+    const caretOffset = preCaretRange.toString().length;
+
+    const text = el.innerText;
+    const escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const highlighted = escaped
+        .replace(/(@reward([\d.]*)([bti]):([^\s]+))/gi, '<span class="hl-reward" data-type="$3">$1</span>')
+        .replace(/(@reward:([^\s]+))/gi, '<span class="hl-reward" data-type="big">$1</span>')
+        .replace(/(^|\s)(#[^\s#]+)/g, '$1<span class="hl-tag">$2</span>');
+
+    if (el.innerHTML !== highlighted) {
+        el.innerHTML = highlighted;
+
+        // Restore Caret Position (ป้องกันเคอร์เซอร์กระโดดไปหน้าสุด)
+        const newRange = document.createRange();
+        let charCount = 0;
+        let nodeFound = false;
+
+        function traverseNodes(node) {
+            if (nodeFound) return;
+            if (node.nodeType === Node.TEXT_NODE) {
+                const nextCharCount = charCount + node.length;
+                if (caretOffset <= nextCharCount) {
+                    newRange.setStart(node, caretOffset - charCount);
+                    newRange.collapse(true);
+                    nodeFound = true;
+                }
+                charCount = nextCharCount;
+            } else {
+                for (let i = 0; i < node.childNodes.length; i++) {
+                    traverseNodes(node.childNodes[i]);
+                }
+            }
+        }
+        traverseNodes(el);
+        if (!nodeFound) {
+            newRange.selectNodeContents(el);
+            newRange.collapse(false);
+        }
+        selection.removeAllRanges();
+        selection.addRange(newRange);
+    }
+}
+
+/**
  * 🏷️ Setup tag autocomplete dropdown for an input field
  */
 export function handleTagAutocomplete(e, getTagsFn) {
     const input = e.target;
-    const value = input.value;
-    const cursorFallback = input.selectionStart;
+    const isContentEditable = input.isContentEditable;
+    const value = isContentEditable ? input.innerText : input.value;
+    
+    let cursorFallback;
+    if (isContentEditable) {
+        const selection = window.getSelection();
+        if (selection.rangeCount === 0) return;
+        const range = selection.getRangeAt(0);
+        const preCaretRange = range.cloneRange();
+        preCaretRange.selectNodeContents(input);
+        preCaretRange.setEnd(range.endContainer, range.endOffset);
+        cursorFallback = preCaretRange.toString().length;
+    } else {
+        cursorFallback = input.selectionStart;
+    }
     
     const textBeforeCursor = value.substring(0, cursorFallback);
     const words = textBeforeCursor.split(/\s/);
     const lastWord = words[words.length - 1];
+
+    // 🟢 1. จัดการ @reward Autocomplete
+    if (lastWord.startsWith('@reward')) {
+        const rData = window.getRewardSystemData ? window.getRewardSystemData() : null;
+        if (!rData) return;
+
+        // ตรวจสอบว่ากำลังพิมพ์ส่วน Category ของ b: หรือ t: อยู่หรือไม่
+        const moneyMatch = lastWord.match(/^@reward[\d.]*b:(.*)$/i);
+        const timeMatch = lastWord.match(/^@reward[\d.]*t:(.*)$/i);
+        const itemMatch = lastWord.match(/^@reward[\d.]*i:(.*)$/i);
+        const lootMatch = lastWord.match(/^@reward:(.*)$/i); // 🟢 เพิ่มรองรับ @reward:
+
+        // 🟢 เพิ่มระบบช่วยเลือกประเภทรางวัล (b:, t:, i:, :) หากยังพิมพ์ไม่ครบ
+        if (!moneyMatch && !timeMatch && !itemMatch && !lootMatch) {
+            const typeQuery = lastWord.match(/^@reward([\d.]*)(.*)$/i);
+            if (typeQuery) {
+                const hasNumber = typeQuery[1] !== "";
+                const currentPart = typeQuery[2].toLowerCase();
+                const suggestions = hasNumber ? ["b:", "t:", "i:"] : ["b:", "t:", "i:", ":"];
+                const filtered = suggestions.filter(s => s.startsWith(currentPart));
+                
+                if (filtered.length > 0) {
+                    showTagAutocompleteDropdown(input, filtered, (selected) => {
+                        const before = textBeforeCursor.substring(0, textBeforeCursor.length - currentPart.length);
+                        const after = value.substring(cursorFallback);
+                        insertAutocompleteText(input, before, selected, after, isContentEditable);
+                    }, '⚡');
+                    return;
+                }
+            }
+        }
+
+        if (moneyMatch || timeMatch || itemMatch || lootMatch) {
+            const query = (moneyMatch ? moneyMatch[1] : (timeMatch ? timeMatch[1] : (itemMatch ? itemMatch[1] : lootMatch[1]))).toLowerCase();
+            const sourceCats = moneyMatch ? rData.moneyCategories : (timeMatch ? rData.timeCategories : (itemMatch ? rData.itemCategories : rData.itemCategories));
+            const filtered = sourceCats.filter(c => c.toLowerCase().includes(query));
+
+            if (filtered.length > 0) {
+                showTagAutocompleteDropdown(input, filtered, (selected) => {
+                    const before = textBeforeCursor.substring(0, textBeforeCursor.length - query.length);
+                    const after = value.substring(cursorFallback);
+                    insertAutocompleteText(input, before, selected, after, isContentEditable);
+                }, moneyMatch ? '💰' : (timeMatch ? '⏳' : '🎁'));
+                return;
+            }
+        }
+    }
 
     // ตรวจจับ # เมื่อพิมพ์ (ต้องไม่ใช่พื้นที่ว่างเปล่าหลัง #)
     if (lastWord.startsWith('#') && lastWord.length > 0) {
@@ -499,10 +645,7 @@ export function handleTagAutocomplete(e, getTagsFn) {
             showTagAutocompleteDropdown(input, filteredTags, (selectedTag) => {
                 const before = textBeforeCursor.substring(0, textBeforeCursor.length - lastWord.length);
                 const after = value.substring(cursorFallback);
-                input.value = before + '#' + selectedTag + ' ' + after;
-                input.focus();
-                const newPos = (before + '#' + selectedTag + ' ').length;
-                input.setSelectionRange(newPos, newPos);
+                insertAutocompleteText(input, before, '#' + selectedTag, after, isContentEditable);
             });
         } else {
             closeTagAutocompleteDropdown();
@@ -512,24 +655,59 @@ export function handleTagAutocomplete(e, getTagsFn) {
     }
 }
 
+/**
+ * 🛠️ Helper: แทรกข้อความ Autocomplete และจัดการเคอร์เซอร์
+ */
+function insertAutocompleteText(input, before, selected, after, isContentEditable) {
+    const newVal = before + selected + ' ' + after;
+    const newPos = (before + selected + ' ').length;
+
+    if (isContentEditable) {
+        input.innerText = newVal;
+        input.focus();
+        const range = document.createRange();
+        const sel = window.getSelection();
+        
+        // ค้นหา Node ข้อความเพื่อวางเคอร์เซอร์
+        let charCount = 0;
+        const walk = document.createTreeWalker(input, NodeFilter.SHOW_TEXT, null, false);
+        let node;
+        while (node = walk.nextNode()) {
+            if (charCount + node.length >= newPos) {
+                range.setStart(node, newPos - charCount);
+                range.collapse(true);
+                break;
+            }
+            charCount += node.length;
+        }
+        sel.removeAllRanges();
+        sel.addRange(range);
+        applySyntaxHighlighting(input);
+    } else {
+        input.value = newVal;
+        input.focus();
+        input.setSelectionRange(newPos, newPos);
+    }
+}
+
 let activeDropdown = null;
 let focusedTagIndex = -1;
 
-function showTagAutocompleteDropdown(input, tags, onSelect) {
+function showTagAutocompleteDropdown(input, tags, onSelect, icon = '#') {
     closeTagAutocompleteDropdown();
 
     const rect = input.getBoundingClientRect();
     const dropdown = document.createElement('div');
     dropdown.className = 'tag-autocomplete-dropdown';
     dropdown.style.left = `${rect.left + window.scrollX}px`;
-    dropdown.style.top = `${rect.bottom + window.scrollY + 5}px`;
+    dropdown.style.top = `${rect.bottom + window.scrollY + 2}px`;
     dropdown.style.width = `${rect.width}px`;
     focusedTagIndex = -1;
 
     tags.forEach((tag, idx) => {
         const item = document.createElement('div');
         item.className = 'tag-autocomplete-item';
-        item.innerHTML = `<span style="opacity:0.7; margin-right:8px;">#</span> <span>${tag}</span>`;
+        item.innerHTML = `<span style="opacity:0.7; margin-right:8px;">${icon}</span> <span>${tag}</span>`;
         item.onclick = (e) => {
             e.preventDefault();
             e.stopPropagation();
