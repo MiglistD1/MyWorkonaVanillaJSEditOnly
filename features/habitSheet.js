@@ -1,8 +1,10 @@
 // features/habitSheet.js
-import { saveData, getAppSettings, getCurrentSpace } from '../core/storage.js';
+import { saveData, getAppSettings, getCurrentSpace, setFilterTags, setFilterMode, getFilterTags } from '../core/storage.js';
 import { renderTasks } from './todoManager.js';
 import Sortable from '../sortable.esm.js';
 import { svgTrashRed } from '../core/icons.js';
+import { generateMiniTagsBtn } from '../core/ui-helpers.js';
+import { renderAll } from '../core/contentManager.js';
 
 // --- 1. เติม export เพื่อให้หน้าจอหลัก (todoManager) เรียกใช้ได้ ---
 export function checkAndResetHabits(space) {
@@ -178,7 +180,7 @@ function updateHabitToggleUI() {
     btn.innerHTML = `<svg class="svg-icon-sm"><use href="#icon-${isActive ? 'eye' : 'eye-off'}"></use></svg>`;
 }
 
-function renderHabitList(space) {
+export function renderHabitList(space) {
     const container = document.getElementById('habit-list-container');
     const progressText = document.getElementById('habit-progress-percent');
     const progressBar = document.getElementById('habit-progress-bar');
@@ -211,11 +213,18 @@ function renderHabitList(space) {
     const hideCompleted = getAppSettings().hideCompletedHabits;
     const showActions = getAppSettings().showHabitActions;
 
+    // 🟢 เตรียมค่า Filter ปัจจุบันเพื่อเปรียบเทียบ
+    const currentFilters = getFilterTags().map(t => t.toUpperCase());
+
     space.habits.forEach((habit, index) => {
         if (hideCompleted && habit.completed) return; // กรองออกถ้าโหมดซ่อนเปิดอยู่
 
         if (typeof habit.streak === 'undefined') habit.streak = 0;
         if (typeof habit.resetInterval === 'undefined') habit.resetInterval = 1;
+
+        // 🟢 ตรวจสอบว่า Habit นี้ถูก Filter อยู่หรือไม่
+        const hTags = (habit.tags || []).map(t => t.toUpperCase());
+        const isFilterActive = hTags.length > 0 && hTags.length === currentFilters.length && hTags.every(t => currentFilters.includes(t));
 
         // ดึงวันที่กดติ๊กถูกล่าสุด (ถ้าไม่มี ให้ใช้วันที่เคยทำ หรือวันนี้)
         const lastDoneStr = habit.lastCompletedDate || habit.lastUpdate || todayStr;
@@ -226,11 +235,6 @@ function renderHabitList(space) {
         const m = monthsEn[lastDateObj.getMonth()];
         const y = lastDateObj.getFullYear().toString().slice(-2);
         const formattedDate = `${d}/${m}/${y}`;
-
-        // --- ซ่อนข้อความสีแดง ถ้าทำงานวันนี้เสร็จแล้ว ---
-        const statusText = !habit.completed 
-            ? `<span style="color:#ef4444; margin-left:4px; font-weight:500;">(Last done ${formattedDate} (${diffDays} days ago))</span>` 
-            : '';
 
         const el = document.createElement('div');
         el.setAttribute('data-index', index);
@@ -257,10 +261,13 @@ function renderHabitList(space) {
                     ${habit.text}
                 </div>
                 <div style="display:flex; align-items:center; gap:10px; margin-top:2px;">
-                    <div style="font-size:11px; color:#888;">
-                        Streak: <span style="font-weight:700; color:#333;">🔥 ${habit.streak} Days</span>
-                        ${statusText}
-                    </div>
+                    ${generateMiniTagsBtn(habit.tags, 'habit', index)}
+                    ${(habit.tags && habit.tags.length > 0) ? `
+                        <button class="btn-icon filter-habit-tag-btn ${isFilterActive ? 'active' : ''}" data-index="${index}" title="Filter items by these tags" style="padding:2px; color:var(--primary-color);">
+                            <svg class="svg-icon-sm"><use href="#icon-eye"></use></svg>
+                        </button>
+                    ` : ''}
+
                     ${showActions ? `
                         <div class="habit-cycle-badge" data-index="${index}" style="font-size:10px; color:var(--text-muted); background:var(--bg-body); padding:1px 6px; border-radius:4px; border:1px solid var(--border-color); display:flex; align-items:center; gap:2px;" title="Click to change cycle">
                             Cycle: <span style="font-weight:700; color:var(--primary-color);">${habit.resetInterval}</span>d
@@ -378,6 +385,22 @@ function renderHabitList(space) {
             }, isChecked ? 800 : 0); // เพิ่มเป็น 800ms ให้เท่ากับระบบ Task
         });
 
+        // --- 🔘 Event: Filter by Tag ---
+        const filterBtn = el.querySelector('.filter-habit-tag-btn');
+        if (filterBtn) {
+            filterBtn.onclick = (e) => {
+                e.stopPropagation();
+                // 🟢 Toggle Logic: ถ้าเปิดอยู่ให้ปิด ถ้าปิดอยู่ให้เปิด
+                if (isFilterActive) {
+                    setFilterTags([]);
+                } else if (hTags.length > 0) {
+                    setFilterTags(hTags);
+                    setFilterMode('OR');
+                }
+                renderAll();
+            };
+        }
+
         const delBtn = el.querySelector('.delete-habit');
         if (delBtn) delBtn.addEventListener('click', () => { // 🟢 ปรับปรุง: เพิ่ม Guard ป้องกัน Error ถ้าปุ่มถูกซ่อน
             if(confirm('Delete this habit?')) {
@@ -479,6 +502,7 @@ function handleAddHabit(space) {
         if (!space.habits) space.habits = [];
         space.habits.push({ 
             text: text, 
+            tags: [], // 🟢 เพิ่มพื้นที่เก็บป้ายกำกับ
             completed: false, 
             streak: 0,
             resetInterval: interval,

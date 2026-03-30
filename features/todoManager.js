@@ -1,10 +1,23 @@
 import Sortable from '../sortable.esm.js';
-import { getCurrentSpace, saveData, getShortDate, getAppSettings, setCurrentSpaceId, getSpaces } from '../core/storage.js';
+import { getCurrentSpace, saveData, getShortDate, getAppSettings, setCurrentSpaceId, getSpaces, getFilterTags } from '../core/storage.js';
 import { svgEdit, svgTrashRed } from '../core/icons.js';
-import { generateMiniTagsBtn, generateTaskHTML, attachSubtaskEventListeners, attachTaskInlineEditListeners } from '../core/ui-helpers.js';
+import { generateMiniTagsBtn, generateTaskHTML, attachSubtaskEventListeners, attachTaskInlineEditListeners, handleTagAutocomplete } from '../core/ui-helpers.js';
+    const taskInput = document.getElementById('new-task-input');
+    if (taskInput) {
+        taskInput.addEventListener('input', (e) => handleTagAutocomplete(e, () => getCurrentSpace()?.tags || []));
+        taskInput.addEventListener('focus', () => {
+            if (taskInput.value.trim() === "") {
+                const currentFilters = (getFilterTags() || []).filter(t => !['ALL', 'UNTAGGED', 'AI', 'HALF SCREEN'].includes(t.toUpperCase()));
+                if (currentFilters.length > 0) {
+                    taskInput.value = '#1 ';
+                }
+            }
+        });
+    }
+
 import { svgRefresh, svgSpinner } from '../core/icons.js';
 import { syncAllGoogleTasks, createGoogleTask, updateGoogleTaskUI } from './googleTasks.js';
-import { checkAndResetHabits } from './habitSheet.js';
+import { checkAndResetHabits, renderHabitList } from './habitSheet.js';
 
 // State & Callbacks
 let fetchGoogleAPI = null;
@@ -85,6 +98,28 @@ export function initTodoManager(callbacks) {
             saveData();
             onRenderCallback();
         });
+    }
+
+    // 🟢 Expand All Subtasks
+    const btnExpandAll = document.getElementById('btn-expand-all-subtasks');
+    if (btnExpandAll) {
+        btnExpandAll.onclick = () => {
+            const space = getCurrentSpace();
+            if (!space || !space.tasks) return;
+            space.tasks.forEach(t => { if (t.subtasks && t.subtasks.length > 0) t.subtasksHidden = false; });
+            saveData(); onRenderCallback();
+        };
+    }
+
+    // 🟢 Collapse All Subtasks
+    const btnCollapseAll = document.getElementById('btn-collapse-all-subtasks');
+    if (btnCollapseAll) {
+        btnCollapseAll.onclick = () => {
+            const space = getCurrentSpace();
+            if (!space || !space.tasks) return;
+            space.tasks.forEach(t => { if (t.subtasks && t.subtasks.length > 0) t.subtasksHidden = true; });
+            saveData(); onRenderCallback();
+        };
     }
 
         // --- Google Keep Mode Logic ---
@@ -220,6 +255,18 @@ export function initTodoManager(callbacks) {
         const space = getCurrentSpace();
         if (!space) return;
         
+        // NEW: Toggle Subtasks Visibility
+        const toggleSubtasksBtn = e.target.closest('.toggle-subtasks-btn');
+        if (toggleSubtasksBtn) {
+            const idx = parseInt(toggleSubtasksBtn.dataset.index);
+            if (space.tasks[idx]) {
+                space.tasks[idx].subtasksHidden = !space.tasks[idx].subtasksHidden;
+                saveData();
+                onRenderCallback();
+            }
+            return; // Prevent other click handlers from firing
+        }
+
         // Collapsible Toggle Logic
         const toggleBtn = e.target.closest('.toggle-actions-btn');
         if (toggleBtn) {
@@ -231,6 +278,77 @@ export function initTodoManager(callbacks) {
                 collapsibleActions.style.display = isHidden ? 'flex' : 'none';
                 toggleBtn.classList.toggle('expanded');
             }
+        }
+
+        // 🔘 Main Task Sync Toggle
+        if (e.target.closest('.main-task-sync-toggle-btn')) {
+            const btn = e.target.closest('.main-task-sync-toggle-btn');
+            const idx = parseInt(btn.getAttribute('data-index'));
+            const task = space.tasks[idx];
+            if (!task) return;
+
+            const token = getGoogleAuthToken();
+            const listId = getCurrentGoogleListId();
+
+            if (!token) {
+                alert("Please connect to Google first");
+                return;
+            }
+
+            if (task.googleTaskId) {
+                // ปิดการซิงค์: ลบออกจาก Google
+                await fetchGoogleAPI(`/lists/${listId}/tasks/${task.googleTaskId}`, 'DELETE');
+                task.googleTaskId = null;
+            } else {
+                // เปิดการซิงค์: สร้างบน Google
+                const gTitle = `${task.text} (S: ${space.name})`;
+                let gBody = { title: gTitle };
+                if (task.dueDate) { gBody.due = new Date(task.dueDate).toISOString(); }
+                const gTask = await createGoogleTask(listId, gBody);
+                if (gTask && gTask.id) {
+                    task.googleTaskId = gTask.id;
+                }
+            }
+            saveData();
+            onRenderCallback();
+        }
+
+        // 🔘 Archive Task Button (Main Task)
+        if (e.target.closest('.archive-task-btn')) {
+            const btn = e.target.closest('.archive-task-btn');
+            const idx = parseInt(btn.getAttribute('data-index'));
+            const task = space.tasks[idx];
+            if (task) {
+                task.completed = true;
+                task.completedAt = Date.now();
+                task.isProminent = false;
+                // Google Sync
+                if (task.googleTaskId && getGoogleAuthToken()) {
+                    fetchGoogleAPI(`/lists/${getCurrentGoogleListId()}/tasks/${task.googleTaskId}`, 'PATCH', { status: 'completed' });
+                }
+                // Auto-complete subtasks
+                if (task.subtasks) {
+                    task.subtasks.forEach(sub => { sub.completed = true; });
+                }
+                saveData(); onRenderCallback();
+            }
+            return;
+        }
+
+        // 🔘 Archive Subtask Button
+        if (e.target.closest('.archive-subtask-btn')) {
+            const btn = e.target.closest('.archive-subtask-btn');
+            const pIdx = parseInt(btn.getAttribute('data-parent-index'));
+            const sIdx = parseInt(btn.getAttribute('data-index'));
+            const task = space.tasks[pIdx]?.subtasks?.[sIdx];
+            if (task) {
+                task.completed = true;
+                if (task.googleTaskId && getGoogleAuthToken()) {
+                    fetchGoogleAPI(`/lists/${getCurrentGoogleListId()}/tasks/${task.googleTaskId}`, 'PATCH', { status: 'completed' });
+                }
+                saveData(); onRenderCallback();
+            }
+            return;
         }
 
         // Edit Task
@@ -249,9 +367,23 @@ export function initTodoManager(callbacks) {
             saveData(); onRenderCallback();
         }
         // Restore Task
+        // 🟢 NEW: Restore Task (from trash)
         if (e.target.closest('.restore-task-btn')) {
             const idx = parseInt(e.target.closest('.restore-task-btn').dataset.index);
-            space.tasks[idx].isDeleted = false; saveData(); onRenderCallback();
+            const task = space.tasks[idx];
+            if (task) {
+                task.isDeleted = false;
+                task.deletedAt = null;
+                task.expiryAt = null;
+                if (task.subtasks) {
+                    task.subtasks.forEach(sub => {
+                        sub.isDeleted = false;
+                        sub.deletedAt = null;
+                        sub.expiryAt = null;
+                    });
+                }
+                saveData(); onRenderCallback();
+            }
         }
         // Permanent Delete Task
         if (e.target.closest('.delete-task-perm-btn')) {
@@ -261,6 +393,20 @@ export function initTodoManager(callbacks) {
                     fetchGoogleAPI(`/lists/${getCurrentGoogleListId()}/tasks/${space.tasks[idx].googleTaskId}`, 'DELETE'); 
                 }
                 space.tasks.splice(idx, 1); saveData(); onRenderCallback();
+            }
+        }
+        // 🟢 NEW: Permanent Delete Subtask
+        if (e.target.closest('.delete-subtask-perm-btn')) {
+            const btn = e.target.closest('.delete-subtask-perm-btn');
+            const pIdx = parseInt(btn.getAttribute('data-parent-index'));
+            const sIdx = parseInt(btn.getAttribute('data-sub-index'));
+            if (confirm("Delete subtask permanently?")) {
+                const subtask = space.tasks[pIdx]?.subtasks?.[sIdx];
+                if (subtask && subtask.googleTaskId && getGoogleAuthToken()) {
+                    fetchGoogleAPI(`/lists/${getCurrentGoogleListId()}/tasks/${subtask.googleTaskId}`, 'DELETE');
+                }
+                space.tasks[pIdx].subtasks.splice(sIdx, 1);
+                saveData(); onRenderCallback();
             }
         }
 
@@ -428,11 +574,35 @@ export function initTodoManager(callbacks) {
             setTimeout(() => {
                 const space = getCurrentSpace(); 
                 const task = space.tasks[index];
-                task.completed = isChecked; 
-                task.completedAt = isChecked ? Date.now() : null;
-                
                 if (isChecked) {
+                    task.isDeleted = true;
+                    task.deletedAt = Date.now();
+                    const days = getAppSettings().autoDeleteDays || 30;
+                    task.expiryAt = task.deletedAt + (days * 24 * 60 * 60 * 1000);
+                    task.completed = false; // เปลี่ยนเป็น false เพื่อให้กู้คืนมาเป็นงานปกติได้
                     task.isProminent = false;
+                    // 🟢 NEW: Mark all subtasks as deleted as well
+                    if (task.subtasks) {
+                        task.subtasks.forEach(sub => {
+                            sub.isDeleted = true;
+                            sub.deletedAt = task.deletedAt;
+                            sub.expiryAt = task.expiryAt;
+                            sub.completed = false; // Subtasks should also be restorable as uncompleted
+                        });
+                    }
+                } else {
+                    task.completed = false;
+                    task.completedAt = null;
+                    task.isDeleted = false;
+                    // 🟢 NEW: Unmark all subtasks as deleted as well
+                    if (task.subtasks) {
+                        task.subtasks.forEach(sub => {
+                            sub.isDeleted = false;
+                            sub.deletedAt = null;
+                            sub.expiryAt = null;
+                            sub.completed = false;
+                        });
+                    }
                 }
                 
                 if (task.googleTaskId && getGoogleAuthToken()) { 
@@ -463,6 +633,7 @@ export function initTodoManager(callbacks) {
 
         if (e.key === 'Enter') {
             e.preventDefault(); // Stop page refresh
+            input.dataset.isSubmitting = "true"; // 🟢 มาร์คไว้ว่ากำลังบันทึก ป้องกัน Blur ล้างค่า
             const pIdx = parseInt(input.getAttribute('data-parent'));
             const value = input.value.trim();
             const space = getCurrentSpace();
@@ -495,6 +666,8 @@ export function initTodoManager(callbacks) {
     // จัดการเหตุการณ์การหลุดโฟกัส (Blur) เพื่อปิดช่อง Input
     const handleSubtaskBlur = (e) => {
         if (e.target.classList.contains('subtask-add-input') || e.target.classList.contains('subtask-edit-input')) {
+            if (e.target.dataset.isSubmitting === "true") return; // 🟢 ข้ามการล้างค่าถ้าเป็นการกดยืนยัน
+
             setTimeout(() => {
                 // If focus shifted to another subtask input (auto-create flow), do not clear state
                 if (document.activeElement && document.activeElement.classList.contains('subtask-add-input')) {
@@ -512,23 +685,9 @@ export function initTodoManager(callbacks) {
         taskListEl.addEventListener('contextmenu', handleTaskContextMenu);
         // The main task checkbox change is handled here
         taskListEl.addEventListener('change', handleTaskChange); 
-        // Subtask checkbox changes are handled by attachSubtaskEventListeners
-        // So, we don't need a separate listener here for subtasks.
-        // The attachSubtaskEventListeners function will be updated to include Google Tasks sync.
 
-        taskListEl.addEventListener('keydown', (e) => {
-            handleSubtaskInputKey(e);
-            // เมื่อกด Enter ในขณะแก้ไขชื่อ Subtask ให้ตั้งค่าเตรียมสร้างอันใหม่
-            if (e.key === 'Enter' && e.target.classList.contains('task-actual-text')) {
-                const li = e.target.closest('li');
-                if (li && li.dataset.type === 'subtask') {
-                    const subList = li.closest('.subtask-list');
-                    if (subList) {
-                        addingSubtaskToIndex = parseInt(subList.dataset.parentIndex);
-                    }
-                }
-            }
-        });
+        taskListEl.addEventListener('keydown', handleSubtaskInputKey); // 🟢 กู้คืน: จัดการ Enter ในช่อง Add Subtask
+
         taskListEl.addEventListener('focusout', handleSubtaskBlur);
 
         // Add Inline Editing for Main and Subtasks
@@ -537,6 +696,53 @@ export function initTodoManager(callbacks) {
             getGoogleAuthToken,
             getCurrentGoogleListId,
             saveData,
+            onAddMainTaskAfter: (space, index) => {
+                const newTask = { text: "", completed: false, tags: [], dueDate: null, createdAt: Date.now(), googleTaskId: null, isProminent: false, subtasks: [] };
+                space.tasks.splice(index + 1, 0, newTask);
+                saveData();
+                onRenderCallback();
+                setTimeout(() => {
+                    const items = document.querySelectorAll('#task-list .task-actual-text');
+                    const target = Array.from(items).find(el => parseInt(el.closest('li').dataset.index) === index + 1);
+                    if (target) {
+                        target.focus();
+                        const range = document.createRange();
+                        range.selectNodeContents(target);
+                        const sel = window.getSelection();
+                        sel.removeAllRanges();
+                        sel.addRange(range);
+                    }
+                }, 100);
+            },
+            onAddSubtaskAfter: (space, index, li) => {
+                const subList = li.closest('.subtask-list');
+                if (subList) {
+                    addingSubtaskToIndex = parseInt(subList.dataset.parentIndex);
+                    onRenderCallback();
+                    setTimeout(() => {
+                        const input = document.querySelector(`.subtask-add-input[data-parent="${addingSubtaskToIndex}"]`);
+                        if (input) input.focus();
+                    }, 50);
+                }
+            },
+            onDeleteEmptyTask: (space, index, type, li) => {
+                let task;
+                if (type === 'task') {
+                    task = space.tasks[index];
+                } else {
+                    const pIdx = parseInt(li.closest('.subtask-list').dataset.parentIndex);
+                    task = space.tasks[pIdx]?.subtasks?.[index];
+                }
+                if (task && task.googleTaskId && getGoogleAuthToken()) {
+                    fetchGoogleAPI(`/lists/${getCurrentGoogleListId() || '@default'}/tasks/${task.googleTaskId}`, 'DELETE');
+                }
+                if (type === 'task') space.tasks.splice(index, 1);
+                else {
+                    const pIdx = parseInt(li.closest('.subtask-list').dataset.parentIndex);
+                    space.tasks[pIdx].subtasks.splice(index, 1);
+                }
+                saveData(); onRenderCallback();
+            },
             onUpdate: () => {
                 onRenderCallback();
                 if (addingSubtaskToIndex !== null) {
@@ -575,6 +781,45 @@ export function initTodoManager(callbacks) {
             getGoogleAuthToken,
             getCurrentGoogleListId,
             saveData,
+            onAddMainTaskAfter: (space, index) => {
+                // 🟢 สร้างงานหลักใหม่ต่อท้ายตำแหน่งที่เพิ่งพิมพ์เสร็จ
+                const newTask = { text: "", completed: false, tags: [], dueDate: null, createdAt: Date.now(), googleTaskId: null, isProminent: false, subtasks: [] };
+                space.tasks.splice(index + 1, 0, newTask);
+                saveData();
+                onRenderCallback();
+
+                // Focus งานที่เพิ่งสร้างขึ้นมาใหม่
+                setTimeout(() => {
+                    const items = document.querySelectorAll('#task-list .task-actual-text');
+                    const target = Array.from(items).find(el => parseInt(el.closest('li').dataset.index) === index + 1);
+                    if (target) {
+                        target.focus();
+                        const range = document.createRange();
+                        range.selectNodeContents(target);
+                        const sel = window.getSelection();
+                        sel.removeAllRanges();
+                        sel.addRange(range);
+                    }
+                }, 100);
+            },
+            onDeleteEmptyTask: (space, index, type, li) => {
+                let task;
+                if (type === 'task') {
+                    task = space.tasks[index];
+                } else {
+                    const pIdx = parseInt(li.closest('.subtask-list').dataset.parentIndex);
+                    task = space.tasks[pIdx]?.subtasks?.[index];
+                }
+                if (task && task.googleTaskId && getGoogleAuthToken()) {
+                    fetchGoogleAPI(`/lists/${getCurrentGoogleListId() || '@default'}/tasks/${task.googleTaskId}`, 'DELETE');
+                }
+                if (type === 'task') space.tasks.splice(index, 1);
+                else {
+                    const pIdx = parseInt(li.closest('.subtask-list').dataset.parentIndex);
+                    space.tasks[pIdx].subtasks.splice(index, 1);
+                }
+                saveData(); onRenderCallback();
+            },
             onUpdate: () => {
                 onRenderCallback();
                 if (addingSubtaskToIndex !== null) {
@@ -702,12 +947,35 @@ export function initTodoManager(callbacks) {
 async function addTask() { 
     const input = document.getElementById('new-task-input'); 
     const dateInput = document.getElementById('new-task-date');
-    const text = input.value.trim();
-    if (text !== '') { 
+    let text = input.value.trim();
+    if (text !== '') {
         input.disabled = true; 
-        const space = getCurrentSpace(); 
+        const space = getCurrentSpace();
+
+        // 🟢 Shortcut #1: แทนที่ด้วยป้ายกำกับที่กำลังกรองอยู่ (ยกเว้นป้ายระบบ)
+        const currentFilters = (getFilterTags() || []).filter(t => !['ALL', 'UNTAGGED', 'AI', 'HALF SCREEN'].includes(t.toUpperCase()));
+        if (text.includes('#1') && currentFilters.length > 0) {
+            const filterTagsString = currentFilters.map(t => '#' + t).join(' ');
+            text = text.replace(/#1/g, filterTagsString);
+        }
+
+        // 🟢 Extract tags from text (e.g., #Work #Urgent)
+        let tags = [];
+        const tagMatches = text.match(/#([^\s#]+)/g);
+        if (tagMatches) {
+            tags = tagMatches.map(t => t.substring(1)); // Remove '#'
+            text = text.replace(/#([^\s#]+)/g, '').trim(); // Remove tags from title
+            if (!text && tags.length > 0) text = tags[0]; // Fallback if only tags were typed
+
+            // Add to space tags if new
+            if (!space.tags) space.tags = [];
+            tags.forEach(t => {
+                if (!space.tags.some(st => st.toUpperCase() === t.toUpperCase())) space.tags.push(t);
+            });
+        }
+
         // Initialize new task with isProminent: false
-        let newTask = { text: text, completed: false, tags: [], dueDate: dateInput.value || null, createdAt: Date.now(), googleTaskId: null, isProminent: false, subtasks: [] }; 
+        let newTask = { text: text, completed: false, tags: tags, dueDate: dateInput.value || null, createdAt: Date.now(), googleTaskId: null, isProminent: false, subtasks: [], subtasksHidden: false }; 
 
         if (isGoogleSyncEnabled() && getGoogleAuthToken()) {
             input.placeholder = "Syncing... ☁️";
@@ -747,7 +1015,10 @@ export function openTaskEditModal(idx, fromCommandCenter = false, subId = null) 
 }
 
 async function saveEditedTask() {
-    const space = getCurrentSpace();
+    // ใน Master View, getCurrentSpace() จะคืนค่า Space ที่เราสับเปลี่ยนไว้ก่อนเปิด Modal
+    const space = getCurrentSpace(); 
+    if (!space) return;
+
     let task = space.tasks[editingTaskLocalIndex];
     
     if (editingSubtaskLocalId) {
@@ -803,7 +1074,7 @@ async function saveEditedTask() {
     saveData(); 
     if (_fromCommandCenter) {
         setCurrentSpaceId(0); // Reset to Command Center
-        renderDefaultDashboard(); // Re-render Command Center
+        if (window.renderDefaultDashboard) window.renderDefaultDashboard(); // 🟢 แก้ไข: เรียกผ่าน window เพื่อป้องกัน Reference Error
     } else {
         onRenderCallback(); // Original callback for regular spaces
     }
@@ -873,6 +1144,15 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
     if (trashListUI) trashListUI.innerHTML = '';
     
     if(!space.tasks) space.tasks = [];
+
+    // 🟢 ตรวจสอบว่ามีงานที่มี Subtask หรือไม่ เพื่อซ่อน/แสดงปุ่ม Expand/Collapse All
+    const btnExpandAll = document.getElementById('btn-expand-all-subtasks');
+    const btnCollapseAll = document.getElementById('btn-collapse-all-subtasks');
+    if (btnExpandAll && btnCollapseAll) {
+        const hasSubtasks = space.tasks.some(t => t && !t.completed && !t.isDeleted && t.subtasks && t.subtasks.length > 0);
+        btnExpandAll.style.display = hasSubtasks ? 'inline-flex' : 'none';
+        btnCollapseAll.style.display = hasSubtasks ? 'inline-flex' : 'none';
+    }
 
     // Update Google Task UI (Space-specific list settings)
     updateGoogleTaskUI(space);
@@ -959,7 +1239,7 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
             isProminentHidden: isProminentHidden,
             isFiltered: isFiltered, // This is for drag-handle visibility
             showActions: space.showTaskActions, // Pass the new state
-            isTrash: task.isDeleted,
+            // isTrash: task.isDeleted, // Removed, using task.isDeleted directly
             addingSubtaskToIndex            
         });
         
@@ -969,6 +1249,12 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
     });
 
     trashContainer.style.display = trashListUI.children.length > 0 ? 'block' : 'none';
+
+    // 🟢 อัปเดตข้อมูลใน Habit Modal ทันที (ถ้ามันเปิดอยู่) เพื่อแก้บัค Tag ไม่อัปเดตล่าสุด
+    const habitModal = document.getElementById('habit-modal');
+    if (habitModal && habitModal.style.display !== 'none') {
+        renderHabitList(space);
+    }
 
     if (!isFiltered && taskListUI) {
         if (taskListUI.sortable) taskListUI.sortable.destroy();

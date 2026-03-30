@@ -7,7 +7,16 @@ import {
 export function applyAppSettings() {
     const appSettings = getAppSettings();
     document.documentElement.style.setProperty('--primary-color', appSettings.color);
+    document.documentElement.style.setProperty('--bg-body', appSettings.bgBody || "#f4f4f0");
+    document.documentElement.style.setProperty('--bg-spacebar', appSettings.bgSpacebar || "#ebebe6");
+    document.documentElement.style.setProperty('--bg-card', appSettings.bgCard || "#ffffff");
+    document.documentElement.style.setProperty('--text-main', appSettings.textMain || "#111111");
+    document.documentElement.style.setProperty('--app-font-size', (appSettings.fontSize || 15) + 'px');
+    document.documentElement.style.setProperty('--spacebar-text-color', appSettings.spacebarTextColor || "#555555");
+    document.documentElement.style.setProperty('--spacebar-font-size', (appSettings.spacebarFontSize || 13) + 'px');
+    
     document.documentElement.style.setProperty('--app-font', appSettings.font);
+    document.documentElement.style.setProperty('--note-font', appSettings.noteFont || appSettings.font);
     const titleEl = document.getElementById('display-app-title');
     if (titleEl) titleEl.innerText = appSettings.title;
     

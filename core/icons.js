@@ -6,7 +6,7 @@ export const svgTrashRed = `<svg class="svg-icon-sm delete-btn-red"><use href="#
 export const dragHandleSvg = `<div class="drag-handle" style="display:inline-block; cursor:grab; margin-right:8px;"><svg class="svg-icon-sm" style="opacity:0.5;"><use href="#icon-drag"></use></svg></div>`;
 export const svgCustomize = `<svg class="svg-icon-sm" style="margin-right:8px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"></circle></svg>`;
 export const svgShare = `<svg class="svg-icon-sm" style="margin-right:8px;"><use href="#icon-share"></use></svg>`;
-export const svgArchive = `<svg class="svg-icon-sm" style="margin-right:8px;"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>`;
+export const svgArchive = `<svg class="svg-icon-sm"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>`;
 export const svgUnarchive = `<svg class="svg-icon-sm" style="margin-right:8px;"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M12 16V8m-3 3 3-3 3 3"/></svg>`;
 export const svgPencil = `<svg class="svg-icon-sm"><use href="#icon-pencil"></use></svg>`;
 export const svgRestore = `<svg class="svg-icon-sm"><use href="#icon-rotate-ccw"></use></svg>`;

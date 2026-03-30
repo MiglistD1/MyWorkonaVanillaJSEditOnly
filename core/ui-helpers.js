@@ -1,4 +1,4 @@
-import { svgTag, dragHandleSvg, googleTasksIcon, svgEdit, svgTrashRed, svgPencil, svgRestore } from './icons.js';
+import { svgTag, dragHandleSvg, googleTasksIcon, svgEdit, svgTrashRed, svgPencil, svgRestore, svgArchive } from './icons.js';
 import { getShortDate, getAppSettings } from './storage.js';
 
 export function generateMiniTagsBtn(itemTags, type, index) {
@@ -133,6 +133,23 @@ export function generateTaskHTML(task, index, {
     if (!task) return '';
 
     const isSubtask = depth > 0;
+    const isCompletedOrDeleted = task.completed; // For line-through if completed
+    const isActuallyDeleted = task.isDeleted; // For trash-specific styling and buttons
+
+    // NEW: Toggle Subtasks Button HTML
+    let toggleSubtaskBtnHTML = '';
+    if (!isSubtask && task.subtasks && task.subtasks.length > 0) {
+        const isSubtasksHidden = task.subtasksHidden || false;
+        const icon = isSubtasksHidden ? '#icon-chevron-down' : '#icon-chevron-up'; // Minimal icons
+        const title = isSubtasksHidden ? 'Show Subtasks' : 'Hide Subtasks';
+        const prominentClass = !isSubtasksHidden ? 'active-red-prominent' : ''; // สีแดงเมื่อแสดง Subtask (ปุ่มหมายถึงซ่อน)
+        toggleSubtaskBtnHTML = `
+            <button class="btn-icon toggle-subtasks-btn ${prominentClass}" data-index="${index}" data-space-id="${spaceId}" title="${title}" style="margin-left: 8px;">
+                <svg class="svg-icon-sm"><use href="${icon}"></use></svg>
+            </button>
+        `;
+    }
+
     const svgBreakLink = `<svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.72 6.72 3 10.44a4 4 0 0 0 5.66 5.66l1.42-1.42M13.56 13.56l1.42-1.42a4 4 0 0 0-5.66-5.66l-1.42 1.42M8 12h8M3 21l18-18"/></svg>`;
     
     const prominentClass = (task.isProminent && !isSubtask) ? 'prominent' : '';
@@ -148,10 +165,10 @@ export function generateTaskHTML(task, index, {
     const editBtnClass = isMasterView ? 'edit-task-btn' : 'edit-task-text-btn';
     const cloudIndicator = (task.googleTaskId) ? `<span style="display: inline-flex; align-items: center; margin-right: 6px; flex-shrink: 0; color: #2684fc;">${googleTasksIcon}</span>` : '';
     
-    const isDateOverdue = task.dueDate && !task.completed && new Date(task.dueDate).setHours(0,0,0,0) < new Date().setHours(0,0,0,0);
+    const isDateOverdue = task.dueDate && !isCompletedOrDeleted && !isActuallyDeleted && new Date(task.dueDate).setHours(0,0,0,0) < new Date().setHours(0,0,0,0);
     const dateColor = isDateOverdue ? '#ef4444' : (isSubtask ? 'var(--primary-color)' : 'var(--text-muted)');
-    const textStyle = (task.completed) 
-        ? "flex: 1; word-break: break-word; white-space: normal; line-height: 1.4; color: var(--text-muted); text-decoration: line-through; opacity: 0.8;" 
+    const textStyle = (isCompletedOrDeleted || isActuallyDeleted) 
+        ? "flex: 1; word-break: break-word; white-space: normal; line-height: 1.4; color: var(--text-muted); text-decoration: line-through; opacity: 0.7;" 
         : `flex: 1; word-break: break-word; white-space: normal; line-height: 1.4; color: ${task.isProminent && !isSubtask ? 'var(--primary-color)' : 'var(--text-main)'}; ${task.isProminent && !isSubtask ? 'font-weight: 700;' : ''}`;
 
     let dateDisplay = task.dueDate ? getShortDate(new Date(task.dueDate)) : '';
@@ -183,7 +200,8 @@ export function generateTaskHTML(task, index, {
         }
 
         // เรนเดอร์คอนเทนเนอร์เสมอเพื่อให้เป็นเป้าหมายในการวาง (Drop Target) สำหรับงานหลักที่ถูกลากเข้ามา
-        subtasksHTML = `<ul class="subtask-list" data-parent-index="${index}">${subItems}</ul>`;
+        const subtaskListStyle = (task.subtasksHidden && task.subtasks && task.subtasks.length > 0) ? 'display: none;' : '';
+        subtasksHTML = `<ul class="subtask-list" data-parent-index="${index}" style="${subtaskListStyle}">${subItems}</ul>`;
     }
 
     const hasLink = task.linkData && task.linkData.url;
@@ -206,32 +224,43 @@ export function generateTaskHTML(task, index, {
 
     if (isTrash) {
         const countdown = getTrashCountdownText(task, getAppSettings().autoDeleteDays);
-        return `<li class="task-item" data-index="${index}" style="opacity:0.7;">
-            <div class="item-main-row" style="padding:4px 0;">
-                <span style="flex:1; text-decoration:line-through; font-size:13.5px;">${task.text}</span>
-                <span style="color:#ef4444; font-size:11px; font-weight:700; margin-right:8px;">${countdown}</span>
-                <div class="item-action-group"><button class="btn-icon restore-task-btn" data-index="${index}" title="Restore">${svgRestore}</button><button class="btn-icon delete-task-perm-btn" data-index="${index}">${svgTrashRed}</button></div>
-            </div></li>`;
+        return `<li class="task-item" data-index="${index}" data-type="task" ${isMasterView ? `data-space-id="${spaceId}"` : ''} style="list-style: none; width: 100%; opacity: 0.7;">
+            <div class="item-main-row" style="display: flex; align-items: center; gap: 6px; padding: 2px 0; width: 100%; min-height: 28px;">
+                <label class="google-task-checkbox">
+                    <input type="checkbox" class="${checkboxClass}" ${checkboxDataAttrs} checked>
+                    <div class="checkmark-circle">
+                        <svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg>
+                    </div>
+                </label>
+                <div style="flex: 1; min-width: 0; display: flex; align-items: center;">
+                    <span class="task-actual-text" contenteditable="true" style="${textStyle}">${task.text}</span>
+                </div>
+                <div class="item-action-group" style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-left: auto;">
+                    <span style="color:#ef4444; font-size:11px; font-weight:700; margin-right:8px;">${countdown}</span>
+                    <button class="btn-icon delete-task-perm-btn" data-index="${index}" ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="Delete Permanently">${svgTrashRed}</button>
+                </div>
+            </div>
+        </li>`;
     }
 
     let actionButtons = '';
     const subtaskSyncBtn = isSubtask ? `<button class="btn-icon subtask-sync-toggle-btn ${task.googleTaskId ? 'active' : ''}" data-parent-index="${parentIndex}" data-sub-index="${index}" ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="Toggle Google Tasks Sync" style="padding: 2px;">${googleTasksIcon}</button>` : '';
+    const maintaskSyncBtn = !isSubtask ? `<button class="btn-icon main-task-sync-toggle-btn ${task.googleTaskId ? 'active' : ''}" data-index="${index}" ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="Toggle Google Tasks Sync" style="padding: 2px;">${googleTasksIcon}</button>` : '';
 
     // Actions that are always visible (tags, prominent button, link button if it has a link)
     actionButtons += isSubtask ? `
         ${generateMiniTagsBtn(task.tags, 'subtask', index)}
-        ${hasLink ? linkBtnHTML : ''}
-        <button class="btn-icon convert-to-main-btn" data-parent-index="${parentIndex}" data-sub-index="${index}" title="Break into Main Task">${svgBreakLink}</button>
-        ${subtaskSyncBtn}
     ` : `
         ${generateMiniTagsBtn(task.tags, 'task', index)}
         ${hasLink ? linkBtnHTML : ''}
     `;
 
     // Content of the collapsible actions (add subtask, edit, delete, link button if no link)
-    const collapsibleActionsContent = `
-            ${!hasLink ? linkBtnHTML : ''}
-            ${(!isSubtask) ? `<button class="btn-icon add-subtask-btn" data-index="${index}" title="Add Sub-task" style="margin: 0; padding: 2px;"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>` : ''}
+    let collapsibleActionsContent = ` 
+            ${(!hasLink || isSubtask) ? linkBtnHTML : ''}
+            ${isSubtask ? `<button class="btn-icon convert-to-main-btn" data-parent-index="${parentIndex}" data-sub-index="${index}" title="Break into Main Task">${svgBreakLink}</button>` : `<button class="btn-icon add-subtask-btn" data-index="${index}" title="Add Sub-task" style="margin: 0; padding: 2px;"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>`}
+            ${!isCompletedOrDeleted && !isActuallyDeleted ? `<button class="btn-icon ${isSubtask ? 'archive-subtask-btn' : 'archive-task-btn'}" data-index="${index}" ${isSubtask ? `data-parent-index="${parentIndex}"` : ''} ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="Archive (Complete)">${svgArchive}</button>` : ''}
+            ${isSubtask ? subtaskSyncBtn : maintaskSyncBtn}
             ${isSubtask ? `
                 <button class="btn-icon edit-subtask-btn" data-parent-index="${parentIndex}" data-sub-index="${index}" data-id="${task.id}" title="Edit Sub-task">${svgEdit}</button>
                 <button class="btn-icon delete-subtask-btn" data-parent-index="${parentIndex}" data-sub-index="${index}" data-id="${task.id}" title="Delete Sub-task">${svgTrashRed}</button>
@@ -240,6 +269,19 @@ export function generateTaskHTML(task, index, {
                 <button class="btn-icon delete-task-btn" data-index="${index}" ${isMasterView ? `data-space-id="${spaceId}"` : ''} style="margin: 0; padding: 2px;">${svgTrashRed}</button>
             `}
     `;
+
+    // 🟢 NEW: Override collapsibleActionsContent for Deleted Tasks (Trash View)
+    if (isActuallyDeleted) {
+        const countdown = getTrashCountdownText(task, getAppSettings().autoDeleteDays);
+        collapsibleActionsContent = `
+            <span style="color:#ef4444; font-size:11px; font-weight:700; margin-right:8px;">${countdown}</span>
+            ${isSubtask ? `
+                <button class="btn-icon delete-subtask-perm-btn" data-parent-index="${parentIndex}" data-sub-index="${index}" data-id="${task.id}" title="Delete Permanently">${svgTrashRed}</button>
+            ` : `
+                <button class="btn-icon delete-task-perm-btn" data-index="${index}" ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="Delete Permanently">${svgTrashRed}</button>
+            `}
+        `;
+    }
 
     if (showActions) {
         // If global toggle is ON, render all actions directly visible
@@ -251,8 +293,8 @@ export function generateTaskHTML(task, index, {
     }
 
     const itemType = isSubtask ? 'subtask' : 'task';
-    return `
-    <li class="${isSubtask ? 'subtask-item' : 'task-item'} ${draggableClass} ${prominentClass}" data-index="${index}" data-type="${itemType}" ${isMasterView ? `data-space-id="${spaceId}"` : ''} style="list-style: none; width: 100%; margin-bottom: 0px; border-bottom: 1px solid transparent;">
+    return ` 
+    <li class="${isSubtask ? 'subtask-item' : 'task-item'} ${draggableClass} ${prominentClass}" data-index="${index}" data-type="${itemType}" ${isMasterView ? `data-space-id="${spaceId}"` : ''} style="list-style: none; width: 100%; margin-bottom: 0px; border-bottom: 1px solid transparent; opacity: ${isActuallyDeleted ? '0.7' : '1'};">
         <div class="item-main-row" style="display: flex; align-items: center; gap: 6px; padding: 2px 0; width: 100%; min-height: 28px;">
             ${handleHTML}
             ${!isSubtask ? `<button class="btn-icon btn-prominent-task ${task.isProminent ? 'active' : ''}" data-index="${index}" ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="Mark as Next Up" style="margin: 0; padding: 2px; flex-shrink: 0; color: ${task.isProminent ? 'var(--primary-color)' : 'var(--text-muted)'}; display: ${isProminentHidden ? 'none' : 'inline-flex'};">
@@ -260,8 +302,8 @@ export function generateTaskHTML(task, index, {
             </button>` : ''}
 
             <label class="google-task-checkbox">
-                <input type="checkbox" class="${checkboxClass}" ${checkboxDataAttrs} ${task.completed ? 'checked' : ''}>
-                <div class="checkmark-circle">
+                <input type="checkbox" class="${checkboxClass}" ${checkboxDataAttrs} ${isActuallyDeleted ? 'checked' : (task.completed ? 'checked' : '')}>
+                <div class="checkmark-circle" style="${isActuallyDeleted ? 'background-color: #ef4444; border-color: #ef4444;' : ''}">
                     <svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg>
                 </div>
             </label>
@@ -275,7 +317,8 @@ export function generateTaskHTML(task, index, {
             </div>
 
             <div class="item-action-group" style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-left: auto;">
-                <span class="task-date" style="font-size: 11px; opacity: 0.6; white-space: nowrap; color: ${dateColor};">${dateDisplay}</span> 
+                <span class="task-date" style="font-size: 11px; opacity: ${isActuallyDeleted ? '1' : '0.6'}; white-space: nowrap; color: ${isActuallyDeleted ? '#ef4444' : dateColor};">${dateDisplay}</span>
+                ${toggleSubtaskBtnHTML}
                 ${actionButtons}
             </div>
         </div>
@@ -340,6 +383,7 @@ export function attachTaskInlineEditListeners(container, getSpaceFn, callbacks =
         if (e.target.classList.contains('task-actual-text')) {
             if (e.key === 'Enter') {
                 e.preventDefault();
+                e.target.dataset.wasEnter = "true"; // 🟢 มาร์คไว้ว่าจบด้วยการกด Enter
                 e.target.blur(); // Trigger the blur event to save
             } else if (e.key === 'Escape') {
                 e.preventDefault();
@@ -366,6 +410,9 @@ export function attachTaskInlineEditListeners(container, getSpaceFn, callbacks =
     // Handle saving on blur
     container.addEventListener('blur', async (e) => {
         if (e.target.classList.contains('task-actual-text')) {
+            const wasEnter = e.target.dataset.wasEnter === "true";
+            delete e.target.dataset.wasEnter;
+
             const li = e.target.closest('li');
             if (!li) return;
             
@@ -385,6 +432,12 @@ export function attachTaskInlineEditListeners(container, getSpaceFn, callbacks =
             }
 
             if (taskObj) {
+                // 🟢 หากช่องชื่อว่างเปล่าและกด Enter ให้ลบ Task นั้นทิ้งอัตโนมัติ
+                if (newText === "" && wasEnter && typeof callbacks.onDeleteEmptyTask === 'function') {
+                    callbacks.onDeleteEmptyTask(space, idx, type, li);
+                    return;
+                }
+
                 const textChanged = taskObj.text !== newText;
                 if (newText === "" && textChanged) {
                     e.target.innerText = taskObj.text; // Revert if empty
@@ -401,7 +454,15 @@ export function attachTaskInlineEditListeners(container, getSpaceFn, callbacks =
                 }
                 
                 if (saveData) saveData();
-                if (onUpdate) onUpdate();
+
+                // 🟢 หากจบด้วย Enter ให้เรียก Callback เฉพาะทาง
+                if (wasEnter && type === 'task' && typeof callbacks.onAddMainTaskAfter === 'function') {
+                    callbacks.onAddMainTaskAfter(space, idx);
+                } else if (wasEnter && type === 'subtask' && typeof callbacks.onAddSubtaskAfter === 'function') {
+                    callbacks.onAddSubtaskAfter(space, idx, li);
+                } else if (onUpdate) {
+                    onUpdate();
+                }
             }
         }
     }, true);
@@ -414,4 +475,127 @@ export function attachTaskInlineEditListeners(container, getSpaceFn, callbacks =
             document.execCommand('insertText', false, text);
         }
     });
+}
+
+/**
+ * 🏷️ Setup tag autocomplete dropdown for an input field
+ */
+export function handleTagAutocomplete(e, getTagsFn) {
+    const input = e.target;
+    const value = input.value;
+    const cursorFallback = input.selectionStart;
+    
+    const textBeforeCursor = value.substring(0, cursorFallback);
+    const words = textBeforeCursor.split(/\s/);
+    const lastWord = words[words.length - 1];
+
+    // ตรวจจับ # เมื่อพิมพ์ (ต้องไม่ใช่พื้นที่ว่างเปล่าหลัง #)
+    if (lastWord.startsWith('#') && lastWord.length > 0) {
+        const query = lastWord.substring(1).toLowerCase();
+        const allTags = getTagsFn() || [];
+        const filteredTags = [...new Set(allTags)].filter(t => t.toLowerCase().includes(query));
+        
+        if (filteredTags.length > 0) {
+            showTagAutocompleteDropdown(input, filteredTags, (selectedTag) => {
+                const before = textBeforeCursor.substring(0, textBeforeCursor.length - lastWord.length);
+                const after = value.substring(cursorFallback);
+                input.value = before + '#' + selectedTag + ' ' + after;
+                input.focus();
+                const newPos = (before + '#' + selectedTag + ' ').length;
+                input.setSelectionRange(newPos, newPos);
+            });
+        } else {
+            closeTagAutocompleteDropdown();
+        }
+    } else {
+        closeTagAutocompleteDropdown();
+    }
+}
+
+let activeDropdown = null;
+let focusedTagIndex = -1;
+
+function showTagAutocompleteDropdown(input, tags, onSelect) {
+    closeTagAutocompleteDropdown();
+
+    const rect = input.getBoundingClientRect();
+    const dropdown = document.createElement('div');
+    dropdown.className = 'tag-autocomplete-dropdown';
+    dropdown.style.left = `${rect.left + window.scrollX}px`;
+    dropdown.style.top = `${rect.bottom + window.scrollY + 5}px`;
+    dropdown.style.width = `${rect.width}px`;
+    focusedTagIndex = -1;
+
+    tags.forEach((tag, idx) => {
+        const item = document.createElement('div');
+        item.className = 'tag-autocomplete-item';
+        item.innerHTML = `<span style="opacity:0.7; margin-right:8px;">#</span> <span>${tag}</span>`;
+        item.onclick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onSelect(tag);
+            closeTagAutocompleteDropdown();
+        };
+        dropdown.appendChild(item);
+    });
+
+    document.body.appendChild(dropdown);
+    activeDropdown = dropdown;
+
+    // ⌨️ Keyboard Navigation Logic
+    const handleKeys = (e) => {
+        const items = dropdown.querySelectorAll('.tag-autocomplete-item');
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            focusedTagIndex = (focusedTagIndex + 1) % items.length;
+            updateActiveItem(items);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            focusedTagIndex = (focusedTagIndex - 1 + items.length) % items.length;
+            updateActiveItem(items);
+        } else if (e.key === 'Enter' && focusedTagIndex >= 0) {
+            e.preventDefault();
+            e.stopPropagation();
+            items[focusedTagIndex].click();
+        } else if (e.key === 'Escape') {
+            closeTagAutocompleteDropdown();
+        }
+    };
+
+    const updateActiveItem = (items) => {
+        items.forEach((item, i) => {
+            item.classList.toggle('active', i === focusedTagIndex);
+            if (i === focusedTagIndex) {
+                // Scroll into view if needed
+                item.scrollIntoView({ block: 'nearest' });
+            }
+        });
+    };
+
+    input.addEventListener('keydown', handleKeys);
+
+    // Cleanup function
+    const cleanup = () => {
+        input.removeEventListener('keydown', handleKeys);
+        document.removeEventListener('mousedown', clickOutside);
+    };
+
+    const clickOutside = (e) => {
+        if (!dropdown.contains(e.target) && e.target !== input) {
+            closeTagAutocompleteDropdown();
+            cleanup();
+        }
+    };
+
+    // Store cleanup on the element
+    dropdown._cleanup = cleanup;
+    document.addEventListener('mousedown', clickOutside);
+}
+
+function closeTagAutocompleteDropdown() {
+    if (activeDropdown) {
+        if (activeDropdown._cleanup) activeDropdown._cleanup();
+        activeDropdown.remove();
+        activeDropdown = null;
+    }
 }

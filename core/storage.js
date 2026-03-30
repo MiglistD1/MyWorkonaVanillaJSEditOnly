@@ -15,13 +15,32 @@ let editingItemState = { type: null, index: null };
 // --- App Settings ---
 let appSettings = {
   title: "My Workspace 2.0", icon: "🚀", color: "#4a86e8",
+  bgBody: "#f4f4f0",
+  bgSpacebar: "#ebebe6",
+  bgCard: "#ffffff",
+  textMain: "#111111",
+  fontSize: 15,
+  spacebarTextColor: "#555555",
+  spacebarFontSize: 13,
   font: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+  noteFont: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
   isTabsCollapsed: false, 
   isResourcesCollapsed: false, showTaskActions: false,
   isTasksCollapsed: false,
   isDarkMode: false, quickColors: ["#ff4d4f", "#4a86e8", "#52c41a"],
   quickNoteState: { float: false, collapsed: false, x: 100, y: 100, w: 350, h: 400 },
   habitState: { open: false, x: 400, y: 80 },
+  dashboardQuickNote: { 
+    isOpen: false, 
+    isPinned: false,
+    mode: 'local', 
+    content: "", 
+    keepUrl: "", 
+    x: 100, 
+    y: 100, 
+    w: 350, 
+    h: 400 
+  },
   hideCompletedHabits: false,
   showHabitActions: false,
   taskSectionOrder: 'todo-first', // 'todo-first' or 'note-first'
@@ -31,7 +50,16 @@ let appSettings = {
   exportSubfolder: "MyBackups",
   autoExportDays: 0,
   autoDeleteDays: 30, // ค่าเริ่มต้น 30 วัน
-  lastExportTimestamp: 0
+  lastExportTimestamp: 0,
+  focusPopupState: {
+    isOpen: false,
+    isMinimized: false,
+    x: 100,
+    y: 100,
+    w: 250,
+    h: 150,
+    collapsed: false
+  }
 };
 
 // URL Params Logic
@@ -76,7 +104,7 @@ export function saveData(immediate = false) {
     };
 
     if (immediate) performSave();
-    else saveTimeout = setTimeout(performSave, 500);
+    else saveTimeout = setTimeout(performSave, 200);
 }
 
 export function loadData(onLoadComplete) {
@@ -84,12 +112,12 @@ export function loadData(onLoadComplete) {
     // Add check for res to prevent undefined
     if (res && res.mySpacesData && res.mySpacesData.length > 0) {
       spaces = res.mySpacesData;
-      currentSpaceId = res.lastSpaceId || spaces[0].id;
+      currentSpaceId = (res.lastSpaceId !== undefined) ? res.lastSpaceId : spaces[0].id;
     } else {
-      spaces = [{ id: 1, name: "My First Space", iconType: "emoji", icon: "📁", tabs: [], resources: [], driveFiles: [], note: "", tasks: [], tags: [] }];
+      spaces = [{ id: 1, name: "My First Space", iconType: "emoji", icon: "📄", tabs: [], resources: [], driveFiles: [], note: "", tasks: [], tags: [] }];
     }
 
-    if (sharedSpaceId && spaces.some((s) => s.id === sharedSpaceId)) {
+    if (sharedSpaceId !== null && (sharedSpaceId === 0 || spaces.some((s) => s.id === sharedSpaceId))) {
       currentSpaceId = sharedSpaceId;
     }
     
@@ -97,6 +125,12 @@ export function loadData(onLoadComplete) {
         // Merge default settings to ensure new keys exist
         if(!res.appSettings.quickNoteState) res.appSettings.quickNoteState = { float: false, collapsed: false, x: 100, y: 100, w: 350, h: 400 };
         if(!res.appSettings.habitState) res.appSettings.habitState = { open: false, x: 400, y: 80 };
+        if(!res.appSettings.dashboardQuickNote) {
+            res.appSettings.dashboardQuickNote = { isOpen: false, isPinned: false, mode: 'local', content: "", keepUrl: "", x: 100, y: 100, w: 350, h: 400 };
+        } else if (res.appSettings.dashboardQuickNote.isPinned === undefined) {
+            res.appSettings.dashboardQuickNote.isPinned = false;
+        }
+        if(!res.appSettings.focusPopupState) res.appSettings.focusPopupState = { isOpen: false, isMinimized: false, x: 100, y: 100, w: 250, h: 150, collapsed: false };
         appSettings = { ...appSettings, ...res.appSettings }; 
     }
     

@@ -138,6 +138,14 @@ function toggleFolder(folderName) {
     
     if (folderName === activeFolder) return;
 
+    // 🟢 ห้ามพับถ้ามี Space ภายในที่กำลังอยู่ในเวลาทำงาน (Schedule Active)
+    const folderSpaces = getSpaces().filter(s => (s.folder || 'General') === folderName);
+    const hasActiveWork = folderSpaces.some(s => {
+        const status = getCombinedStatus(s);
+        return status.active && !status.isLocked;
+    });
+    if (hasActiveWork) return;
+
     if (!settings.collapsedFolders) settings.collapsedFolders = [];
     
     const idx = settings.collapsedFolders.indexOf(folderName);
@@ -304,7 +312,7 @@ export function renderSidebar() {
                     ${iconHTML}
                     <span class="status-indicator" style="margin-right:8px; display:none; align-items:center;"></span>
                 </div>
-                <span class="space-name-text" style="flex:1; word-break:break-word; white-space:normal; line-height:1.4;">
+                <span class="space-name-text" style="flex:1; line-height:1.4;">
                     ${space.name}
                 </span>
                 ${countdownHTML}
@@ -374,14 +382,21 @@ export function renderSidebar() {
         const currentSpace = allSpaces.find(s => s.id === getCurrentSpaceId());
         const activeFolder = currentSpace ? (currentSpace.folder || 'General') : null;
         
+        // 🟢 ตรวจสอบว่ามี Space ภายในที่กำลัง Active (Schedule/Focus) หรือไม่
+        const hasActiveWork = groups[folderName].some(s => {
+            const status = getCombinedStatus(s);
+            return status.active && !status.isLocked;
+        });
+        
         let isCollapsed = collapsedFolders.includes(folderName);
-        if (folderName === activeFolder) isCollapsed = false; // บังคับกางออกเสมอสำหรับ Active Folder
+        if (folderName === activeFolder || hasActiveWork) isCollapsed = false; // บังคับกางออกเสมอ
         
         const isLocked = settings.lockedFolders?.includes(folderName);
         
         const folderWrapper = document.createElement('div');
         const isGeneral = folderName === 'General';
         folderWrapper.className = 'folder-group' + (isGeneral ? ' static-folder' : '');
+        folderWrapper.classList.add(isCollapsed ? 'folder-collapsed' : 'folder-expanded');
         folderWrapper.dataset.folder = folderName;
 
         const fIcon = (settings.folderIcons && settings.folderIcons[folderName]) ? settings.folderIcons[folderName] : "📁";

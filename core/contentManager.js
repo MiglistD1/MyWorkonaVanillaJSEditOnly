@@ -11,9 +11,12 @@ import { renderTagBar } from '../components/tagBar.js';
 import { renderLaunchers } from '../features/customLaunchers.js';
 import { renderSidebar } from '../components/sidebar.js';
 import { renderDefaultDashboard } from '../features/defaultDashboard.js';
+import { renderDashboardQuickNote } from '../features/dashboardQuickNote.js';
+import { renderFocusPersistentPopup } from '../features/smartFlow.js';
 
 export function renderMainContent() {
   const spaceId = getCurrentSpaceId();
+  const globalSettings = getAppSettings();
   const mainGrid = document.getElementById('main-grid');
   const tagBar = document.getElementById('tag-bar-container');
   const defaultContainer = document.getElementById('default-dashboard-container');
@@ -25,8 +28,9 @@ export function renderMainContent() {
   document.querySelector('.workspace')?.classList.remove('hide-bars');
 
   // Update Command Center button active state
-  const btnCC = document.getElementById('btn-command-center');
-  if (btnCC) btnCC.style.color = (spaceId === 0) ? 'var(--primary-color)' : '';
+  document.querySelectorAll('.btn-cc-trigger').forEach(btn => {
+      btn.style.color = (spaceId === 0) ? 'var(--primary-color)' : '';
+  });
 
   // Handle Default Dashboard (Command Center) view
   if (spaceId === 0) {
@@ -37,12 +41,13 @@ export function renderMainContent() {
       if (fBar) fBar.style.display = 'none';
       if (toggleToolsBtn) toggleToolsBtn.style.display = 'none';
       if (defaultContainer) {
-          defaultContainer.style.display = 'flex';
-          defaultContainer.style.flexDirection = 'column';
+          defaultContainer.style.display = 'grid'; // เปลี่ยนจาก flex เป็น grid
           defaultContainer.className = 'dashboard-grid'; // CSS จะคุมเรื่อง scroll เอง
       }
       document.getElementById('current-space-title').innerText = "Command Center";
       renderDefaultDashboard();
+      renderDashboardQuickNote();
+      renderFocusPersistentPopup(); // 🟢 Render persistent popup in Command Center
       return;
   }
 
@@ -55,48 +60,8 @@ export function renderMainContent() {
   const space = getCurrentSpace(); if (!space) return;
   document.getElementById('current-space-title').innerText = space.name;
   
-  // --- Apply Space-Specific Theme ---
-  const globalSettings = getAppSettings();
-  const defaultColors = globalSettings.isDarkMode
-      ? { primary: globalSettings.color, body: '#191919', spacebar: '#202020', card: '#252525', text: '#eeeeee', textMuted: '#aaaaaa' }
-      : { primary: globalSettings.color, body: '#f4f4f0', spacebar: '#ebebe6', card: '#ffffff', text: '#111111', textMuted: '#555555' };
-
-  if (space.theme) {
-      document.documentElement.style.setProperty('--primary-color', space.theme.primary || defaultColors.primary);
-      document.documentElement.style.setProperty('--bg-spacebar', space.theme.bgSpacebar || space.theme.bgSidebar || defaultColors.spacebar);
-      document.documentElement.style.setProperty('--bg-body', space.theme.bgWorkspace || space.theme.bgBody || defaultColors.body);
-      document.documentElement.style.setProperty('--bg-card', space.theme.bgCard || defaultColors.card);
-      
-      // Typography Overrides
-      if (space.theme.textMain) document.documentElement.style.setProperty('--text-main', space.theme.textMain);
-      else document.documentElement.style.removeProperty('--text-main');
-
-      if (space.theme.fontFamily) document.documentElement.style.setProperty('--app-font', space.theme.fontFamily);
-      else document.documentElement.style.setProperty('--app-font', globalSettings.font); // Revert to global
-
-      if (space.theme.fontSize) document.documentElement.style.setProperty('--app-font-size', space.theme.fontSize + 'px');
-      else document.documentElement.style.removeProperty('--app-font-size');
-
-      if (space.theme.spacebarTextColor || space.theme.sidebarTextColor) document.documentElement.style.setProperty('--spacebar-text-color', space.theme.spacebarTextColor || space.theme.sidebarTextColor);
-      else document.documentElement.style.removeProperty('--spacebar-text-color');
-
-      if (space.theme.spacebarFontSize || space.theme.sidebarFontSize) document.documentElement.style.setProperty('--spacebar-font-size', (space.theme.spacebarFontSize || space.theme.sidebarFontSize) + 'px');
-      else document.documentElement.style.removeProperty('--spacebar-font-size');
-
-  } else {
-      // Revert to global settings if no space theme exists
-      document.documentElement.style.setProperty('--primary-color', defaultColors.primary);
-      document.documentElement.style.setProperty('--bg-spacebar', defaultColors.spacebar);
-      document.documentElement.style.setProperty('--bg-body', defaultColors.body);
-      document.documentElement.style.setProperty('--bg-card', defaultColors.card);
-      
-      // Revert Typography
-      document.documentElement.style.removeProperty('--text-main');
-      document.documentElement.style.setProperty('--app-font', globalSettings.font);
-      document.documentElement.style.removeProperty('--app-font-size');
-      document.documentElement.style.removeProperty('--spacebar-text-color');
-      document.documentElement.style.removeProperty('--spacebar-font-size');
-  }
+  // Note: All visual properties are now applied globally via applyAppSettings()
+  // called in renderAll() within contentManager.js
 
   // Headers
   const headers = space.headers || {};
@@ -134,6 +99,8 @@ export function renderMainContent() {
   renderDriveFiles(space, currentFilterTags, currentFilterMode, currentSearchQuery, renderAll);
   renderTasks(space, currentFilterTags, currentFilterMode, currentSearchQuery);
   renderQuickNotes(space);
+  renderDashboardQuickNote(); // 🟢 อัปเดตการแสดงผลตามสถานะ Pin เมื่อเปลี่ยน Space
+  renderFocusPersistentPopup(); // 🟢 Render persistent popup when switching to a regular space
 
   // Show/Hide features based on space settings
   const showTools = (space.showSchedule !== false);
@@ -147,6 +114,7 @@ export function renderAll() {
     renderSidebar(); 
     renderMainContent();
     renderLaunchers();
+    renderFocusPersistentPopup(); // 🟢 Render persistent popup when re-rendering all
 }
 
 function setupCollapsing() {

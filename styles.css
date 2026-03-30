@@ -30,7 +30,7 @@ body { margin: 0; font-family: var(--app-font); display: flex; height: 100vh; ba
 
 .space-group { padding: 10px 0; overflow-y: auto;}
 .space-group-title { font-size: 11px; text-transform: uppercase; padding: 0 20px 10px; letter-spacing: 1px; color: var(--text-muted); font-weight: 700; display:flex; justify-content: space-between; align-items: center;}
-.space-item { padding: 8px 12px; margin: 2px 8px; border-radius: 6px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: background 0.2s, color 0.2s; font-size: var(--spacebar-font-size, 13px); white-space: nowrap; font-weight: 500; color: var(--spacebar-text-color, var(--text-muted)); }
+.space-item { padding: 4px 12px; margin: 1px 8px; border-radius: 6px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: background 0.2s, color 0.2s; font-size: var(--spacebar-font-size, 13px); white-space: nowrap; font-weight: 500; color: var(--spacebar-text-color, var(--text-muted)); }
 .space-item:hover { background-color: rgba(0, 0, 0, 0.05); color: var(--text-main); }
 .space-item.active { background-color: rgba(47, 128, 237, 0.1); font-weight: 700; color: var(--primary-color); }
 .space-actions { display: none; gap: 5px; }
@@ -45,6 +45,12 @@ body { margin: 0; font-family: var(--app-font); display: flex; height: 100vh; ba
   color: white !important;
   box-shadow: 0 4px 12px rgba(47, 128, 237, 0.4);
   transform: scale(1.1);
+}
+
+/* 🟢 จัดการการแสดงผลปุ่ม Command Center ใน Topbar (แสดงเฉพาะตอนซ่อน Sidebar) */
+#btn-command-center-topbar { display: none; }
+#spacebar.collapsed + .workspace #btn-command-center-topbar {
+    display: inline-flex;
 }
 
 .workspace { flex: 1; display: flex; flex-direction: column; overflow: hidden; transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1); min-width: 0;}
@@ -374,6 +380,22 @@ body { margin: 0; font-family: var(--app-font); display: flex; height: 100vh; ba
 .task-item:hover .add-subtask-btn { opacity: 1; }
 .subtask-item .btn-prominent-task { display: none !important; }
 
+/* 🟢 สไตล์สำหรับปุ่มซ่อน/แสดง Subtask */
+.toggle-subtasks-btn {
+    opacity: 0.6;
+    transition: opacity 0.2s, transform 0.2s, box-shadow 0.2s, color 0.2s;
+}
+.toggle-subtasks-btn:hover {
+    opacity: 1;
+    transform: scale(1.05);
+}
+.toggle-subtasks-btn.active-red-prominent {
+    color: #ef4444 !important; /* สีแดง */
+    opacity: 1 !important;
+    transform: scale(1.1); /* ขยายเล็กน้อย */
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.3); /* เงาเรืองแสง */
+}
+
 .subtask-actions { 
     display: flex; 
     gap: 4px; 
@@ -551,14 +573,14 @@ body { margin: 0; font-family: var(--app-font); display: flex; height: 100vh; ba
 .task-input-bar { display: flex; align-items: center; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 4px 6px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.03); transition: border-color 0.2s;}
 .task-input-bar:focus-within { border-color: var(--primary-color); }
 
-.btn-sync-toggle, .subtask-sync-toggle-btn { 
+.btn-sync-toggle, .subtask-sync-toggle-btn, .main-task-sync-toggle-btn { 
     background: transparent; border: none; padding: 6px; cursor: pointer; display: flex; 
     align-items: center; justify-content: center; transition: all 0.2s ease; border-radius: 4px;
     color: var(--text-muted); /* สีเทาตอนปิด */
     opacity: 0.5; /* จางลงตอนปิด */
 }
-.btn-sync-toggle:hover { background: var(--hover-bg); opacity: 0.8;}
-.btn-sync-toggle.active, .subtask-sync-toggle-btn.active { 
+.btn-sync-toggle:hover, .subtask-sync-toggle-btn:hover, .main-task-sync-toggle-btn:hover { background: var(--hover-bg); opacity: 0.8;}
+.btn-sync-toggle.active, .subtask-sync-toggle-btn.active, .main-task-sync-toggle-btn.active { 
     color: #2684fc; /* Google Task Blue */
     opacity: 1; 
 }
@@ -594,7 +616,7 @@ body { margin: 0; font-family: var(--app-font); display: flex; height: 100vh; ba
 .dark-mode .note-container { background: #222222; border-color: #555; }
 .note-toolbar { display: flex; gap: 8px; padding: 8px 12px; border-bottom: 1px dashed var(--border-color); align-items: center; background: rgba(0,0,0,0.02);}
 .note-toolbar select { padding: 4px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--input-bg); color: var(--text-main); font-size: 12px; outline: none; cursor: pointer;}
-.note-area { width: 100%; flex: 1; min-height: 250px; font-family: var(--app-font); font-size: 16px; outline: none; line-height: 1.6; padding: 15px; box-sizing: border-box; color: var(--text-main); overflow-y: auto;}
+.note-area { width: 100%; flex: 1; min-height: 250px; font-family: var(--note-font, var(--app-font)); font-size: 16px; outline: none; line-height: 1.6; padding: 15px; box-sizing: border-box; color: var(--text-main); overflow-y: auto;}
 
 /* Google Keep Embed Improvements */
 #keep-iframe {
@@ -914,12 +936,12 @@ details[open] > .details-summary .summary-chevron {
 }
 
 /* --- Ultimate Command Center UI --- */
-.master-progress-container { margin-bottom: 20px; }
-.master-progress-info { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px; color: var(--text-main); }
+.master-progress-container { margin-bottom: 10px; }
+.master-progress-info { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; color: var(--text-main); }
 .master-progress-track { height: 8px; background: var(--hover-bg); border-radius: 4px; overflow: hidden; position: relative; }
 .master-progress-fill { height: 100%; background: linear-gradient(90deg, var(--primary-color), #60a5fa); transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); border-radius: 4px; }
 
-.space-pill-cloud { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid var(--border-color); }
+.space-pill-cloud { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--border-color); }
 .space-pill { 
     padding: 4px 12px; border-radius: 15px; background: var(--bg-body); border: 1px solid var(--border-color); 
     font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.2s; color: var(--text-muted); opacity: 0.6;
@@ -989,11 +1011,12 @@ details[open] > .details-summary .summary-chevron {
 /* --- Default Dashboard (Master Command Center) --- */
 .dashboard-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    grid-template-columns: 1fr; /* เป็นคอลัมน์เดียวในมือถือหรือจอแคบ */
     gap: 20px;
-    padding: 20px;
+    padding: 10px 20px 20px 20px; /* 🟢 ลดพื้นที่ว่างด้านบนสุดของ Grid */
     flex: 1;
-    overflow-y: auto;
+    /* จัดการการ Scroll ภายใน Dashboard เองเพื่อให้แสดงผลถูกต้องบน Desktop */
+    overflow-y: auto; 
     min-height: 0; /* สำคัญเพื่อให้ flex scroll ทำงาน */
 }
 
@@ -1004,17 +1027,77 @@ details[open] > .details-summary .summary-chevron {
     }
 }
 
-.widget-card {
+/* แสดงผล 2 คอลัมน์เมื่อหน้าจอกว้างกว่า 1000px (Desktop & Laptop) */
+@media (min-width: 1000px) {
+    .dashboard-grid {
+        grid-template-columns: 1.5fr 1fr;
+    }
+}
+
+.dashboard-grid-inner {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column; /* แนวตั้งสำหรับจอเล็ก */
+    gap: 20px;
+    width: 100%;
+}
+
+@media (min-width: 1000px) {
+    /* เมื่อมี Card 2 ใบขึ้นไป ให้เรียงเป็นแนวนอน */
+    .dashboard-grid-inner:has(.widget-card + .widget-card) {
+        flex-direction: row;
+        align-items: flex-start;
+    }
+
+    /* กำหนดสัดส่วนตาม Class ของ Widget โดยตรง */
+    .master-todo-widget {
+        flex: 1.5;
+        min-width: 0; /* ป้องกันเนื้อหาดันจนสัดส่วนเพี้ยน */
+    }
+    .smart-flow-widget {
+        flex: 1;
+        min-width: 0;
+    }
+}
+
+.minimized-widgets-bar {
+    grid-column: 1 / -1; /* ให้แถบวงกลมกินพื้นที่เต็มความกว้าง */
+    display: flex;
+    gap: 12px;
+    margin-bottom: 5px; /* 🟢 ลดระยะห่างก่อนถึงตัว Widget */
+    min-height: 44px; /* 🟢 ปรับให้พอดีกับขนาดปุ่ม */
+    align-items: center;
+    padding: 0 10px;
+}
+
+.minimized-bubble {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
     background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-    min-height: 400px;
+    border: 2px solid var(--primary-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 20px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.minimized-bubble:hover { transform: scale(1.15); box-shadow: 0 0 15px var(--primary-color); }
+
+.widget-card .card-header {
+    cursor: grab;
+    user-select: none;
+    position: relative; /* 🟢 ยกเลิกการ Sticky เพื่อให้เลื่อนหายไปตามการ Scroll */
+    top: auto;
+}
+.widget-card .card-header:active {
+    cursor: grabbing;
 }
 
 .space-tag {
-    font-size: 10px;
-    padding: 2px 8px;
+
     background: var(--primary-color);
     color: white;
     border-radius: 12px;
@@ -1170,4 +1253,491 @@ details[open] > .details-summary .summary-chevron {
     text-overflow: clip !important; /* ปิดการซ่อนข้อความด้วย ... */
     outline: none;
     transition: background-color 0.2s ease;
+}
+
+/* --- Smart Flow Settings Modal --- */
+#smart-flow-settings-modal .modal-content {
+    padding: 25px;
+}
+#smart-flow-settings-modal .settings-group label {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: var(--text-main);
+}
+#smart-flow-settings-modal .settings-input {
+    padding: 8px 12px;
+    font-size: 14px;
+}
+
+/* --- Smart Flow Styles --- */
+.smart-flow-section {
+    /* ปรับให้โปร่งใสเมื่ออยู่ใน Card-body */
+    background: transparent;
+    border: none;
+    padding: 0;
+}
+.smart-flow-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 5px;
+}
+.smart-flow-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+/* เพิ่มสีพื้นหลังจางๆ ให้กับ Widget Smart Flow เพื่อให้ดูแยกส่วนชัดเจน */
+.smart-flow-widget {
+    background: color-mix(in srgb, var(--primary-color), transparent 97%);
+}
+.dark-mode .smart-flow-widget {
+    background: color-mix(in srgb, var(--primary-color), transparent 95%);
+}
+.smart-flow-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    transition: all 0.2s ease;
+}
+/* ขอบแดงหน้างานที่ติดเงื่อนไข */
+.smart-flow-item.sf-locked {
+    border-left: 4px solid #ef4444 !important;
+}
+.smart-flow-item.sf-locked .smart-flow-title,
+.smart-flow-item.sf-locked .smart-flow-desc,
+.smart-flow-item.sf-locked .smart-flow-number {
+    color: #ef4444 !important;
+}
+.dark-mode .smart-flow-item.sf-locked .smart-flow-title,
+.dark-mode .smart-flow-item.sf-locked .smart-flow-desc,
+.dark-mode .smart-flow-item.sf-locked .smart-flow-number {
+    color: #f87171 !important;
+}
+
+.smart-flow-item:hover { border-color: var(--primary-color); }
+.smart-flow-item.completed { 
+    opacity: 0.8; 
+    background: #f0fdf4 !important; /* พื้นหลังสีเขียวอ่อน */
+    border-color: #bbf7d0 !important;
+}
+
+.smart-flow-item.completed .smart-flow-title,
+.smart-flow-item.completed .smart-flow-number {
+    color: #166534 !important;
+}
+.smart-flow-item.completed .smart-flow-desc {
+    color: #15803d !important;
+}
+.smart-flow-item.completed .smart-flow-action-btn,
+.smart-flow-item.completed .drag-handle svg,
+.smart-flow-item.completed .flow-menu-trigger {
+    color: #16a34a !important;
+}
+
+
+.dark-mode .smart-flow-item.completed {
+    background: rgba(22, 163, 74, 0.1) !important;
+    border-color: rgba(34, 197, 94, 0.3) !important;
+}
+
+.dark-mode .smart-flow-item.completed .smart-flow-title,
+.dark-mode .smart-flow-item.completed .smart-flow-number {
+    color: #4ade80 !important;
+}
+.dark-mode .smart-flow-item.completed .smart-flow-desc {
+    color: #86efac !important;
+}
+.dark-mode .smart-flow-item.completed .smart-flow-action-btn,
+.dark-mode .smart-flow-item.completed .drag-handle svg,
+.dark-mode .smart-flow-item.completed .flow-menu-trigger {
+    color: #22c55e !important;
+}
+
+.smart-flow-item.completed .smart-flow-title { text-decoration: line-through; }
+
+.smart-flow-number {
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--text-muted);
+    width: 18px;
+}
+.smart-flow-action-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 1px solid var(--border-color);
+    background: var(--bg-body);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--primary-color);
+    transition: all 0.2s;
+}
+.smart-flow-action-btn:hover:not(:disabled) { transform: scale(1.1); background: var(--primary-color); color: white; }
+.smart-flow-action-btn:disabled { opacity: 0.3; cursor: not-allowed; filter: grayscale(1); }
+
+/* --- Shake Animation --- */
+@keyframes sf-shake {
+    0% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    50% { transform: translateX(5px); }
+    75% { transform: translateX(-5px); }
+    100% { transform: translateX(0); }
+}
+
+.sf-shake {
+    animation: sf-shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
+    border-color: #ef4444 !important;
+}
+
+/* --- Smart Flow Countdown --- */
+.sf-countdown-timer {
+    font-size: 10px;
+    font-weight: 700;
+    color: #ef4444;
+    margin-bottom: 2px;
+}
+
+.smart-flow-content { flex: 1; min-width: 0; }
+.smart-flow-title { font-size: 14px; font-weight: 700; outline: none; padding: 2px 4px; border-radius: 4px; }
+.smart-flow-desc { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.flow-dep-tag {
+    margin-left: 8px;
+    padding: 1px 6px;
+    background: #fee2e2;
+    color: #991b1b;
+    border-radius: 4px;
+    font-weight: 700;
+    font-size: 10px;
+}
+
+.smart-flow-actions-container { 
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.flow-actions-menu-popup {
+    display: none;
+    position: absolute;
+    right: 32px; /* วางไว้หน้าปุ่ม 3 จุด */
+    top: 50%;
+    transform: translateY(-50%);
+    align-items: center;
+    gap: 4px;
+    background: var(--bg-card);
+    padding: 2px 6px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    z-index: 50;
+}
+
+.smart-flow-actions-container.expanded .flow-actions-menu-popup {
+    display: flex;
+}
+
+.smart-flow-actions-container.expanded .flow-menu-trigger {
+    background: var(--hover-bg);
+    color: var(--primary-color);
+}
+
+/* --- Global Flow Actions Visibility --- */
+.smart-flow-actions-container.global-expand .flow-actions-menu-popup {
+    display: flex !important;
+    position: static !important;
+    transform: none !important;
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+    background: transparent !important;
+}
+
+/* --- Smart Flow Modal Lists --- */
+#sf-deps-list-container .tag-select-row:hover {
+    background: var(--hover-bg);
+}
+#sf-deps-list-container .google-task-checkbox {
+    margin-right: 0;
+}
+
+/* --- Smart Flow Setting Day Pills --- */
+.sf-day-pill {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 800;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: var(--text-muted);
+    background: var(--bg-card);
+}
+.sf-day-pill:hover { background: var(--hover-bg); color: var(--text-main); }
+.sf-day-pill.active {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+    box-shadow: 0 2px 6px rgba(47, 128, 237, 0.3);
+}
+
+/* --- Smart Flow Header actions --- */
+.sf-header-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-wrap: nowrap; /* ป้องกันปุ่มตกบรรทัด */
+}
+.sf-view-toggle {
+    font-size: 11px !important;
+    padding: 2px 8px !important;
+    gap: 4px !important;
+}
+
+/* --- Smart Flow Focus Overlay --- */
+.sf-focus-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(4px);
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+}
+.sf-focus-lock-card {
+    background: var(--bg-card);
+    padding: 20px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    text-align: center;
+    min-width: 180px;
+}
+
+.sf-focus-popup {
+    position: fixed;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    padding: 15px;
+    width: 200px;
+    z-index: 10000;
+    animation: fadeIn 0.2s ease;
+}
+
+/* 🟢 Persistent Focus Popup */
+.sf-focus-popup-persistent {
+    position: fixed;
+    background: rgba(15, 15, 15, 0.9) !important; 
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px; 
+    box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+    padding: 0;
+    width: 220px !important;
+    height: auto !important; 
+    z-index: 10001;
+    animation: fadeIn 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: visible; 
+    box-sizing: border-box;
+    user-select: none;
+    color: white;
+    opacity: 1 !important; /* 🟢 ยกเลิก Auto-dim */
+
+}
+
+.sf-focus-popup-persistent:hover,
+.sf-focus-popup-persistent.is-dragging {
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.sf-focus-popup-persistent .focus-time-display {
+    font-family: 'JetBrains Mono', 'Menlo', 'Consolas', monospace;
+    letter-spacing: -2px;
+    font-weight: 700;
+    line-height: 1;
+    margin: 8px 0;
+    z-index: 5;
+}
+
+.sf-watch-progress-ring {
+    position: absolute;
+    top: 0; left: 0;
+    transform: rotate(-90deg);
+    pointer-events: none;
+}
+
+
+.btn-tag-mode {
+    border: 1px solid var(--border-color);
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.sf-item-tags-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 10px;
+    font-weight: 800;
+    color: var(--primary-color);
+    background: rgba(47, 128, 237, 0.1);
+    padding: 1px 6px;
+    border-radius: 4px;
+    border: 1px solid rgba(47, 128, 237, 0.2);
+}
+
+/* 🎯 สไตล์สำหรับปุ่ม Focus ใน Smart Flow Widget เมื่อเปิดใช้งาน */
+#sf-widget-focus-btn.active-red {
+    background-color: #ef4444 !important;
+    color: white !important;
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+    border: 1px solid #dc2626 !important;
+    transform: translateY(-1px);
+}
+
+/* 🔵 สไตล์สำหรับปุ่ม Focus เมื่อเปิดสวิตช์แต่ยังไม่เริ่มจับเวลา */
+#sf-widget-focus-btn.active-blue {
+    background-color: var(--primary-color) !important;
+    color: white !important;
+    box-shadow: 0 4px 12px rgba(47, 128, 237, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    transform: translateY(-1px);
+}
+
+/* 👁️ สไตล์สำหรับปุ่ม Filter ใน Habit Tracker เมื่อเปิดใช้งาน */
+.filter-habit-tag-btn.active {
+    background-color: var(--primary-color) !important;
+    color: white !important;
+    border-radius: 4px;
+    box-shadow: 0 0 8px rgba(47, 128, 237, 0.4);
+}
+
+#sf-widget-focus-btn.active-orange {
+    background-color: #f59e0b !important;
+    color: white !important;
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+    border: 1px solid #d97706 !important;
+    transform: translateY(-1px);
+}
+
+/* 🛡️ Iframe Shield: ป้องกันอาการหน่วงขณะลากหรือขยายหน้าต่าง */
+.floating-note.is-interacting iframe {
+    pointer-events: none !important;
+    opacity: 0.8; /* จางลงเล็กน้อยเพื่อให้รู้ว่ากำลังขยับ */
+    transition: opacity 0.2s;
+}
+
+/* 🏷️ Autocomplete Dropdown */
+.tag-autocomplete-dropdown {
+    position: absolute;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+    z-index: 11000;
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 6px;
+    min-width: 180px;
+}
+.tag-autocomplete-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    color: var(--text-main);
+}
+.tag-autocomplete-item:hover, 
+.tag-autocomplete-item.active {
+    background: rgba(47, 128, 237, 0.1);
+    color: var(--primary-color);
+    outline: none;
+}
+
+/* 📂 Sidebar Text Management */
+.folder-name-text, 
+.space-name-text {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+
+/* 📄 Expand full name only for active space */
+.space-item.active .space-name-text {
+    white-space: normal;
+    word-break: break-word;
+}
+
+/* 📂 Sidebar Folder Visual Separation */
+.folder-group {
+    border-radius: 8px;
+    margin: 2px 8px;
+    padding: 1px 0; /* ปรับให้มีพื้นที่บนและล่างเท่ากัน */
+    transition: background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.3s;
+    border: 1px solid transparent;
+}
+
+.folder-group.folder-collapsed {
+    background-color: var(--hover-bg); /* สีเทาตามระบบ */
+    opacity: 0.9;
+}
+
+.folder-group.folder-expanded {
+    background-color: rgba(34, 197, 94, 0.08); /* สีเขียวจางๆ */
+    border-color: rgba(34, 197, 94, 0.15);
+}
+
+.dark-mode .folder-group.folder-expanded {
+    background-color: rgba(34, 197, 94, 0.12);
+}
+
+/* 📏 เส้นแบ่งระหว่างกลุ่มโฟลเดอร์ */
+.folder-header {
+    display: flex;
+    align-items: center;
+    padding: 2px 8px; /* ลด Padding */
+    margin: 0px 4px; /* นำ Margin บน/ล่างออกเพื่อให้กึ่งกลางตาม Padding */
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    cursor: grab;
+    border-radius: 4px;
+    transition: background 0.2s;
+    user-select: none;
+    gap: 6px;
+}
+.folder-group:not(:last-child) {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    padding-bottom: 4px; /* ปรับระยะเส้นแบ่งให้สมดุล */
+    margin-bottom: 4px; 
 }

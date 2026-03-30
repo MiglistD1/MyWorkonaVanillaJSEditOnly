@@ -16,19 +16,7 @@ export function setupSpaceModals(onRender) {
     const folderSuggestions = document.getElementById('cust-folder-suggestions');
     const iconInput = document.getElementById('cust-space-icon-input');
     const iconPreview = document.getElementById('cust-space-icon-preview');
-    const colorInput = document.getElementById('cust-space-color');
     const iconFileInput = document.getElementById('cust-space-icon-file');
-    const bgSpacebarInput = document.getElementById('cust-bg-spacebar');
-    const bgWorkspaceInput = document.getElementById('cust-bg-workspace');
-    const bgCardInput = document.getElementById('cust-bg-card');
-    const textMainInput = document.getElementById('cust-text-main');
-    const fontFamilyInput = document.getElementById('cust-font-family');
-    const fontSizeInput = document.getElementById('cust-font-size');
-    const spacebarTextColorInput = document.getElementById('cust-spacebar-text-color');
-    const spacebarFontSizeInput = document.getElementById('cust-spacebar-font-size');
-    
-    const resetAppearanceBtn = document.getElementById('btn-reset-appearance');
-    const resetTypographyBtn = document.getElementById('btn-reset-typography');
     const resetHeadersBtn = document.getElementById('btn-reset-headers');
 
     const headerTabs = document.getElementById('cust-header-tabs');
@@ -80,19 +68,6 @@ export function setupSpaceModals(onRender) {
 
         space.icon = iconInput.value || "📁";
         
-        // --- Save Theme Colors ---
-        space.theme = {
-            primary: colorInput.value,
-            bgSpacebar: bgSpacebarInput.value,
-            bgWorkspace: bgWorkspaceInput.value,
-            bgCard: bgCardInput.value,
-            textMain: textMainInput.value,
-            fontFamily: fontFamilyInput.value,
-            fontSize: fontSizeInput.value,
-            spacebarTextColor: spacebarTextColorInput.value,
-            spacebarFontSize: spacebarFontSizeInput.value
-        };
-
         space.headers = {
             tabHeader: headerTabs.value.trim(),
             resourceHeader: headerRes.value.trim(),
@@ -105,9 +80,7 @@ export function setupSpaceModals(onRender) {
 
     // Bind Auto-Save to Inputs
     const inputs = [
-        nameInput, folderInput, iconInput, colorInput, 
-        bgSpacebarInput, bgWorkspaceInput, bgCardInput, textMainInput, 
-        fontFamilyInput, fontSizeInput, spacebarTextColorInput, spacebarFontSizeInput,
+        nameInput, folderInput, iconInput,
         headerTabs, headerRes, headerTasks
     ];
     inputs.forEach(el => {
@@ -145,26 +118,6 @@ export function setupSpaceModals(onRender) {
             iconInput.value = space.icon || "📁";
             btnSave.innerText = "Done"; // Change button text
 
-            // --- Load Theme Colors ---
-            // Migrate old themeColor if it exists
-            if (space.themeColor && !space.theme) {
-                space.theme = { primary: space.themeColor };
-                delete space.themeColor;
-            }
-
-            const globalSettings = getAppSettings();
-            const defaultColors = globalSettings.isDarkMode ? { body: '#191919', spacebar: '#202020', card: '#252525', text: '#eeeeee', textMuted: '#aaaaaa' } : { body: '#f4f4f0', spacebar: '#ebebe6', card: '#ffffff', text: '#111111', textMuted: '#555555' };
-            colorInput.value = space.theme?.primary || globalSettings.color;
-            // Fallback to legacy 'bgSidebar' if 'bgSpacebar' doesn't exist
-            bgSpacebarInput.value = space.theme?.bgSpacebar || space.theme?.bgSidebar || defaultColors.spacebar;
-            bgWorkspaceInput.value = space.theme?.bgWorkspace || space.theme?.bgBody || defaultColors.body;
-            bgCardInput.value = space.theme?.bgCard || defaultColors.card;
-            textMainInput.value = space.theme?.textMain || defaultColors.text;
-            fontFamilyInput.value = space.theme?.fontFamily || "";
-            fontSizeInput.value = space.theme?.fontSize || 15;
-            spacebarTextColorInput.value = space.theme?.spacebarTextColor || space.theme?.sidebarTextColor || defaultColors.textMuted;
-            spacebarFontSizeInput.value = space.theme?.spacebarFontSize || space.theme?.sidebarFontSize || 13;
-
             const h = space.headers || {};
             headerTabs.value = h.tabHeader || "";
             headerRes.value = h.resourceHeader || "";
@@ -175,7 +128,7 @@ export function setupSpaceModals(onRender) {
             const newId = spaces.length ? Math.max(...spaces.map(s => s.id)) + 1 : 1;
             
             // Create immediate space object
-            const newSpace = { id: newId, name: "New Space", folder: null, isArchived: false, tabs: [], resources: [], driveFiles: [], note: "", tasks: [], tags: [], icon: "📁" };
+            const newSpace = { id: newId, name: "New Space", folder: null, isArchived: false, tabs: [], resources: [], driveFiles: [], note: "", tasks: [], tags: [], icon: "" };
             spaces.push(newSpace);
             setCurrentSpaceId(newId);
             editingSpaceId = newId;
@@ -183,21 +136,9 @@ export function setupSpaceModals(onRender) {
             // Set Defaults in Inputs
             nameInput.value = "New Space";
             folderInput.value = (prefillFolderName === 'General') ? "" : (prefillFolderName || "");
-            iconInput.value = "📁";
+            iconInput.value = "📄";
             btnSave.innerText = "Create";
             
-            const globalSettings = getAppSettings();
-            const defaultColors = globalSettings.isDarkMode ? { body: '#191919', spacebar: '#202020', card: '#252525', text: '#eeeeee', textMuted: '#aaaaaa' } : { body: '#f4f4f0', spacebar: '#ebebe6', card: '#ffffff', text: '#111111', textMuted: '#555555' };
-            colorInput.value = globalSettings.color;
-            bgSpacebarInput.value = defaultColors.spacebar;
-            bgWorkspaceInput.value = defaultColors.body;
-            bgCardInput.value = defaultColors.card;
-            textMainInput.value = defaultColors.text;
-            fontFamilyInput.value = "";
-            fontSizeInput.value = 15;
-            spacebarTextColorInput.value = defaultColors.textMuted;
-            spacebarFontSizeInput.value = 13;
-
             headerTabs.value = ""; headerRes.value = ""; headerTasks.value = "";
             
             // Save initial defaults to the new space and render
@@ -212,26 +153,6 @@ export function setupSpaceModals(onRender) {
     // 2. Actions
     document.getElementById('btn-close-cust-modal').onclick = () => modal.style.display = 'none';
     
-    resetAppearanceBtn.onclick = () => {
-        const globalSettings = getAppSettings();
-        const defaultColors = globalSettings.isDarkMode ? { body: '#191919', spacebar: '#202020', card: '#252525', text: '#eeeeee', textMuted: '#aaaaaa' } : { body: '#f4f4f0', spacebar: '#ebebe6', card: '#ffffff', text: '#111111', textMuted: '#555555' };
-        
-        colorInput.value = globalSettings.color;
-        bgSpacebarInput.value = defaultColors.spacebar;
-        bgWorkspaceInput.value = defaultColors.body;
-        bgCardInput.value = defaultColors.card;
-        textMainInput.value = defaultColors.text;
-        spacebarTextColorInput.value = defaultColors.textMuted;
-        saveSpaceData(); // Auto-save reset
-    };
-
-    resetTypographyBtn.onclick = () => {
-        fontFamilyInput.value = "";
-        fontSizeInput.value = 15;
-        spacebarFontSizeInput.value = 13;
-        saveSpaceData(); // Auto-save reset
-    };
-
     resetHeadersBtn.onclick = () => {
         headerTabs.value = "";
         headerRes.value = "";
@@ -678,6 +599,7 @@ export function setupTagModal(onRender) {
             else if (type === 'drive') item = space.driveFiles[index];
             else if (type === 'task') item = space.tasks[index];
             else if (type === 'tab') item = space.tabs[index];
+            else if (type === 'habit') item = space.habits[index];
 
             if (item) {
                 const selectedTags = [];
@@ -720,6 +642,7 @@ export function handleMiniTagClick(btn, onRender) {
     else if (type === 'drive') item = space.driveFiles[index];
     else if (type === 'task') item = space.tasks[index];
     else if (type === 'tab') item = space.tabs[index];
+    else if (type === 'habit') item = space.habits[index];
 
     if (!item) return;
     if (!item.tags) item.tags = [];
@@ -814,8 +737,16 @@ export function setupSettingsModal(onRender) {
         document.getElementById('setting-icon').value = currentIcon; 
         updateSettingPreview(currentIcon);
         document.getElementById('setting-auto-delete-days').value = appSettings.autoDeleteDays || 30;
+        document.getElementById('setting-bg-card').value = appSettings.bgCard || "#ffffff";
+        document.getElementById('setting-text-main').value = appSettings.textMain || "#111111";
+        document.getElementById('setting-bg-body').value = appSettings.bgBody || "#f4f4f0";
+        document.getElementById('setting-bg-spacebar').value = appSettings.bgSpacebar || "#ebebe6";
+        document.getElementById('setting-spacebar-text-color').value = appSettings.spacebarTextColor || "#555555";
+        document.getElementById('setting-font-size').value = appSettings.fontSize || 15;
+        document.getElementById('setting-spacebar-font-size').value = appSettings.spacebarFontSize || 13;
         document.getElementById('setting-color').value = appSettings.color; 
         document.getElementById('setting-app-font').value = appSettings.font;
+        document.getElementById('setting-note-font').value = appSettings.noteFont || appSettings.font;
         document.getElementById('settings-modal').style.display = 'flex'; 
     });
 
@@ -827,11 +758,54 @@ export function setupSettingsModal(onRender) {
         appSettings.icon = document.getElementById('setting-icon').value;
         appSettings.color = document.getElementById('setting-color').value;
         appSettings.font = document.getElementById('setting-app-font').value;
+        appSettings.noteFont = document.getElementById('setting-note-font').value;
+        appSettings.bgCard = document.getElementById('setting-bg-card').value;
+        appSettings.textMain = document.getElementById('setting-text-main').value;
+        appSettings.bgBody = document.getElementById('setting-bg-body').value;
+        appSettings.bgSpacebar = document.getElementById('setting-bg-spacebar').value;
+        appSettings.spacebarTextColor = document.getElementById('setting-spacebar-text-color').value;
+        appSettings.fontSize = parseInt(document.getElementById('setting-font-size').value) || 15;
+        appSettings.spacebarFontSize = parseInt(document.getElementById('setting-spacebar-font-size').value) || 13;
         appSettings.autoDeleteDays = parseInt(document.getElementById('setting-auto-delete-days').value) || 30;
         document.getElementById('settings-modal').style.display = 'none';
         saveData();
         applyAppSettings();
     });
+
+    // 🟢 Reset Global Visuals Logic
+    const resetVisualsBtn = document.getElementById('btn-reset-global-visuals');
+    if (resetVisualsBtn) {
+        resetVisualsBtn.onclick = () => {
+            if (confirm("Reset all visual settings to system default?")) {
+                const appSettings = getAppSettings();
+                appSettings.color = "#4a86e8";
+                appSettings.bgBody = "#f4f4f0";
+                appSettings.bgSpacebar = "#ebebe6";
+                appSettings.bgCard = "#ffffff";
+                appSettings.textMain = "#111111";
+                appSettings.fontSize = 15;
+                appSettings.spacebarTextColor = "#555555";
+                appSettings.spacebarFontSize = 13;
+                appSettings.font = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+                appSettings.noteFont = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+
+                // Re-populate the modal inputs
+                document.getElementById('setting-color').value = appSettings.color;
+                document.getElementById('setting-bg-body').value = appSettings.bgBody;
+                document.getElementById('setting-bg-spacebar').value = appSettings.bgSpacebar;
+                document.getElementById('setting-bg-card').value = appSettings.bgCard;
+                document.getElementById('setting-text-main').value = appSettings.textMain;
+                document.getElementById('setting-font-size').value = appSettings.fontSize;
+                document.getElementById('setting-spacebar-text-color').value = appSettings.spacebarTextColor;
+                document.getElementById('setting-spacebar-font-size').value = appSettings.spacebarFontSize;
+                document.getElementById('setting-app-font').value = appSettings.font;
+                document.getElementById('setting-note-font').value = appSettings.noteFont;
+
+                saveData();
+                applyAppSettings();
+            }
+        };
+    }
     
     // Icon Inputs
     document.querySelectorAll('.emoji-pick').forEach(btn => btn.addEventListener('click', (e) => { 

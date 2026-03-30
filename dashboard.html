@@ -53,17 +53,19 @@
     <symbol id="icon-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></symbol>
     <symbol id="icon-reorder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></symbol>
     <symbol id="icon-lock-minimal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></symbol>
+    <symbol id="icon-unlock-minimal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path></symbol>
     <symbol id="icon-folder-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path><line x1="12" y1="11" x2="12" y2="17"></line><line x1="9" y1="14" x2="15" y2="14"></line></symbol>
     <symbol id="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></symbol>
     <symbol id="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.09 18.09 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.09 18.09 0 0 1-2.51 3.15"></path><line x1="1" y1="1" x2="23" y2="23"></line><path d="M12 12v.01"></path></symbol>
     <symbol id="icon-rotate-ccw" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></symbol>
+    <symbol id="icon-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="17" x2="12" y2="22"></line><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.79-.9A.5.5 0 0 1 16 12.1V8a4 4 0 0 0-8 0v4.1a.5.5 0 0 1-.1.3l-1.79.9A2 2 0 0 0 5 15.24Z"></path></symbol>
   </svg>
 
   <div class="spacebar" id="spacebar">
     <div class="spacebar-header">
       <div class="app-branding"><div class="app-icon-box" id="display-app-icon">🚀</div><span id="display-app-title">My Workspace</span></div>
       <div style="display: flex; gap: 4px; align-items: center;">
-        <button class="btn-icon" id="btn-command-center" title="Master Command Center"><svg class="svg-icon-lg" style="width: 20px; height: 20px;"><use href="#icon-layers"></use></svg></button>
+        <button class="btn-icon btn-cc-trigger" id="btn-command-center" title="Master Command Center"><svg class="svg-icon-lg" style="width: 20px; height: 20px;"><use href="#icon-layers"></use></svg></button>
         <button class="btn-icon" id="btn-open-settings" title="App Settings"><svg class="svg-icon-lg"><use href="#icon-settings"></use></svg></button>
       </div>
     </div>
@@ -101,7 +103,12 @@
 
   <div class="workspace">
 <div class="topbar">
-      <button class="btn-icon" id="btn-toggle-spacebar" style="margin-right: 5px;" title="Toggle Spacebar"><svg class="svg-icon-lg"><use href="#icon-sidebar-toggle"></use></svg></button>
+      <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-right: 5px;">
+        <button class="btn-icon btn-cc-trigger" id="btn-command-center-topbar" title="Master Command Center"><svg class="svg-icon-lg" style="width: 20px; height: 20px;"><use href="#icon-layers"></use></svg></button>
+        <button class="btn-icon" id="btn-toggle-spacebar" title="Toggle Spacebar"><svg class="svg-icon-lg"><use href="#icon-sidebar-toggle"></use></svg></button>
+        <div style="width: 1px; height: 20px; background: var(--border-color); margin: 0 4px; opacity: 0.5;"></div>
+      </div>
+
       <h1 class="workspace-title" id="current-space-title">Loading...</h1>
       <button class="btn-icon" id="btn-collapse-launchers" title="Toggle Shortcuts" style="margin-right: 10px;">
         <svg class="svg-icon-sm" style="transition: transform 0.2s;"><use href="#icon-chevron-up"></use></svg>
@@ -249,6 +256,8 @@
                   <svg class="svg-icon-sm"><use href="#icon-eye"></use></svg>
                 </button>
                 <button id="btn-toggle-prominent-tasks" class="btn-icon" title="Toggle Next Up Visibility" style="padding: 2px; opacity: 0.6;"><svg class="svg-icon-sm"><use href="#icon-flag"></use></svg></button>
+                <button id="btn-expand-all-subtasks" class="btn-icon" title="Expand All Subtasks" style="padding: 2px; opacity: 0.6;"><svg class="svg-icon-sm"><use href="#icon-chevrons-down"></use></svg></button>
+                <button id="btn-collapse-all-subtasks" class="btn-icon" title="Collapse All Subtasks" style="padding: 2px; opacity: 0.6;"><svg class="svg-icon-sm"><use href="#icon-chevrons-up"></use></svg></button>
               </div>
               <div id="google-task-controls" class="google-task-menu" style="display:none;">
                  <button id="btn-toggle-specific-list" class="btn-icon" title="Space-Specific List" style="margin-right: 4px; padding: 2px;"><svg class="svg-icon-sm"><use href="#icon-lock-minimal"></use></svg></button>
@@ -336,77 +345,6 @@
         </div>
     </div>
 
-    <!-- 2. Appearance -->
-    <div class="customize-section">
-        <label class="section-label" style="margin-top:0;">Appearance<button id="btn-reset-appearance" class="btn btn-outline" style="font-size:11px; padding:2px 6px;" title="Reset all colors to default">Reset</button></label>
-        
-        <!-- Group 1: Theme & Cards -->
-        <div style="font-size:12px; font-weight:700; color:var(--primary-color); margin-bottom:8px;">🎨 Theme & Cards</div>
-        <div class="customize-row">
-            <span style="font-size:14px; color:var(--text-main);">Primary Color</span>
-            <input type="color" id="cust-space-color" style="width:28px; height:28px; padding:0; border:none; background:transparent; cursor:pointer;" title="Space specific color">
-        </div>
-        <div class="customize-row">
-            <span style="font-size:14px; color:var(--text-main);">Card Background</span>
-            <input type="color" id="cust-bg-card" style="width:28px; height:28px; padding:0; border:none; background:transparent; cursor:pointer;" title="Card background color">
-        </div>
-        
-        <div style="height:1px; background:var(--border-color); margin: 8px 0; opacity:0.5;"></div>
-
-        <!-- Group 2: Workspace (Main Content) -->
-        <div style="font-size:12px; font-weight:700; color:var(--text-main); margin-bottom:8px;">📄 Workspace</div>
-        <div class="customize-row">
-            <span style="font-size:14px; color:var(--text-main);">Workspace Text Color</span>
-            <input type="color" id="cust-text-main" style="width:28px; height:28px; padding:0; border:none; background:transparent; cursor:pointer;" title="Main text color">
-        </div>
-        <div class="customize-row">
-            <span style="font-size:14px; color:var(--text-main);">Workspace Background</span>
-            <input type="color" id="cust-bg-workspace" style="width:28px; height:28px; padding:0; border:none; background:transparent; cursor:pointer;" title="Main background color">
-        </div>
-        
-        <div style="height:1px; background:var(--border-color); margin: 8px 0; opacity:0.5;"></div>
-
-        <!-- Group 3: Spacebar (Sidebar) -->
-        <div style="font-size:12px; font-weight:700; color:var(--text-muted); margin-bottom:8px;">🗄️ Spacebar</div>
-        <div class="customize-row">
-            <span style="font-size:14px; color:var(--text-main);">Spacebar Text Color</span>
-            <input type="color" id="cust-spacebar-text-color" style="width:28px; height:28px; padding:0; border:none; background:transparent; cursor:pointer;" title="Spacebar text color">
-        </div>
-        <div class="customize-row">
-            <span style="font-size:14px; color:var(--text-main);">Spacebar Background</span>
-            <input type="color" id="cust-bg-spacebar" style="width:28px; height:28px; padding:0; border:none; background:transparent; cursor:pointer;" title="Spacebar background color">
-        </div>
-        
-        <div style="height:1px; background:var(--border-color); margin: 12px 0;"></div>
-        <label class="section-label" style="margin-top:0;">Typography<button id="btn-reset-typography" class="btn btn-outline" style="font-size:11px; padding:2px 6px;" title="Reset fonts to default">Reset</button></label>
-        <div class="customize-row">
-            <span style="font-size:14px; color:var(--text-main);">Workspace Font Family</span>
-            <select id="cust-font-family" class="settings-input" style="width: 160px; padding: 4px; font-size:12px;">
-                <option value="">Default (Global)</option>
-                <option value="'Sarabun', sans-serif">Sarabun</option>
-                <option value="'Prompt', sans-serif">Prompt</option>
-                <option value="'Kanit', sans-serif">Kanit</option>
-                <option value="'Noto Sans Thai', sans-serif">Noto Sans Thai</option>
-                <option value="'Athiti', sans-serif">Athiti</option>
-                <option value="'Sriracha', cursive">Sriracha</option>
-            </select>
-        </div>
-        <div class="customize-row">
-            <span style="font-size:14px; color:var(--text-main);">Workspace Font Size</span>
-            <div style="display:flex; align-items:center; gap:5px;">
-                <input type="number" id="cust-font-size" class="settings-input" style="width: 60px; padding: 4px; text-align:center;" placeholder="15" min="10" max="24">
-                <span style="font-size:12px; color:var(--text-muted);">px</span>
-            </div>
-        </div>
-        <div class="customize-row">
-            <span style="font-size:14px; color:var(--text-main);">Spacebar Font Size</span>
-            <div style="display:flex; align-items:center; gap:5px;">
-                <input type="number" id="cust-spacebar-font-size" class="settings-input" style="width: 60px; padding: 4px; text-align:center;" placeholder="13" min="10" max="20">
-                <span style="font-size:12px; color:var(--text-muted);">px</span>
-            </div>
-        </div>
-    </div>
-
     <!-- 4. Headers -->
     <div class="customize-section">
         <label class="section-label" style="margin-top:0;">Custom Headers<button id="btn-reset-headers" class="btn btn-outline" style="font-size:11px; padding:2px 6px;" title="Reset headers to default">Reset</button></label>
@@ -471,7 +409,7 @@
   </div></div>
 
   <div class="modal-overlay" id="settings-modal"><div class="modal-content">
-    <h3 style="font-size:16px; display:flex; align-items:center; gap:8px;"><svg class="svg-icon-lg"><use href="#icon-settings"></use></svg> App Settings</h3>
+    <h3 style="font-size:16px; display:flex; align-items:center; gap:8px; margin-top:0;"><svg class="svg-icon-lg"><use href="#icon-settings"></use></svg> App Settings</h3>
     <div class="settings-group" style="background: var(--hover-bg); padding: 10px; border-radius: 6px;">
       <label style="display:flex; align-items:center; gap:6px;"><svg class="svg-icon-sm"><use href="#icon-floppy"></use></svg> Data Management:</label>
       <div style="display:flex; flex-direction:column; gap:8px; margin-top: 8px;">
@@ -507,19 +445,87 @@
       </div>
     </div>
 
-    <div class="settings-group"><label>Primary Color:</label><input type="color" id="setting-color" style="width:100%; height:30px; border:none; cursor:pointer;"></div>
+    <!-- 🎨 Global Appearance -->
+    <div class="customize-section" style="max-height: 300px; overflow-y: auto;">
+        <label class="section-label" style="margin-top:0; display: flex; justify-content: space-between; align-items: center;">
+            Global Visual Settings
+            <button id="btn-reset-global-visuals" class="btn btn-outline" style="font-size:11px; padding:2px 6px;" title="Reset all visuals to system default">Reset</button>
+        </label>
+        
+        <div style="font-size:12px; font-weight:700; color:var(--primary-color); margin-bottom:8px;">🎨 Theme & Cards</div>
+        <div class="customize-row">
+            <span style="font-size:14px; color:var(--text-main);">Primary Color</span>
+            <input type="color" id="setting-color" style="width:28px; height:28px; padding:0; border:none; background:transparent; cursor:pointer;">
+        </div>
+        <div class="customize-row">
+            <span style="font-size:14px; color:var(--text-main);">Card Background</span>
+            <input type="color" id="setting-bg-card" style="width:28px; height:28px; padding:0; border:none; background:transparent; cursor:pointer;">
+        </div>
+        
+        <div style="height:1px; background:var(--border-color); margin: 8px 0; opacity:0.5;"></div>
 
-    <div class="settings-group">
-      <label>App Font (Global):</label>
-      <select id="setting-app-font" class="settings-input">
-        <option value="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" selected>System</option>
-        <option value="'Sarabun', sans-serif">Sarabun</option>
-        <option value="'Prompt', sans-serif">Prompt</option>
-        <option value="'Kanit', sans-serif">Kanit</option>
-        <option value="'Noto Sans Thai', sans-serif">Noto Sans Thai</option>
-        <option value="'Athiti', sans-serif">Athiti</option>
-        <option value="'Sriracha', cursive">Sriracha</option>
-      </select>
+        <div style="font-size:12px; font-weight:700; color:var(--text-main); margin-bottom:8px;">📄 Workspace</div>
+        <div class="customize-row">
+            <span style="font-size:14px; color:var(--text-main);">Workspace Text Color</span>
+            <input type="color" id="setting-text-main" style="width:28px; height:28px; padding:0; border:none; background:transparent; cursor:pointer;">
+        </div>
+        <div class="customize-row">
+            <span style="font-size:14px; color:var(--text-main);">Workspace Background</span>
+            <input type="color" id="setting-bg-body" style="width:28px; height:28px; padding:0; border:none; background:transparent; cursor:pointer;">
+        </div>
+        
+        <div style="height:1px; background:var(--border-color); margin: 8px 0; opacity:0.5;"></div>
+
+        <div style="font-size:12px; font-weight:700; color:var(--text-muted); margin-bottom:8px;">🗄️ Spacebar</div>
+        <div class="customize-row">
+            <span style="font-size:14px; color:var(--text-main);">Spacebar Text Color</span>
+            <input type="color" id="setting-spacebar-text-color" style="width:28px; height:28px; padding:0; border:none; background:transparent; cursor:pointer;">
+        </div>
+        <div class="customize-row">
+            <span style="font-size:14px; color:var(--text-main);">Spacebar Background</span>
+            <input type="color" id="setting-bg-spacebar" style="width:28px; height:28px; padding:0; border:none; background:transparent; cursor:pointer;">
+        </div>
+        
+        <div style="height:1px; background:var(--border-color); margin: 12px 0;"></div>
+        <label class="section-label" style="margin-top:0;">Global Typography</label>
+        <div class="customize-row">
+            <span style="font-size:14px; color:var(--text-main);">Font Family</span>
+            <select id="setting-app-font" class="settings-input" style="width: 160px; padding: 4px; font-size:12px;">
+                <option value="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">System</option>
+                <option value="'Sarabun', sans-serif">Sarabun</option>
+                <option value="'Prompt', sans-serif">Prompt</option>
+                <option value="'Kanit', sans-serif">Kanit</option>
+                <option value="'Noto Sans Thai', sans-serif">Noto Sans Thai</option>
+                <option value="'Athiti', sans-serif">Athiti</option>
+                <option value="'Sriracha', cursive">Sriracha</option>
+            </select>
+        </div>
+        <div class="customize-row">
+            <span style="font-size:14px; color:var(--text-main);">Quick Note Font</span>
+            <select id="setting-note-font" class="settings-input" style="width: 160px; padding: 4px; font-size:12px;">
+                <option value="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">System</option>
+                <option value="'Sarabun', sans-serif">Sarabun</option>
+                <option value="'Prompt', sans-serif">Prompt</option>
+                <option value="'Kanit', sans-serif">Kanit</option>
+                <option value="'Noto Sans Thai', sans-serif">Noto Sans Thai</option>
+                <option value="'Athiti', sans-serif">Athiti</option>
+                <option value="'Sriracha', cursive">Sriracha</option>
+            </select>
+        </div>
+        <div class="customize-row">
+            <span style="font-size:14px; color:var(--text-main);">Workspace Font Size</span>
+            <div style="display:flex; align-items:center; gap:5px;">
+                <input type="number" id="setting-font-size" class="settings-input" style="width: 60px; padding: 4px; text-align:center;" placeholder="15" min="10" max="24">
+                <span style="font-size:12px; color:var(--text-muted);">px</span>
+            </div>
+        </div>
+        <div class="customize-row">
+            <span style="font-size:14px; color:var(--text-main);">Spacebar Font Size</span>
+            <div style="display:flex; align-items:center; gap:5px;">
+                <input type="number" id="setting-spacebar-font-size" class="settings-input" style="width: 60px; padding: 4px; text-align:center;" placeholder="13" min="10" max="20">
+                <span style="font-size:12px; color:var(--text-muted);">px</span>
+            </div>
+        </div>
     </div>
 
     <div class="settings-group" style="border-top: 1px solid var(--border-color); padding-top: 15px;">

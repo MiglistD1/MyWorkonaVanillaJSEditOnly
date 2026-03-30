@@ -1,32 +1,161 @@
-import { getSpaces, getAppSettings } from '../core/storage.js';
+import { getSpaces, getAppSettings, saveData, getFilterTags } from '../core/storage.js';
 import { getGoogleStatus, fetchGoogleLists } from './googleTasks.js';
 import { updateKeepTagButtonState, openKeepWithTag } from './googleKeep.js';
 import { openGoogleTasks } from './googleTasksLauncher.js';
 import { renderMasterTodoList, renderMasterHeaderControls } from './masterTodoList.js';
+import { renderSmartFlow, initSmartFlow, flowState, showFocusPopup, formatFocusTime } from './smartFlow.js';
+import { toggleDashboardQuickNote, renderDashboardQuickNote } from './dashboardQuickNote.js';
+import Sortable from '../sortable.esm.js';
 
-export function renderDefaultDashboard() {
+let ccWidgetStateCache = null; // 🟢 แคชสถานะ UI ไว้ในแรมเพื่อให้ทำงานเร็วขึ้น
+
+export async function renderDefaultDashboard() {
     const container = document.getElementById('default-dashboard-container');
     if (!container) return;
 
+    // 🟢 โหลดจาก Storage เฉพาะครั้งแรก ครั้งต่อไปอ่านจากแรมทันที
+    if (!ccWidgetStateCache) {
+        const uiRes = await chrome.storage.local.get(['ccWidgetState']);
+        ccWidgetStateCache = uiRes.ccWidgetState || {
+            minimized: [],
+            order: ['todo', 'flow'],
+            isLocked: false
+        };
+    }
+    const uiState = ccWidgetStateCache;
+    const isMinimized = (id) => uiState.minimized.includes(id);
+
     const allSpaces = getSpaces().filter(s => !s.isArchived);
-    
+    await initSmartFlow(); 
+    const settings = getAppSettings();
+
     // 1. Render Dashboard Wrapper
     container.innerHTML = `
-        <div class="dashboard-grid">
-            <div class="card widget-card">
-                <div class="card-header" style="display: flex; align-items: center; gap: 15px; padding: 10px 20px;">
-                    <div id="master-header-controls-container" style="display: contents;">
-                        ${renderMasterHeaderControls()}
-                    </div>
-                    ${renderGoogleIntegrations()}
-                </div>
-                <div id="master-todo-list-container" class="card-body"></div>
-            </div>
+        <div id="cc-minimized-row" class="minimized-widgets-bar">
+            <button class="btn-icon btn-lock-widgets ${uiState.isLocked ? 'is-locked' : ''}" title="${uiState.isLocked ? 'Unlock Widgets' : 'Lock Widgets'}" style="margin-right: 10px; border: 1px solid ${uiState.isLocked ? '#ef4444' : 'var(--border-color)'}; color: ${uiState.isLocked ? '#ef4444' : 'inherit'};">
+                <svg class="svg-icon-sm"><use href="${uiState.isLocked ? '#icon-lock-minimal' : '#icon-unlock-minimal'}"></use></svg>
+            </button>
+            <button class="btn-icon btn-dashboard-note-toggle" title="Dashboard Quick Note" style="margin-right: 10px; ${settings.dashboardQuickNote?.isOpen ? 'color: var(--primary-color); border: 1px solid var(--primary-color); background: rgba(47, 128, 237, 0.1);' : ''}">
+                <svg class="svg-icon-sm"><use href="#icon-pencil"></use></svg>
+            </button>
+            ${isMinimized('todo') ? `<div class="minimized-bubble" data-id="todo" title="Restore Todo List">✅</div>` : ''}
+            ${isMinimized('flow') ? `<div class="minimized-bubble" data-id="flow" title="Restore Smart Flow">🚀</div>` : ''}
+        </div>
+
+        <div id="cc-widget-grid" class="dashboard-grid-inner ${uiState.isLocked ? 'is-locked' : ''}">
+            ${uiState.order.filter(id => !isMinimized(id)).map(id => {
+                
+                if (id === 'todo') {
+                    return `
+                        <div class="card widget-card master-todo-widget" data-id="todo">
+                            <div class="card-header" style="display: flex; align-items: center; gap: 15px; padding: 10px 20px;">
+                                <div id="master-header-controls-container" style="display: contents;">
+                                    ${renderMasterHeaderControls()}
+                                </div>
+                                <button class="btn-icon btn-minimize-widget" data-id="todo" title="Minimize">
+                                    <svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                </button>
+                                ${renderGoogleIntegrations()}
+                            </div>
+                            <div id="master-todo-list-container" class="card-body" style="padding-top: 5px;"></div>
+                        </div>
+                    `;
+                } else {
+                    return `
+                        <div class="card widget-card smart-flow-widget" data-id="flow">
+                            <div class="card-header" style="display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 10px 20px;">
+                                <button class="btn-icon ${flowState.isFocusRunning ? (flowState.isPaused ? 'active-orange' : 'active-red') : (flowState.focusMode ? 'active-blue' : '')}" id="sf-widget-focus-btn" title="Focus Mode" style="font-size: 11px; gap: 4px; padding: 2px 8px; width: auto; border-radius: 20px;">
+                                    <svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="2"></circle></svg>
+                                    <span id="sf-widget-focus-text">${flowState.isFocusRunning ? (flowState.isPaused ? 'Paused' : formatFocusTime(flowState.focusTimeLeft)) : 'Focus'}</span>
+                                </button>
+                                <button class="btn-icon btn-toggle-all-flow-actions" title="Toggle Flow Actions" style="opacity: ${flowState.showActions ? '1' : '0.6'};">
+                                    <svg class="svg-icon-sm"><use href="#icon-${flowState.showActions ? 'eye' : 'eye-off'}"></use></svg>
+                                </button>
+                                <button class="btn-icon btn-minimize-widget" data-id="flow" title="Minimize">
+                                    <svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                </button>
+                            </div>
+                            <div id="smart-flow-container" class="card-body" style="padding-top: 5px;"></div>
+                        </div>
+                    `;
+                }
+            }).join('')}
         </div>
     `;
 
-    // 2. Delegate Rendering of the Master Todo List
-    renderMasterTodoList(document.getElementById('master-todo-list-container'));
+    // 2. Delegate Rendering
+    if (!isMinimized('todo')) renderMasterTodoList(document.getElementById('master-todo-list-container'));
+    if (!isMinimized('flow')) renderSmartFlow(document.getElementById('smart-flow-container'));
+
+    // 3. Setup Events (Minimize/Restore/Sort)
+    container.querySelectorAll('.btn-minimize-widget').forEach(btn => {
+        btn.onclick = () => {
+            const id = btn.dataset.id;
+            if (!uiState.minimized.includes(id)) uiState.minimized.push(id);
+            chrome.storage.local.set({ ccWidgetState: uiState });
+            renderDefaultDashboard(); // 🟢 วาดใหม่ทันที ไม่ต้องรอ Storage Callback
+        };
+    });
+
+    // Focus Mode Popup Trigger
+    const focusWidgetBtn = container.querySelector('#sf-widget-focus-btn');
+    if (focusWidgetBtn) {
+        focusWidgetBtn.onclick = (e) => {
+            e.stopPropagation();
+            showFocusPopup(focusWidgetBtn);
+        };
+    }
+
+    // Toggle All Flow Actions
+    container.querySelectorAll('.btn-toggle-all-flow-actions').forEach(btn => {
+        btn.onclick = () => {
+            flowState.showActions = !flowState.showActions;
+            renderDefaultDashboard();
+        };
+    });
+
+    container.querySelectorAll('.minimized-bubble').forEach(bub => {
+        bub.onclick = () => {
+            const id = bub.dataset.id;
+            uiState.minimized = uiState.minimized.filter(m => m !== id);
+            chrome.storage.local.set({ ccWidgetState: uiState });
+            renderDefaultDashboard(); // 🟢 กู้คืนทันที
+        };
+    });
+
+    const gridEl = document.getElementById('cc-widget-grid');
+    if (gridEl) {
+        Sortable.create(gridEl, {
+            handle: '.card-header', // ใช้หัว Card เป็นจุดจับลากแทน
+            animation: 150,
+            ghostClass: 'widget-ghost',
+            disabled: uiState.isLocked,
+            onEnd: () => {
+                const newOrder = Array.from(gridEl.querySelectorAll('.widget-card')).map(el => el.dataset.id);
+                // รวมลำดับเดิมเข้าไปด้วยเผื่อมีตัวที่ถูกซ่อนอยู่
+                const finalOrder = [...newOrder];
+                uiState.order.forEach(id => { if(!finalOrder.includes(id)) finalOrder.push(id); });
+                uiState.order = finalOrder;
+                chrome.storage.local.set({ ccWidgetState: uiState });
+            }
+        });
+    }
+
+    // Toggle Layout Lock
+    const lockBtn = container.querySelector('.btn-lock-widgets');
+    if (lockBtn) {
+        lockBtn.onclick = () => {
+            uiState.isLocked = !uiState.isLocked;
+            chrome.storage.local.set({ ccWidgetState: uiState });
+            renderDefaultDashboard(); // 🟢 ล็อคทันที
+        };
+    }
+
+    // Dashboard Quick Note Toggle
+    const noteBtn = container.querySelector('.btn-dashboard-note-toggle');
+    if (noteBtn) {
+        noteBtn.onclick = () => toggleDashboardQuickNote();
+    }
 
     // 3. Global Dashboard UI Updates
     updateKeepTagButtonState(); // อัปเดตสถานะปุ่ม Tag ทันทีที่เรนเดอร์
@@ -112,7 +241,7 @@ function initMasterEvents() {
     }
 
     const handleAdd = async () => {
-        const text = taskInput.value.trim();
+        let text = taskInput.value.trim();
         const spaceId = parseInt(spaceSelect.value);
         if (!text) return;
 
@@ -122,8 +251,29 @@ function initMasterEvents() {
         
         if (targetSpace) {
             if (!targetSpace.tasks) targetSpace.tasks = [];
+
+            // 🟢 Shortcut #1 replacement
+            const currentFilters = (getFilterTags() || []).filter(t => !['ALL', 'UNTAGGED', 'AI', 'HALF SCREEN'].includes(t.toUpperCase()));
+            if (text.includes('#1') && currentFilters.length > 0) {
+                const filterTagsString = currentFilters.map(t => '#' + t).join(' ');
+                text = text.replace(/#1/g, filterTagsString);
+            }
+
+            // 🟢 Extract tags from text
+            let tags = [];
+            const tagMatches = text.match(/#([^\s#]+)/g);
+            if (tagMatches) {
+                tags = tagMatches.map(t => t.substring(1));
+                text = text.replace(/#([^\s#]+)/g, '').trim();
+                if (!text && tags.length > 0) text = tags[0];
+
+                if (!targetSpace.tags) targetSpace.tags = [];
+                tags.forEach(t => {
+                    if (!targetSpace.tags.some(st => st.toUpperCase() === t.toUpperCase())) targetSpace.tags.push(t);
+                });
+            }
             
-            let newTask = { text, completed: false, createdAt: Date.now(), isProminent: false, tags: [], googleTaskId: null };
+            let newTask = { text, completed: false, createdAt: Date.now(), isProminent: false, tags: tags, googleTaskId: null, subtasksHidden: false };
 
             // Google Tasks Integration
             const status = getGoogleStatus();

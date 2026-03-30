@@ -14,6 +14,7 @@ import { applyAppSettings, initSettingsManager } from './core/settings-manager.j
 import { initSearchManager } from './core/searchManager.js';
 import { initContentManager, renderMainContent, renderAll } from './core/contentManager.js';
 import { openOrFocusTab } from './core/ui-helpers.js';
+import { initDashboardQuickNote } from './features/dashboardQuickNote.js';
 import { 
   getAppSettings, saveData, loadData, getSpaces,
   getCurrentSpaceId, setCurrentSpaceId, setFilterTags, setSearchQuery, getCurrentSpace
@@ -95,6 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Make the smart tab opener globally available for other modules
         window.openOrFocusTab = openOrFocusTab;
+        window.handleSpaceChange = handleSpaceChange;
         
         // Initialize Core Modules
         applyAppSettings();
@@ -130,6 +132,7 @@ document.addEventListener('DOMContentLoaded', () => {
         initGoogleKeep();
         initGoogleTasksLauncher();
         initCustomLaunchers();
+        initDashboardQuickNote();
         
         const unarchiveBtn = document.getElementById('btn-unarchive-from-banner');
         if (unarchiveBtn) {
@@ -145,10 +148,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Command Center Trigger
-        const btnCommandCenter = document.getElementById('btn-command-center');
-        if (btnCommandCenter) {
-            btnCommandCenter.onclick = () => handleSpaceChange(0, false);
-        }
+        document.querySelectorAll('.btn-cc-trigger').forEach(btn => {
+            btn.onclick = (e) => {
+                e.preventDefault();
+                handleSpaceChange(0, false);
+            };
+        });
 
         // Shortcut Bar Collapse Logic
         const btnCollapseLaunchers = document.getElementById('btn-collapse-launchers');
