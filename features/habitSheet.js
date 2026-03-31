@@ -56,7 +56,10 @@ export function openHabitModal(space) {
             <div class="modal-content" style="position:absolute; width: 450px; max-height: 85vh; display:flex; flex-direction:column; background:var(--bg-card); pointer-events:auto; box-shadow: 0 10px 40px rgba(0,0,0,0.2); border: 1px solid var(--border-color); padding: 0; overflow:hidden;">
                 <div id="habit-header" style="display:flex; justify-content:space-between; align-items:center; padding: 15px 20px; border-bottom:1px solid var(--border-color); background: var(--bg-spacebar); cursor: grab; user-select:none;">
                     <div>
-                        <h3 style="margin:0; font-size:20px;">🔥 Habit Tracker</h3>
+                        <h3 style="margin:0; font-size:20px; display:flex; align-items:center; gap:8px;">
+                            <svg class="svg-icon-lg" style="color:var(--primary-color);"><use href="#icon-sparkles"></use></svg>
+                            Habit Tracker
+                        </h3>
                         <div id="habit-stats-text" style="font-size:13px; color:#888; margin-top:4px;">Keep the streak alive!</div>
                     </div>
                     <div style="display:flex; align-items:center; gap:10px;">
@@ -73,12 +76,24 @@ export function openHabitModal(space) {
                 
                 <div style="display:flex; gap:8px; padding: 20px 20px 10px 20px; align-items: center;">
                     <input type="text" id="new-habit-input" class="settings-input" placeholder="✨ New Habit..." style="flex:1;">
-                    <div style="display: flex; align-items: center; gap: 4px; background: var(--hover-bg); padding: 4px 8px; border-radius: 6px; border: 1px solid var(--border-color);" title="Wait X days before reset">
-                        <span style="font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform:uppercase;">Every</span>
-                        <input type="number" id="new-habit-interval" value="1" min="1" style="width: 35px; border: none; background: transparent; text-align: center; font-weight: 700; font-size: 13px; outline: none; color: var(--primary-color);">
-                        <span style="font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform:uppercase;">Days</span>
+                    <!-- 🟢 Optimized Cycle Selector (Smaller) -->
+                    <div style="display: flex; align-items: center; gap: 2px; background: var(--hover-bg); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border-color); height: 30px;" title="Wait X days before reset">
+                        <span style="font-size: 9px; font-weight: 800; color: var(--text-muted); text-transform:uppercase;">Ev.</span>
+                        <input type="number" id="new-habit-interval" value="1" min="1" style="width: 28px; border: none; background: transparent; text-align: center; font-weight: 700; font-size: 12px; outline: none; color: var(--primary-color);">
+                        <span style="font-size: 9px; font-weight: 800; color: var(--text-muted); text-transform:uppercase;">d</span>
                     </div>
+                    <!-- 🟢 Single Direct Save Group Button (Shared Globally) -->
+                    <button class="btn btn-outline habit-action-btn" id="btn-save-habit-group" title="Save current list as a Global Group" style="padding: 5px; width: 30px; height: 30px; justify-content: center; display: none; color: #f59e0b; border-color: #f59e0b;">
+                        <svg class="svg-icon-sm"><use href="#icon-package"></use></svg>
+                    </button>
                     <button class="btn btn-primary" id="btn-add-habit">Add</button>
+                </div>
+
+                <!-- 🟢 Habit Template Bar -->
+                <div id="habit-template-bar" style="padding: 0 20px 10px 20px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; border-bottom: 1px solid var(--border-color); margin-bottom: 10px;">
+                    <span style="font-size: 10px; font-weight: 800; color: var(--text-muted); text-transform: uppercase;">Templates:</span>
+                    <div id="habit-templates-list" style="display: flex; gap: 5px; flex-wrap: wrap; flex: 1;"></div>
+                    <button class="btn btn-outline" id="btn-manage-habit-templates" style="font-size: 10px; padding: 2px 6px; height: 22px;" title="Manage Templates"><svg class="svg-icon-sm" style="width:12px;height:12px;"><use href="#icon-settings"></use></svg></button>
                 </div>
 
                 <div id="habit-list-container" style="flex:1; overflow-y:auto; padding: 0 20px 10px 20px;"></div>
@@ -116,7 +131,22 @@ export function openHabitModal(space) {
         });
 
         document.getElementById('btn-add-habit').addEventListener('click', () => handleAddHabit(space));
-        document.getElementById('new-habit-input').addEventListener('keypress', (e) => { if(e.key === 'Enter') handleAddHabit(space); });
+        
+        // 🟢 Save Group Listener
+        document.getElementById('btn-save-habit-group').onclick = () => {
+            showSaveHabitGroupModal(space); // 🟢 เรียก Modal ใหม่แทน prompt
+        };
+
+        document.getElementById('btn-manage-habit-templates').onclick = () => {
+            showHabitTemplateManager();
+        };
+
+        const newHabitInput = document.getElementById('new-habit-input');
+        if (newHabitInput) {
+            newHabitInput.addEventListener('keypress', (e) => { if(e.key === 'Enter') handleAddHabit(space); });
+            // 🟢 NEW: Add input event for autocomplete and highlighting
+            newHabitInput.addEventListener('input', (e) => { handleTagAutocomplete(e, () => space?.tags || []); applySyntaxHighlighting(newHabitInput); });
+        }
 
         // --- 🖐️ Drag Logic for Habit Window ---
         const header = document.getElementById('habit-header');
@@ -162,8 +192,212 @@ export function openHabitModal(space) {
 
     updateHabitToggleUI();
     renderHabitList(space);
+    renderHabitTemplates(); // 🟢 วาดรายการ Template (Global)
     modal.style.display = 'flex';
     document.getElementById('new-habit-input').focus();
+}
+
+function showSaveHabitGroupModal(space) {
+    const habits = space.habits || [];
+
+    // 🟢 สร้างรายการชั่วคราวสำหรับ Modal (เริ่มจาก Habit ที่มีอยู่)
+    let tempGroupItems = habits.map(h => ({ 
+        text: h.text, 
+        tags: [...(h.tags || [])], 
+        resetInterval: h.resetInterval || 1,
+        selected: true 
+    }));
+
+    const modalId = 'save-habit-group-modal';
+    let modal = document.getElementById(modalId);
+    if (modal) modal.remove();
+
+    const modalHTML = `
+    <div class="modal-overlay" id="${modalId}" style="display:flex; z-index:13000;">
+        <div class="modal-content" style="width:380px;">
+            <h3 style="margin-top:0; display:flex; align-items:center; gap:8px;">
+                <svg class="svg-icon-sm" style="color:#f59e0b;"><use href="#icon-package"></use></svg>
+                Save Group Template
+            </h3>
+            <div class="settings-group">
+                <label>Group Name:</label>
+                <input type="text" id="habit-group-name-input" class="settings-input" placeholder="e.g. Morning Set">
+            </div>
+            <div style="margin-top:15px;">
+                <label style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; margin-bottom:8px; display:block;">Included Items:</label>
+                
+                <!-- 🟢 Quick Add inside Modal -->
+                <div style="display:flex; gap:5px; margin-bottom:10px;">
+                    <input type="text" id="modal-new-habit-input" class="settings-input" placeholder="Add more habit to group..." style="font-size:12px; height:30px;">
+                    <button id="btn-modal-add-habit" class="btn btn-outline" style="padding:0 10px; height:30px;">+</button>
+                </div>
+
+                <div id="modal-included-items-list" style="max-height:200px; overflow-y:auto; background:var(--bg-body); border-radius:8px; padding:5px; border:1px solid var(--border-color); display:flex; flex-direction:column; gap:2px;">
+                </div>
+            </div>
+            <div class="modal-actions" style="margin-top:20px; display:flex; justify-content:flex-end; gap:8px;">
+                <button class="btn btn-outline" id="btn-cancel-group-save">Cancel</button>
+                <button class="btn btn-primary" id="btn-confirm-group-save">Save Group</button>
+            </div>
+        </div>
+    </div>`;
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+    const listContainer = document.getElementById('modal-included-items-list');
+    const modalAddInput = document.getElementById('modal-new-habit-input');
+    const modalAddBtn = document.getElementById('btn-modal-add-habit');
+
+    const renderModalList = () => {
+        listContainer.innerHTML = tempGroupItems.map((item, idx) => `
+            <label class="tag-select-row" style="padding:6px 10px; border-radius:6px; ${item.selected ? '' : 'opacity:0.5;'}">
+                <label class="google-task-checkbox">
+                    <input type="checkbox" class="modal-item-check" data-index="${idx}" ${item.selected ? 'checked' : ''}>
+                    <div class="checkmark-circle"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg></div>
+                </label>
+                <span style="font-size:13px; margin-left:8px; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${item.text}</span>
+                <button class="btn-icon btn-modal-remove-item" data-index="${idx}" style="color:#ef4444; padding:2px;">✕</button>
+            </label>
+        `).join('') || '<div style="text-align:center; padding:20px; font-size:12px; color:var(--text-muted);">No items added</div>';
+    };
+
+    renderModalList();
+
+    // 🟢 List Interaction (Checkbox & Remove)
+    listContainer.onclick = (e) => {
+        const check = e.target.closest('.modal-item-check');
+        const remove = e.target.closest('.btn-modal-remove-item');
+        if (check) {
+            tempGroupItems[parseInt(check.dataset.index)].selected = check.checked;
+            renderModalList();
+        } else if (remove) {
+            tempGroupItems.splice(parseInt(remove.dataset.index), 1);
+            renderModalList();
+        }
+    };
+
+    // 🟢 Quick Add inside Modal Logic
+    const addItem = () => {
+        const val = modalAddInput.value.trim();
+        if (val) {
+            tempGroupItems.push({ text: val, tags: [], resetInterval: 1, selected: true });
+            modalAddInput.value = '';
+            renderModalList();
+        }
+    };
+    modalAddBtn.onclick = addItem;
+    modalAddInput.onkeydown = (e) => { if(e.key === 'Enter') addItem(); };
+
+    const nameInput = document.getElementById('habit-group-name-input');
+    nameInput.focus();
+
+    document.getElementById('btn-cancel-group-save').onclick = () => document.getElementById(modalId).remove();
+    document.getElementById('btn-confirm-group-save').onclick = () => {
+        const groupName = nameInput.value.trim();
+        const selectedItems = tempGroupItems.filter(i => i.selected);
+        
+        if (!groupName) return alert("Please enter a group name");
+        if (selectedItems.length === 0) return alert("Please select at least one habit");
+
+        const settings = getAppSettings();
+        if (!settings.habitTemplates) settings.habitTemplates = [];
+        settings.habitTemplates.push({ 
+            text: groupName, 
+            isGroup: true, 
+            items: selectedItems.map(i => ({ text: i.text, tags: i.tags, resetInterval: i.resetInterval })) 
+        });
+        
+        saveData(); 
+        renderHabitTemplates(); 
+        document.getElementById(modalId).remove();
+    };
+}
+
+/**
+ * � วาดรายการ Template ของ Habit ให้เลือกกด
+ */
+function renderHabitTemplates() {
+    const container = document.getElementById('habit-templates-list');
+    if (!container) return;
+    const settings = getAppSettings();
+    if (!settings.habitTemplates) settings.habitTemplates = [];
+
+    container.innerHTML = settings.habitTemplates.map((temp, idx) => `
+        <button class="tag-pill habit-template-pill" data-index="${idx}" 
+            title="${temp.isGroup ? `Add group: ${temp.items.length} items` : 'Click to add this habit'}" 
+            style="font-size: 10px; padding: 2px 8px; height: auto; line-height: 1.2; display: inline-flex; align-items: center; gap: 4px; ${temp.isGroup ? 'border-color: #f59e0b; color: #d97706; background: rgba(245, 158, 11, 0.05);' : ''}">
+            ${temp.isGroup ? `<svg class="svg-icon-sm" style="width:10px;height:10px;"><use href="#icon-package"></use></svg>` : ''}${temp.text}
+        </button>
+    `).join('');
+
+    container.querySelectorAll('.habit-template-pill').forEach(btn => {
+        btn.onclick = () => {
+            const idx = parseInt(btn.dataset.index);
+            const template = settings.habitTemplates[idx];
+            if (template) {
+                const space = getCurrentSpace();
+                if (!space.habits) space.habits = [];
+                
+                if (template.isGroup) {
+                    // 📦 เพิ่มทุกรายการในกลุ่ม
+                    template.items.forEach(item => {
+                        space.habits.push({
+                            ...item,
+                            completed: false,
+                            streak: 0,
+                            lastUpdate: new Date().toDateString()
+                        });
+                    });
+                }
+                saveData();
+                renderHabitList(space);
+                renderTasks(space);
+            }
+        };
+    });
+}
+
+/**
+ * ⚙️ หน้าต่างจัดการ Template (ลบทิ้ง)
+ */
+function showHabitTemplateManager() {
+    const existing = document.getElementById('habit-template-manager-modal');
+    if (existing) existing.remove();
+    const settings = getAppSettings();
+
+    const modalHTML = `
+    <div class="modal-overlay" id="habit-template-manager-modal" style="display:flex; z-index:12000;">
+        <div class="modal-content" style="width:300px;">
+            <h3 style="margin-top:0; font-size: 16px;">📦 Global Habit Templates</h3>
+            <div id="habit-template-manager-list" style="max-height:300px; overflow-y:auto; display:flex; flex-direction:column; gap:8px;">
+                ${(settings.habitTemplates || []).map((t, i) => `
+                    <div class="loot-item" style="padding:8px 12px; margin:0; border-radius: 8px;">
+                        <span style="font-size:13px; font-weight:600; flex:1; display:flex; align-items:center; gap:6px;">
+                            ${t.isGroup ? `<svg class="svg-icon-sm" style="width:12px;height:12px;color:#f59e0b;"><use href="#icon-package"></use></svg>` : ''}
+                            ${t.text}
+                        </span>
+                        <button class="btn-icon delete-habit-template" data-index="${i}" style="color:#ef4444;">${svgTrashRed}</button>
+                    </div>
+                `).join('') || '<div style="text-align:center; opacity:0.5; font-size:12px; padding:20px;">No templates saved</div>'}
+            </div>
+            <div class="modal-actions" style="margin-top:20px; text-align:right;">
+                <button class="btn btn-outline" id="btn-close-habit-temp-manager">Close</button>
+            </div>
+        </div>
+    </div>`;
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+    document.getElementById('btn-close-habit-temp-manager').onclick = () => document.getElementById('habit-template-manager-modal').remove();
+    document.getElementById('habit-template-manager-list').onclick = (e) => {
+        const delBtn = e.target.closest('.delete-habit-template');
+        if (delBtn) {
+            const idx = parseInt(delBtn.dataset.index);
+            settings.habitTemplates.splice(idx, 1);
+            saveData();
+            document.getElementById('habit-template-manager-modal').remove();
+            showHabitTemplateManager();
+            renderHabitTemplates();
+        }
+    };
 }
 
 /**
@@ -178,6 +412,11 @@ function updateHabitToggleUI() {
     btn.style.border = isActive ? '1px solid var(--primary-color)' : '1px solid transparent';
     btn.style.opacity = isActive ? '1' : '0.6';
     btn.innerHTML = `<svg class="svg-icon-sm"><use href="#icon-${isActive ? 'eye' : 'eye-off'}"></use></svg>`;
+
+    // 🟢 ซ่อน/แสดงปุ่ม Template & Group ในแถบรับข้อมูล
+    document.querySelectorAll('.habit-action-btn').forEach(el => {
+        el.style.display = isActive ? 'inline-flex' : 'none';
+    });
 }
 
 export function renderHabitList(space) {
@@ -226,6 +465,12 @@ export function renderHabitList(space) {
         const hTags = (habit.tags || []).map(t => t.toUpperCase());
         const isFilterActive = hTags.length > 0 && hTags.length === currentFilters.length && hTags.every(t => currentFilters.includes(t));
 
+        // 🟢 ตรวจสอบการเชื่อมโยง Template
+        const linkedTemplate = (space.todoTemplates && typeof habit.linkedTemplateIdx === 'number') 
+            ? space.todoTemplates[habit.linkedTemplateIdx] 
+            : null;
+        const hasTemplate = !!linkedTemplate;
+
         // ดึงวันที่กดติ๊กถูกล่าสุด (ถ้าไม่มี ให้ใช้วันที่เคยทำ หรือวันนี้)
         const lastDoneStr = habit.lastCompletedDate || habit.lastUpdate || todayStr;
         const lastDateObj = new Date(lastDoneStr);
@@ -257,8 +502,15 @@ export function renderHabitList(space) {
             </label>
             
             <div style="flex:1; min-width:0;">
-                <div class="habit-text-content" contenteditable="true" style="font-size:15px; font-weight:500; color:${habit.completed ? '#15803d' : '#333'}; cursor:text; outline:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; border-radius:4px; padding:0 2px;" title="Click to edit name">
-                    ${habit.text}
+                <div style="display:flex; align-items:center; gap:6px;">
+                    <div class="habit-text-content" contenteditable="true" style="font-size:15px; font-weight:500; color:${habit.completed ? '#15803d' : '#333'}; cursor:text; outline:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; border-radius:4px; padding:0 2px; flex:1;" title="Click to edit name">
+                        ${habit.text}
+                    </div>
+                    ${hasTemplate ? `
+                        <button class="btn-icon btn-generate-from-temp" style="width: 22px; height: 22px; border-radius: 6px; color:#10b981;" title="Generate tasks from: ${linkedTemplate.name}">
+                            <svg class="svg-icon-sm" style="width:14px; height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                        </button>
+                    ` : ''}
                 </div>
                 <div style="display:flex; align-items:center; gap:10px; margin-top:2px;">
                     ${generateMiniTagsBtn(habit.tags, 'habit', index)}
@@ -277,6 +529,9 @@ export function renderHabitList(space) {
             </div>
 
             <div style="display: ${showActions ? 'flex' : 'none'}; gap: 4px; align-items: center;">
+                <button class="btn-icon btn-link-todo-temp" style="color: ${hasTemplate ? 'var(--primary-color)' : 'inherit'}; padding: 2px;" title="Link To-Do Template">
+                    <svg class="svg-icon-sm"><use href="#icon-layers"></use></svg>
+                </button>
                 <button class="btn-icon delete-habit" style="color:#ef4444; padding: 2px;" title="Delete Habit">${svgTrashRed}</button>
             </div>
         `;
@@ -396,7 +651,25 @@ export function renderHabitList(space) {
             }, isChecked ? 800 : 0); // เพิ่มเป็น 800ms ให้เท่ากับระบบ Task
         });
 
-        // --- 🔘 Event: Filter by Tag ---
+        // --- 🟢 Event: Link To-Do Template ---
+        const linkBtn = el.querySelector('.btn-link-todo-temp');
+        if (linkBtn) {
+            linkBtn.onclick = (e) => {
+                e.stopPropagation();
+                showHabitTemplatePicker(linkBtn, habit, space);
+            };
+        }
+
+        // --- 🟢 Event: Generate Tasks from Template ---
+        const genBtn = el.querySelector('.btn-generate-from-temp');
+        if (genBtn) {
+            genBtn.onclick = (e) => {
+                e.stopPropagation();
+                generateTasksFromHabitTemplate(habit, space);
+            };
+        }
+
+        // --- � Event: Filter by Tag ---
         const filterBtn = el.querySelector('.filter-habit-tag-btn');
         if (filterBtn) {
             filterBtn.onclick = (e) => {
@@ -423,6 +696,11 @@ export function renderHabitList(space) {
         });
 
         container.appendChild(el);
+        
+        // 🟢 NEW: Apply syntax highlighting to the text right after it's rendered
+        if (nameTextEl) {
+            applySyntaxHighlighting(nameTextEl);
+        }
     });
 
     container.sortable = Sortable.create(container, {
@@ -436,6 +714,102 @@ export function renderHabitList(space) {
             renderTasks(space);
         }
     });
+}
+
+/**
+ * 📋 Popup เลือก To-Do Template สำหรับ Habit
+ */
+function showHabitTemplatePicker(anchorEl, habit, space) {
+    const existing = document.getElementById('habit-todo-link-popup');
+    if (existing) { existing.remove(); return; }
+
+    const popup = document.createElement('div');
+    popup.id = 'habit-todo-link-popup';
+    popup.className = 'sf-sub-popup'; // ใช้สไตล์ที่มีอยู่
+    popup.style.width = '220px';
+    popup.style.padding = '12px';
+    
+    const templates = space.todoTemplates || [];
+    
+    popup.innerHTML = `
+        <div style="font-weight:800; font-size:10px; margin-bottom:10px; text-transform:uppercase; color:var(--text-muted); letter-spacing:0.5px;">Link To-Do Template</div>
+        <div style="display:flex; flex-direction:column; gap:4px; max-height:200px; overflow-y:auto; margin-bottom:10px;">
+            ${templates.map((t, i) => `
+                <div class="habit-link-item-row" data-index="${i}" style="display:flex; align-items:center; padding:6px 8px; border-radius:6px; cursor:pointer; font-size:13px; transition:0.2s; ${habit.linkedTemplateIdx === i ? 'background:rgba(47,128,237,0.1); color:var(--primary-color); font-weight:700;' : ''}">
+                    <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${t.name}</span>
+                    ${habit.linkedTemplateIdx === i ? '✅' : ''}
+                </div>
+            `).join('') || '<div style="font-size:11px; opacity:0.5; padding:15px; text-align:center;">No To-Do templates found in this space.</div>'}
+        </div>
+        ${habit.linkedTemplateIdx !== undefined ? `
+            <button id="btn-unlink-todo-temp" class="btn btn-outline" style="width:100%; border:none; color:#ef4444; font-size:11px; justify-content:center; padding:8px; background:rgba(239,68,68,0.05);">Unlink Template</button>
+        ` : ''}
+    `;
+
+    document.body.appendChild(popup);
+
+    const rect = anchorEl.getBoundingClientRect();
+    popup.style.top = `${rect.bottom + window.scrollY + 5}px`;
+    popup.style.left = `${Math.max(10, rect.left + window.scrollX - 180)}px`;
+
+    popup.querySelectorAll('.habit-link-item-row').forEach(row => {
+        row.onclick = () => {
+            habit.linkedTemplateIdx = parseInt(row.dataset.index);
+            saveData(); renderHabitList(space); popup.remove();
+        };
+        row.onmouseenter = () => row.style.background = 'var(--hover-bg)';
+        row.onmouseleave = () => row.style.background = habit.linkedTemplateIdx === parseInt(row.dataset.index) ? 'rgba(47,128,237,0.1)' : 'transparent';
+    });
+
+    const unlinkBtn = document.getElementById('btn-unlink-todo-temp');
+    if (unlinkBtn) {
+        unlinkBtn.onclick = () => {
+            delete habit.linkedTemplateIdx;
+            saveData(); renderHabitList(space); popup.remove();
+        };
+    }
+
+    setTimeout(() => {
+        const close = (ev) => { if (!popup.contains(ev.target)) { popup.remove(); document.removeEventListener('mousedown', close); } };
+        document.addEventListener('mousedown', close);
+    }, 0);
+}
+
+/**
+ * 🚀 สร้างรายการงานจาก Template ที่ผูกไว้
+ */
+function generateTasksFromHabitTemplate(habit, space) {
+    const template = space.todoTemplates ? space.todoTemplates[habit.linkedTemplateIdx] : null;
+    if (!template) return;
+
+    if (!space.tasks) space.tasks = [];
+    
+    // ทำ Deep Copy รายการงานจาก Template เข้าสู่รายการงานจริง
+    template.tasks.forEach(t => {
+        space.tasks.push({
+            ...t,
+            subtasks: (t.subtasks || []).map(s => ({ ...s, id: Date.now() + Math.random() })),
+            createdAt: Date.now(),
+            isFromTemplate: true,
+            googleTaskId: null
+        });
+    });
+
+    saveData();
+    renderTasks(space); // อัปเดต UI รายการงานหลัก
+    
+    // 🎊 Enhanced Feedback Animation
+    const btn = document.querySelector(`.habit-item[data-index="${space.habits.indexOf(habit)}"] .btn-generate-from-temp`);
+    if (btn) {
+        btn.animate([
+            { transform: 'scale(1)', backgroundColor: 'rgba(16,185,129,0.1)' },
+            { transform: 'scale(1.4) rotate(90deg)', backgroundColor: '#10b981', color: 'white' },
+            { transform: 'scale(1)', backgroundColor: 'rgba(16,185,129,0.1)' }
+        ], {
+            duration: 500,
+            easing: 'cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+        });
+    }
 }
 
 /**

@@ -19,7 +19,7 @@
     <symbol id="icon-tag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></symbol>
     <symbol id="icon-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></symbol>
     <symbol id="icon-undo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></symbol>
-    <symbol id="icon-gtask" viewBox="0 0 24 24"><path fill="currentColor" d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path fill="#FFF" d="M10.5 15.5l-4-4 1.4-1.4 2.6 2.6 6.6-6.6 1.4 1.4z"/></symbol>
+    <symbol id="icon-gtask" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.5V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.5"></path><polyline points="9 11 12 14 22 4"></polyline></symbol>
     <symbol id="icon-share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="18" cy="5" r="3"></circle>
       <circle cx="6" cy="12" r="3"></circle>
@@ -59,6 +59,8 @@
     <symbol id="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.09 18.09 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.09 18.09 0 0 1-2.51 3.15"></path><line x1="1" y1="1" x2="23" y2="23"></line><path d="M12 12v.01"></path></symbol>
     <symbol id="icon-rotate-ccw" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></symbol>
     <symbol id="icon-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="17" x2="12" y2="22"></line><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.79-.9A.5.5 0 0 1 16 12.1V8a4 4 0 0 0-8 0v4.1a.5.5 0 0 1-.1.3l-1.79.9A2 2 0 0 0 5 15.24Z"></path></symbol>
+    <symbol id="icon-star" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></symbol>
+    <symbol id="icon-package" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"></line><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></symbol>
   </svg>
 
   <div class="spacebar" id="spacebar">
@@ -106,6 +108,7 @@
       <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-right: 5px;">
         <button class="btn-icon btn-cc-trigger" id="btn-command-center-topbar" title="Master Command Center"><svg class="svg-icon-lg" style="width: 20px; height: 20px;"><use href="#icon-layers"></use></svg></button>
         <button class="btn-icon" id="btn-toggle-spacebar" title="Toggle Spacebar"><svg class="svg-icon-lg"><use href="#icon-sidebar-toggle"></use></svg></button>
+        <button class="btn-icon" id="btn-open-rewards-topbar" title="Quest Loot & Rewards" style="color: #f59e0b;"><svg class="svg-icon-lg"><use href="#icon-sparkles"></use></svg></button>
         <div style="width: 1px; height: 20px; background: var(--border-color); margin: 0 4px; opacity: 0.5;"></div>
       </div>
 
@@ -258,6 +261,8 @@
                 <button id="btn-toggle-prominent-tasks" class="btn-icon" title="Toggle Next Up Visibility" style="padding: 2px; opacity: 0.6;"><svg class="svg-icon-sm"><use href="#icon-flag"></use></svg></button>
                 <button id="btn-expand-all-subtasks" class="btn-icon" title="Expand All Subtasks" style="padding: 2px; opacity: 0.6;"><svg class="svg-icon-sm"><use href="#icon-chevrons-down"></use></svg></button>
                 <button id="btn-collapse-all-subtasks" class="btn-icon" title="Collapse All Subtasks" style="padding: 2px; opacity: 0.6;"><svg class="svg-icon-sm"><use href="#icon-chevrons-up"></use></svg></button>
+                <button id="btn-toggle-gtask-embed" class="btn-icon" title="Switch to Google Tasks View" style="padding: 2px; opacity: 0.6;"><svg class="svg-icon-sm"><use href="#icon-google-minimal"></use></svg></button>
+                <button id="btn-todo-templates" class="btn btn-outline" style="font-size: 11px; padding: 2px 8px; margin-left: 5px;">📑 Templates</button>
               </div>
               <div id="google-task-controls" class="google-task-menu" style="display:none;">
                  <button id="btn-toggle-specific-list" class="btn-icon" title="Space-Specific List" style="margin-right: 4px; padding: 2px;"><svg class="svg-icon-sm"><use href="#icon-lock-minimal"></use></svg></button>
@@ -274,6 +279,10 @@
               <button class="btn btn-primary" id="btn-add-task" style="padding: 5px 12px; flex-shrink: 0; font-size: 13px; margin-left: 4px;">Add</button>
             </div>
             
+            <div id="gtask-embed-container" style="display: none; height: 500px; margin-top: 10px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color);">
+                <iframe id="gtask-iframe" src="" style="width: 100%; height: 100%; border: none;"></iframe>
+            </div>
+
             <ul class="task-list drag-container" id="task-list"></ul>
             
             <details id="archived-tasks-details" style="margin-top:10px; margin-bottom:15px;">

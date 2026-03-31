@@ -1,7 +1,7 @@
 import Sortable from '../sortable.esm.js';
 import { getSpaces, getCurrentSpaceId, setCurrentSpaceId, saveData, setSpaces, getAppSettings } from '../core/storage.js';
 import { getScheduleRemainingTime } from '../features/scheduleMode.js';
-import { svgCustomize, svgShare, svgArchive, svgUnarchive, svgTrashRed, dragHandleSvg, svgRestore } from '../core/icons.js';
+import { svgCustomize, svgShare, svgArchive, svgUnarchive, svgTrashRed, dragHandleSvg, svgRestore, svgPin } from '../core/icons.js';
 import { getTrashCountdownText } from '../core/ui-helpers.js';
 
 // Callbacks to the main dashboard.js
@@ -129,22 +129,9 @@ export function initSidebar(callbacks) {
 function toggleFolder(folderName) {
     const settings = getAppSettings();
     
-    // 🟢 เช็คว่าถ้าโฟลเดอร์ถูก Lock อยู่ หรือมี Space ที่ใช้งานอยู่ ไม่ให้ทำงาน (ห้ามพับ)
     if (settings.lockedFolders && settings.lockedFolders.includes(folderName)) {
         return;
     }
-    const currentSpace = getSpaces().find(s => s.id === getCurrentSpaceId());
-    const activeFolder = currentSpace ? (currentSpace.folder || 'General') : null;
-    
-    if (folderName === activeFolder) return;
-
-    // 🟢 ห้ามพับถ้ามี Space ภายในที่กำลังอยู่ในเวลาทำงาน (Schedule Active)
-    const folderSpaces = getSpaces().filter(s => (s.folder || 'General') === folderName);
-    const hasActiveWork = folderSpaces.some(s => {
-        const status = getCombinedStatus(s);
-        return status.active && !status.isLocked;
-    });
-    if (hasActiveWork) return;
 
     if (!settings.collapsedFolders) settings.collapsedFolders = [];
     
@@ -291,8 +278,10 @@ export function renderSidebar() {
     const createSpaceElement = (space) => {
         const div = document.createElement('div');
         div.dataset.id = space.id;
-        const isLocked = getCombinedStatus(space).isLocked;
-        div.className = `space-item ${space.id === getCurrentSpaceId() ? 'active' : ''} ${isLocked ? 'locked-space' : ''}`;
+        const status = getCombinedStatus(space);
+        const isWorking = status.active && !status.isLocked; // 🟢 ทามเมอร์กำลังเดิน หรืออยู่ในเวลาทำงาน
+        const pinnedClass = space.isPinned ? 'is-pinned' : '';
+        div.className = `space-item ${space.id === getCurrentSpaceId() ? 'active' : ''} ${status.isLocked ? 'locked-space' : ''} ${pinnedClass} ${isWorking ? 'is-working' : ''}`;
         
         let iconVal = space.icon || "📁";
         let iconHTML;
@@ -379,18 +368,8 @@ export function renderSidebar() {
     const collapsedFolders = settings.collapsedFolders || [];
 
     folderOrder.forEach(folderName => {
-        const currentSpace = allSpaces.find(s => s.id === getCurrentSpaceId());
-        const activeFolder = currentSpace ? (currentSpace.folder || 'General') : null;
-        
-        // 🟢 ตรวจสอบว่ามี Space ภายในที่กำลัง Active (Schedule/Focus) หรือไม่
-        const hasActiveWork = groups[folderName].some(s => {
-            const status = getCombinedStatus(s);
-            return status.active && !status.isLocked;
-        });
-        
-        let isCollapsed = collapsedFolders.includes(folderName);
-        if (folderName === activeFolder || hasActiveWork) isCollapsed = false; // บังคับกางออกเสมอ
-        
+        const isCollapsed = settings.collapsedFolders?.includes(folderName);
+
         const isLocked = settings.lockedFolders?.includes(folderName);
         
         const folderWrapper = document.createElement('div');
@@ -420,7 +399,7 @@ export function renderSidebar() {
                     <use href="#icon-chevron-right"></use>
                 </svg>
                 ${fIconHTML}
-                <span class="folder-name-text" style="flex:1; overflow:hidden; text-overflow:ellipsis;">${folderName}</span>
+                <span class="folder-name-text" style="overflow:hidden; text-overflow:ellipsis;">${folderName}</span>
             </div>
             <div class="folder-actions" style="display:none; gap:4px;">
                 <button class="btn-icon add-space-to-folder-btn" title="Add Space to this Folder" style="padding:4px; font-size:18px;">+</button>
@@ -560,6 +539,7 @@ function showSpaceContextMenu(e, space, btn) {
     menu.innerHTML = `
         ${!isTrash ? `
             <button class="menu-item" id="ctx-cust-btn" style="display:flex; align-items:center; width:100%; padding:6px 10px; border:none; background:transparent; cursor:pointer; font-size:13px; color:var(--text-main); text-align:left; border-radius:4px;">${svgCustomize} Customize Space</button>
+            <button class="menu-item" id="ctx-pin-btn" style="display:flex; align-items:center; width:100%; padding:6px 10px; border:none; background:transparent; cursor:pointer; font-size:13px; color:var(--text-main); text-align:left; border-radius:4px;">${svgPin} ${space.isPinned ? 'Unpin Space' : 'Pin Space'}</button>
             <button class="menu-item" id="ctx-share-btn" style="display:flex; align-items:center; width:100%; padding:6px 10px; border:none; background:transparent; cursor:pointer; font-size:13px; color:var(--text-main); text-align:left; border-radius:4px;">${svgShare} Share Space</button>
             <button class="menu-item" id="ctx-delete-btn" style="display:flex; align-items:center; gap:8px; width:100%; padding:6px 10px; border:none; background:transparent; cursor:pointer; font-size:13px; color:#dc2626; text-align:left; border-radius:4px;">${svgTrashRed} Move to Trash</button>
             <div style="height:1px; background:var(--border-color); margin: 4px 8px;"></div>
@@ -587,7 +567,12 @@ function showSpaceContextMenu(e, space, btn) {
     }
 
     menu.style.top = `${top}px`;
-    menu.style.left = `${rect.left + window.scrollX}px`;
+
+    // 🟢 ป้องกันล้นขอบขวา
+    let left = rect.left + window.scrollX;
+    if (left + menuRect.width > window.innerWidth) left = window.innerWidth - menuRect.width - 10;
+    
+    menu.style.left = `${Math.max(10, left)}px`;
     menu.style.visibility = 'visible'; // Show the menu now that it's positioned
 
     // Hover effects
@@ -600,6 +585,14 @@ function showSpaceContextMenu(e, space, btn) {
     const custBtn = document.getElementById('ctx-cust-btn');
     if (custBtn) custBtn.onclick = () => { closeContextMenu(); window.openCustomizeSpaceModal(space.id); };
     
+    const pinBtn = document.getElementById('ctx-pin-btn');
+    if (pinBtn) pinBtn.onclick = () => {
+        closeContextMenu();
+        space.isPinned = !space.isPinned;
+        saveData();
+        renderSidebar();
+    };
+
     const shareBtn = document.getElementById('ctx-share-btn');
     if (shareBtn) shareBtn.onclick = () => { closeContextMenu(); const link = `https://myworkona.test/open?spaceId=${space.id}`; prompt('Copy this link:', link); };
 

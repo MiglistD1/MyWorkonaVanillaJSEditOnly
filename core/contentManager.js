@@ -141,11 +141,13 @@ export function initContentManager() {
     // 1. Spacebar Toggle (Renamed from Sidebar)
     const spacebar = document.getElementById('spacebar');
     const toggleBtn = document.getElementById('btn-toggle-spacebar');
+    const ccBtnTopbar = document.getElementById('btn-command-center-topbar');
     
     const updateToggleBtnUI = () => {
-        if (toggleBtn && spacebar) {
-            // เพิ่ม class sidebar-hidden เมื่อ sidebar ถูกพับ
-            toggleBtn.classList.toggle('sidebar-hidden', spacebar.classList.contains('collapsed'));
+        if (spacebar) {
+            const isCollapsed = spacebar.classList.contains('collapsed');
+            if (toggleBtn) toggleBtn.classList.toggle('sidebar-hidden', isCollapsed);
+            if (ccBtnTopbar) ccBtnTopbar.classList.toggle('sidebar-hidden', isCollapsed);
         }
     };
 

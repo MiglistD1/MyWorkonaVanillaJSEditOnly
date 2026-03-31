@@ -196,3 +196,19 @@ export function getShortDate(d = new Date()) {
 export function getCurrentSpace() {
     return spaces.find(s => s.id === currentSpaceId);
 }
+
+// Helper function to convert unit char to Thai unit
+export function getThaiUnit(unitChar) {
+    if (unitChar === 'b') return 'บาท';
+    if (unitChar === 't') return 'นาที';
+    if (unitChar === 'i') return 'อัน';
+    return '';
+}
+
+// Helper function to convert Thai unit to unit char
+export function getUnitCharFromThai(thaiUnit) {
+    if (thaiUnit === 'บาท') return 'b';
+    if (thaiUnit === 'นาที') return 't';
+    if (thaiUnit === 'อัน') return 'i';
+    return '';
+}

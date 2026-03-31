@@ -25,8 +25,8 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 });
 
 // Create a periodic alarm for Google Tasks sync
-chrome.alarms.create('google-tasks-sync-alarm', {
-  periodInMinutes: 5
+chrome.alarms.create('google-tasks-sync-alarm', { // Changed from 5 minutes to 1 minute for faster sync
+  periodInMinutes: 1
 });
 
 // Create a periodic alarm for auto-export

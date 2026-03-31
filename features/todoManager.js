@@ -1,7 +1,7 @@
 import Sortable from '../sortable.esm.js';
-import { getCurrentSpace, saveData, getShortDate, getAppSettings, setCurrentSpaceId, getSpaces, getFilterTags } from '../core/storage.js';
-import { svgEdit, svgTrashRed } from '../core/icons.js';
-import { generateMiniTagsBtn, generateTaskHTML, attachSubtaskEventListeners, attachTaskInlineEditListeners, handleTagAutocomplete } from '../core/ui-helpers.js';
+import { getCurrentSpace, saveData, getShortDate, getAppSettings, setCurrentSpaceId, getSpaces, getFilterTags, loadData } from '../core/storage.js';
+import { svgEdit, svgTrashRed, googleTasksIcon } from '../core/icons.js';
+import { generateMiniTagsBtn, generateTaskHTML, attachSubtaskEventListeners, attachTaskInlineEditListeners, handleTagAutocomplete, applySyntaxHighlighting } from '../core/ui-helpers.js';
     const taskInput = document.getElementById('new-task-input');
     if (taskInput) {
         taskInput.addEventListener('input', (e) => handleTagAutocomplete(e, () => getCurrentSpace()?.tags || []));
@@ -36,6 +36,8 @@ let editingLinkTaskIdx = null;
 let editingLinkSubIdx = null;
 let editingLinkSpaceId = null;
 let addingSubtaskToIndex = null; // เก็บ Index ของงานหลักที่กำลังจะเพิ่มงานย่อย
+let editingTemplateIndex = null; // 🟢 สำหรับจำว่ากำลังแก้ไข Template ไหนอยู่
+let currentTemplateTasks = []; // ตัวแปรชั่วคราวขณะสร้าง Template
 
 // Helpers
 
@@ -67,7 +69,10 @@ export function initTodoManager(callbacks) {
     // Listen for background sync completion
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (message.type === 'GOOGLE_TASKS_SYNC_COMPLETE') {
-            onRenderCallback(); // Trigger re-render of tasks
+            // 🟢 โหลดข้อมูลใหม่จาก Storage ก่อนเรนเดอร์ เพื่อให้เห็นการเปลี่ยนแปลงจาก Google Tasks
+            loadData(() => {
+                onRenderCallback(); 
+            });
         }
     });
     onRenderCallback = callbacks.onRender;
@@ -75,6 +80,9 @@ export function initTodoManager(callbacks) {
     // Event Listeners
     document.getElementById('btn-add-task').addEventListener('click', addTask);
     document.getElementById('new-task-input').addEventListener('keypress', (e) => { if (e.key === 'Enter') addTask(); });
+
+    // 🟢 Template System Initialization
+    initTodoTemplateSystem();
 
     // Toggle Global Prominent Visibility
     const toggleProminentBtn = document.getElementById('btn-toggle-prominent-tasks'); //
@@ -250,6 +258,27 @@ export function initTodoManager(callbacks) {
         });
     }
 
+    // 🟢 Empty Trash Tasks Button
+    const btnEmptyTrash = document.getElementById('btn-empty-tasks-trash');
+    if (btnEmptyTrash) {
+        btnEmptyTrash.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation(); // ป้องกันการพับ/เปิดของ Details เมื่อกดปุ่ม
+            const space = getCurrentSpace();
+            if (space && confirm("Empty Tasks Trash? This cannot be undone.")) {
+                // ลบออกจาก Google Tasks ด้วยหากมีการซิงค์อยู่
+                for (const t of space.tasks) {
+                    if (t.isDeleted && t.googleTaskId && getGoogleAuthToken()) {
+                        await fetchGoogleAPI(`/lists/${getCurrentGoogleListId()}/tasks/${t.googleTaskId}`, 'DELETE');
+                    }
+                }
+                space.tasks = space.tasks.filter(t => !t.isDeleted);
+                saveData();
+                onRenderCallback();
+            }
+        });
+    }
+
     // Delegation for Task List Actions
     const handleTaskClick = async (e) => {
         const space = getCurrentSpace();
@@ -310,7 +339,7 @@ export function initTodoManager(callbacks) {
             if (!task) return;
 
             const token = getGoogleAuthToken();
-            const listId = getCurrentGoogleListId();
+            const listId = getCurrentGoogleListId(space); // 🟢 ส่ง space เข้าไปด้วย
 
             if (!token) {
                 alert("Please connect to Google first");
@@ -346,7 +375,8 @@ export function initTodoManager(callbacks) {
                 task.isProminent = false;
                 // Google Sync
                 if (task.googleTaskId && getGoogleAuthToken()) {
-                    fetchGoogleAPI(`/lists/${getCurrentGoogleListId()}/tasks/${task.googleTaskId}`, 'PATCH', { status: 'completed' });
+                    const targetListId = getCurrentGoogleListId(space);
+                    fetchGoogleAPI(`/lists/${targetListId}/tasks/${task.googleTaskId}`, 'PATCH', { status: 'completed' });
                 }
                 // Auto-complete subtasks
                 if (task.subtasks) {
@@ -366,7 +396,8 @@ export function initTodoManager(callbacks) {
             if (task) {
                 task.completed = true;
                 if (task.googleTaskId && getGoogleAuthToken()) {
-                    fetchGoogleAPI(`/lists/${getCurrentGoogleListId()}/tasks/${task.googleTaskId}`, 'PATCH', { status: 'completed' });
+                    const targetListId = getCurrentGoogleListId(space);
+                    fetchGoogleAPI(`/lists/${targetListId}/tasks/${task.googleTaskId}`, 'PATCH', { status: 'completed' });
                 }
                 saveData(); onRenderCallback();
             }
@@ -411,8 +442,9 @@ export function initTodoManager(callbacks) {
         if (e.target.closest('.delete-task-perm-btn')) {
             const idx = parseInt(e.target.closest('.delete-task-perm-btn').dataset.index);
             if (confirm("Delete task permanently?")) {
-                if (space.tasks[idx].googleTaskId && getGoogleAuthToken()) { 
-                    fetchGoogleAPI(`/lists/${getCurrentGoogleListId()}/tasks/${space.tasks[idx].googleTaskId}`, 'DELETE'); 
+                if (space.tasks[idx].googleTaskId && getGoogleAuthToken()) {
+                    const targetListId = getCurrentGoogleListId(space);
+                    fetchGoogleAPI(`/lists/${targetListId}/tasks/${space.tasks[idx].googleTaskId}`, 'DELETE'); 
                 }
                 space.tasks.splice(idx, 1); saveData(); onRenderCallback();
             }
@@ -425,7 +457,8 @@ export function initTodoManager(callbacks) {
             if (confirm("Delete subtask permanently?")) {
                 const subtask = space.tasks[pIdx]?.subtasks?.[sIdx];
                 if (subtask && subtask.googleTaskId && getGoogleAuthToken()) {
-                    fetchGoogleAPI(`/lists/${getCurrentGoogleListId()}/tasks/${subtask.googleTaskId}`, 'DELETE');
+                    const targetListId = getCurrentGoogleListId(space);
+                    fetchGoogleAPI(`/lists/${targetListId}/tasks/${subtask.googleTaskId}`, 'DELETE');
                 }
                 space.tasks[pIdx].subtasks.splice(sIdx, 1);
                 saveData(); onRenderCallback();
@@ -493,7 +526,7 @@ export function initTodoManager(callbacks) {
             if (!task) return;
 
             const token = getGoogleAuthToken();
-            const listId = getCurrentGoogleListId();
+            const targetListId = getCurrentGoogleListId(space);
 
             if (!token) {
                 alert("Please connect to Google first");
@@ -502,7 +535,7 @@ export function initTodoManager(callbacks) {
 
             if (task.googleTaskId) {
                 // ปิดการซิงค์: ลบออกจาก Google
-                await fetchGoogleAPI(`/lists/${listId}/tasks/${task.googleTaskId}`, 'DELETE');
+                await fetchGoogleAPI(`/lists/${targetListId}/tasks/${task.googleTaskId}`, 'DELETE');
                 task.googleTaskId = null;
             } else {
                 // เปิดการซิงค์: ตรวจสอบว่างานหลักซิงค์แล้วหรือยังเพื่อทำการ Nesting
@@ -515,7 +548,7 @@ export function initTodoManager(callbacks) {
                 const gTitle = `${task.text} (S: ${space.name})`;
                 let gBody = { title: gTitle };
                 if (task.dueDate) { gBody.due = new Date(task.dueDate).toISOString(); }
-                const gTask = await createGoogleTask(listId, gBody, parentTask.googleTaskId);
+                const gTask = await createGoogleTask(targetListId, gBody, parentTask.googleTaskId);
                 if (gTask && gTask.id) {
                     task.googleTaskId = gTask.id;
                 }
@@ -561,9 +594,9 @@ export function initTodoManager(callbacks) {
                 // 🟢 ค้นหาตำแหน่งสุดท้ายของกลุ่มงานที่ติดธงอยู่แล้ว
                 let lastProminentIdx = -1;
                 for (let i = 0; i < space.tasks.length; i++) {
-                    if (space.tasks[i].isProminent && space.tasks[i] !== movedTask) {
+                    if (space.tasks[i].isProminent) {
                         lastProminentIdx = i;
-                    } else if (!space.tasks[i].isProminent) {
+                    } else {
                         break; // งานติดธงจะอยู่บนสุดเสมอ จึงหยุดหาได้ทันทีที่เจองานปกติ
                     }
                 }
@@ -658,7 +691,8 @@ export function initTodoManager(callbacks) {
                 }
                 
                 if (task.googleTaskId && getGoogleAuthToken()) { 
-                    fetchGoogleAPI(`/lists/${getCurrentGoogleListId()}/tasks/${task.googleTaskId}`, 'PATCH', { status: isChecked ? 'completed' : 'needsAction' }); 
+                    const targetListId = getCurrentGoogleListId(space);
+                    fetchGoogleAPI(`/lists/${targetListId}/tasks/${task.googleTaskId}`, 'PATCH', { status: isChecked ? 'completed' : 'needsAction' }); 
                 }
 
                 // อัปเดตสถานะงานย่อยทั้งหมด
@@ -667,7 +701,8 @@ export function initTodoManager(callbacks) {
                         if (!sub) return;
                         sub.completed = isChecked;
                         if (sub.googleTaskId && getGoogleAuthToken()) {
-                            fetchGoogleAPI(`/lists/${getCurrentGoogleListId()}/tasks/${sub.googleTaskId}`, 'PATCH', { status: isChecked ? 'completed' : 'needsAction' });
+                            const targetListId = getCurrentGoogleListId(space);
+                            fetchGoogleAPI(`/lists/${targetListId}/tasks/${sub.googleTaskId}`, 'PATCH', { status: isChecked ? 'completed' : 'needsAction' });
                         }
                     });
                 }
@@ -786,7 +821,8 @@ export function initTodoManager(callbacks) {
                     task = space.tasks[pIdx]?.subtasks?.[index];
                 }
                 if (task && task.googleTaskId && getGoogleAuthToken()) {
-                    fetchGoogleAPI(`/lists/${getCurrentGoogleListId() || '@default'}/tasks/${task.googleTaskId}`, 'DELETE');
+                    const targetListId = getCurrentGoogleListId(space);
+                    fetchGoogleAPI(`/lists/${targetListId || '@default'}/tasks/${task.googleTaskId}`, 'DELETE');
                 }
                 if (type === 'task') space.tasks.splice(index, 1);
                 else {
@@ -863,7 +899,8 @@ export function initTodoManager(callbacks) {
                     task = space.tasks[pIdx]?.subtasks?.[index];
                 }
                 if (task && task.googleTaskId && getGoogleAuthToken()) {
-                    fetchGoogleAPI(`/lists/${getCurrentGoogleListId() || '@default'}/tasks/${task.googleTaskId}`, 'DELETE');
+                    const targetListId = getCurrentGoogleListId(space);
+                    fetchGoogleAPI(`/lists/${targetListId || '@default'}/tasks/${task.googleTaskId}`, 'DELETE');
                 }
                 if (type === 'task') space.tasks.splice(index, 1);
                 else {
@@ -996,6 +1033,216 @@ export function initTodoManager(callbacks) {
     }
 }
 
+/**
+ * 📑 ระบบจัดการ Template To-Do List
+ */
+function initTodoTemplateSystem() {
+    const btnOpen = document.getElementById('btn-todo-templates');
+    if (!btnOpen) return;
+
+    // สร้าง Modal HTML
+    if (!document.getElementById('todo-template-modal')) {
+        const modalHTML = `
+        <div class="modal-overlay" id="todo-template-modal" style="display:none; z-index:12000;">
+            <div class="modal-content" style="width:500px; max-height:85vh; display:flex; flex-direction:column;">
+                <h3 style="margin-top:0;">📑 Template Manager</h3>
+                
+                <div id="template-editor-section" style="border:1px solid var(--border-color); border-radius:8px; padding:15px; background:var(--bg-body); margin-bottom:15px; flex-shrink:0; transition: border-color 0.3s ease;">
+                    <label style="font-size:11px; font-weight:800; color:var(--text-muted); text-transform:uppercase;">Create / Edit Template</label>
+                    <input type="text" id="template-name-input" class="settings-input" placeholder="Template Name (e.g. Morning Routine)" style="margin:8px 0;">
+                    
+                    <div class="task-input-bar" style="margin-bottom:10px;">
+                        <input type="text" id="template-task-input" class="task-input" placeholder="Add task to template...">
+                        <button class="btn btn-primary" id="btn-add-task-to-temp" style="padding:4px 12px;">+</button>
+                    </div>
+                    <ul class="task-list" id="template-sandbox-list" style="max-height:250px; overflow-y:auto; background:var(--bg-card); border-radius:6px; padding:5px; border:1px solid var(--border-color);"></ul>
+                    
+                    <button class="btn btn-primary" id="btn-save-full-template" style="width:100%; justify-content:center; margin-top:10px;">💾 Save Template</button>
+                </div>
+
+                <label style="font-size:11px; font-weight:800; color:var(--text-muted); text-transform:uppercase;">Saved Templates</label>
+                <div id="saved-templates-list" style="flex:1; overflow-y:auto; margin-top:8px; display:flex; flex-direction:column; gap:8px;"></div>
+
+                <div class="modal-actions" style="margin-top:20px; text-align:right;">
+                    <button class="btn btn-outline" id="btn-close-todo-template-modal">Close</button>
+                </div>
+            </div>
+        </div>`;
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+    }
+
+    const modal = document.getElementById('todo-template-modal');
+    const sandboxList = document.getElementById('template-sandbox-list');
+    const tempTaskInput = document.getElementById('template-task-input');
+    const nameInput = document.getElementById('template-name-input');
+    const savedListUI = document.getElementById('saved-templates-list');
+
+    // 🟢 บันทึกฟังก์ชัน Refresh ไว้เพื่อให้ Modals เรียกใช้งานได้
+    window._refreshSandbox = () => { renderSandbox(); };
+
+    const renderSandbox = () => {
+        sandboxList.innerHTML = currentTemplateTasks.map((t, i) => {
+            const hasLink = t.linkData && t.linkData.url;
+            const linkIcon = hasLink ? '#icon-notebook' : '#icon-link';
+            const syncActive = t.wantsSync ? 'active' : '';
+            
+            return `
+            <li class="task-item" style="padding:8px 12px; border-bottom:1px solid var(--border-color); display:flex; align-items:center; gap:10px;">
+                <div style="width:16px; height:16px; border-radius:50%; border:2px solid var(--border-color); opacity:0.3;"></div>
+                <span style="flex:1; font-size:14px; font-weight:500;">${t.text}</span>
+                
+                <div class="item-action-group" style="display:flex; align-items:center; gap:6px; opacity:1;">
+                    ${generateMiniTagsBtn(t.tags, 'sandbox-task', i)}
+                    
+                    <button class="btn-icon task-link-btn ${hasLink ? 'has-link' : ''}" data-index="${i}" title="Task Link">
+                        <svg class="svg-icon-sm"><use href="${linkIcon}"></use></svg>
+                    </button>
+
+                    <button class="btn-icon main-task-sync-toggle-btn ${syncActive}" data-index="${i}" title="Google Tasks Sync">
+                        ${googleTasksIcon}
+                    </button>
+
+                    <button class="btn-icon btn-remove-temp-task" data-index="${i}" style="color:#ef4444; margin-left: 5px;">✕</button>
+                </div>
+            </li>`;
+        }).join('');
+    };
+
+    sandboxList.onclick = (e) => {
+        const target = e.target;
+        const removeBtn = target.closest('.btn-remove-temp-task');
+        const tagBtn = target.closest('.btn-edit-tags');
+        const linkBtn = target.closest('.task-link-btn');
+        const syncBtn = target.closest('.main-task-sync-toggle-btn');
+
+        if (removeBtn) {
+            const i = parseInt(removeBtn.dataset.index);
+            currentTemplateTasks.splice(i, 1);
+            renderSandbox();
+        } else if (tagBtn) {
+            openSandboxTagModal(parseInt(tagBtn.dataset.index)); // 🟢 เรียก Modal แทน prompt
+        } else if (linkBtn) {
+            openTaskLinkModal(parseInt(linkBtn.dataset.index), false, null, 'sandbox'); // 🟢 เรียก Modal แทน prompt
+        } else if (syncBtn) {
+            const i = parseInt(syncBtn.dataset.index);
+            currentTemplateTasks[i].wantsSync = !currentTemplateTasks[i].wantsSync;
+            renderSandbox();
+        }
+    };
+
+    const renderSavedTemplates = () => {
+        const space = getCurrentSpace();
+        if (!space.todoTemplates) space.todoTemplates = [];
+        
+        savedListUI.innerHTML = space.todoTemplates.map((temp, idx) => `
+            <div class="loot-item" style="margin:0; padding:10px 15px; border-left:4px solid var(--primary-color);">
+                <div style="flex:1;">
+                    <div style="font-weight:700; font-size:14px;">${temp.name}</div>
+                    <div style="font-size:11px; color:var(--text-muted);">${temp.tasks.length} tasks</div>
+                </div>
+                <div style="display:flex; gap:8px;">
+                    <button class="btn btn-primary btn-apply-template" data-index="${idx}" style="padding:4px 12px; font-size:11px;">Use Template</button>
+                    <button class="btn-icon btn-edit-template" data-index="${idx}" style="color:var(--primary-color);">${svgEdit}</button>
+                    <button class="btn-icon btn-delete-template" data-index="${idx}" style="color:#ef4444;">${svgTrashRed}</button>
+                </div>
+            </div>
+        `).join('') || '<div style="text-align:center; padding:20px; opacity:0.5; font-size:12px;">No templates saved yet</div>';
+    };
+
+    const applyTodoTemplate = async (idx) => {
+        const space = getCurrentSpace();
+        const template = space.todoTemplates[idx];
+        if (template) {
+            for (const t of template.tasks) {
+                const newTask = {
+                    ...t,
+                    subtasks: (t.subtasks || []).map(s => ({ ...s, id: Date.now() + Math.random() })),
+                    createdAt: Date.now(),
+                    isFromTemplate: true, // 🟢 มาร์คว่าเป็นงานจาก Template เพื่อติดสีส้ม
+                    googleTaskId: null
+                };
+
+                // ☁️ Auto-sync with Google Tasks if enabled in Template
+                if (t.wantsSync && isGoogleSyncEnabled() && getGoogleAuthToken()) {
+                    const gTitle = `${t.text} (S: ${space.name})`;
+                    let gBody = { title: gTitle };
+                    if (t.dueDate) gBody.due = new Date(t.dueDate).toISOString();
+                    
+                    const gTask = await fetchGoogleAPI(`/lists/${getCurrentGoogleListId()}/tasks`, 'POST', gBody);
+                    if (gTask && gTask.id) {
+                        newTask.googleTaskId = gTask.id;
+                    }
+                }
+
+                space.tasks.push(newTask);
+            }
+            saveData();
+            onRenderCallback();
+            modal.style.display = 'none';
+        }
+    };
+
+    const editTodoTemplate = (idx) => {
+        const space = getCurrentSpace();
+        const template = space.todoTemplates[idx];
+        if (template) {
+            editingTemplateIndex = idx;
+            nameInput.value = template.name;
+            // สร้างสำเนาข้อมูล (Deep Copy) เพื่อไม่ให้กระทบต้นฉบับขณะแก้
+            currentTemplateTasks = JSON.parse(JSON.stringify(template.tasks));
+            renderSandbox();
+            document.getElementById('btn-save-full-template').innerText = "💾 Update Template";
+            document.getElementById('template-editor-section').style.borderColor = 'var(--primary-color)';
+        }
+    };
+
+    const deleteTodoTemplate = (idx) => {
+        if (confirm("Delete this template?")) {
+            getCurrentSpace().todoTemplates.splice(idx, 1);
+            saveData(); renderSavedTemplates();
+        }
+    };
+
+    savedListUI.onclick = (e) => {
+        const applyBtn = e.target.closest('.btn-apply-template');
+        const delBtn = e.target.closest('.btn-delete-template');
+        const editBtn = e.target.closest('.btn-edit-template');
+        if (applyBtn) {
+            applyTodoTemplate(parseInt(applyBtn.dataset.index));
+        } else if (delBtn) {
+            deleteTodoTemplate(parseInt(delBtn.dataset.index));
+        } else if (editBtn) {
+            editTodoTemplate(parseInt(editBtn.dataset.index));
+        }
+    };
+
+    document.getElementById('btn-close-todo-template-modal').onclick = () => modal.style.display = 'none';
+
+    btnOpen.onclick = () => {
+        currentTemplateTasks = [];
+        tempTaskInput.value = '';
+        nameInput.value = '';
+        renderSandbox();
+        renderSavedTemplates();
+        modal.style.display = 'flex';
+    };
+
+    document.getElementById('btn-add-task-to-temp').onclick = () => {
+        const val = tempTaskInput.value.trim();
+        if (val) { currentTemplateTasks.push({ text: val, completed: false, subtasks: [], tags: [], linkData: null, wantsSync: true }); tempTaskInput.value = ''; renderSandbox(); }
+    };
+
+    document.getElementById('btn-save-full-template').onclick = () => {
+        const name = nameInput.value.trim();
+        if (!name || currentTemplateTasks.length === 0) return alert("Please enter name and at least 1 task");
+        const space = getCurrentSpace();
+        if (!space.todoTemplates) space.todoTemplates = [];
+        space.todoTemplates.push({ name, tasks: [...currentTemplateTasks] });
+        saveData();
+        currentTemplateTasks = []; nameInput.value = ''; renderSandbox(); renderSavedTemplates();
+    };
+}
+
 async function addTask() { 
     const input = document.getElementById('new-task-input'); 
     const dateInput = document.getElementById('new-task-date');
@@ -1031,10 +1278,11 @@ async function addTask() {
 
         if (isGoogleSyncEnabled() && getGoogleAuthToken()) {
             input.placeholder = "Syncing... ☁️";
+            const listId = getCurrentGoogleListId(space);
             const gTitle = `${text} (S: ${space.name})`;
             let gBody = { title: gTitle };
             if (newTask.dueDate) { gBody.due = new Date(newTask.dueDate).toISOString(); }
-            const gTask = await fetchGoogleAPI(`/lists/${getCurrentGoogleListId()}/tasks`, 'POST', gBody);
+            const gTask = await fetchGoogleAPI(`/lists/${listId}/tasks`, 'POST', gBody);
             if (gTask && gTask.id) { newTask.googleTaskId = gTask.id; } 
         }
         space.tasks.push(newTask); 
@@ -1083,7 +1331,7 @@ async function saveEditedTask() {
     const newDate = document.getElementById('edit-task-date-input').value;
     const wantsSync = document.getElementById('edit-task-sync-check').checked;
     const token = getGoogleAuthToken();
-    const listId = getCurrentGoogleListId();
+    const listId = getCurrentGoogleListId(space);
     
     if(newName === "") return;
     
@@ -1133,6 +1381,35 @@ async function saveEditedTask() {
     _fromCommandCenter = false; // Reset the flag
 }
 
+/**
+ * 🏷️ ฟังก์ชันขับเคลื่อน Tag Modal สำหรับโหมด Sandbox
+ */
+function openSandboxTagModal(index) {
+    const task = currentTemplateTasks[index];
+    if (!task) return;
+
+    const modal = document.getElementById('tag-modal');
+    const container = document.getElementById('modal-tag-list-container');
+    const space = getCurrentSpace();
+    
+    // วาดรายการ Tag จาก Space ปัจจุบัน
+    container.innerHTML = (space?.tags || []).map(tag => `
+        <label class="tag-select-row">
+            <input type="checkbox" class="sandbox-tag-check" value="${tag}" ${task.tags.includes(tag) ? 'checked' : ''}>
+            <span>${tag}</span>
+        </label>
+    `).join('') || '<p style="font-size:12px; opacity:0.5; padding:10px;">No tags found in this space.</p>';
+
+    modal.style.display = 'flex';
+    
+    document.getElementById('btn-save-item-tags').onclick = () => {
+        task.tags = Array.from(container.querySelectorAll('.sandbox-tag-check:checked')).map(cb => cb.value);
+        modal.style.display = 'none';
+        if (window._refreshSandbox) window._refreshSandbox();
+    };
+    document.getElementById('btn-close-modal').onclick = () => { modal.style.display = 'none'; };
+}
+
 export function openTaskLinkModal(idx, isSubtask, pIdx = null, spaceId = null) {
     if (isSubtask) {
         editingLinkTaskIdx = pIdx;
@@ -1143,13 +1420,18 @@ export function openTaskLinkModal(idx, isSubtask, pIdx = null, spaceId = null) {
     }
     editingLinkSpaceId = spaceId;
 
-    const spaces = getSpaces();
-    const space = spaceId ? spaces.find(s => s.id === spaceId) : getCurrentSpace();
-    if (!space) return;
+    let task;
+    if (spaceId === 'sandbox') {
+        task = currentTemplateTasks[idx]; // 🟢 ดึงข้อมูลจาก Sandbox Array
+    } else {
+        const spaces = getSpaces();
+        const space = spaceId ? spaces.find(s => s.id === spaceId) : getCurrentSpace();
+        if (!space) return;
 
-    let task = space.tasks[editingLinkTaskIdx];
-    if (isSubtask && task.subtasks) {
-        task = task.subtasks[editingLinkSubIdx];
+        task = space.tasks[editingLinkTaskIdx];
+        if (isSubtask && task.subtasks) {
+            task = task.subtasks[editingLinkSubIdx];
+        }
     }
 
     if (!task) return;
@@ -1164,13 +1446,18 @@ async function saveTaskLink() {
     const url = document.getElementById('task-link-input').value.trim();
     const isSideview = document.getElementById('task-link-sideview').checked;
 
-    const spaces = getSpaces();
-    const space = editingLinkSpaceId ? spaces.find(s => s.id === editingLinkSpaceId) : getCurrentSpace();
-    if (!space) return;
+    let task;
+    if (editingLinkSpaceId === 'sandbox') {
+        task = currentTemplateTasks[editingLinkSubIdx !== null ? editingLinkSubIdx : editingLinkTaskIdx];
+    } else {
+        const spaces = getSpaces();
+        const space = (editingLinkSpaceId && editingLinkSpaceId !== 'sandbox') ? spaces.find(s => s.id === editingLinkSpaceId) : getCurrentSpace();
+        if (!space) return;
 
-    let task = space.tasks[editingLinkTaskIdx];
-    if (editingLinkSubIdx !== null && task.subtasks) {
-        task = task.subtasks[editingLinkSubIdx];
+        task = space.tasks[editingLinkTaskIdx];
+        if (editingLinkSubIdx !== null && task.subtasks) {
+            task = task.subtasks[editingLinkSubIdx];
+        }
     }
 
     if (task) {
@@ -1179,6 +1466,8 @@ async function saveTaskLink() {
         document.getElementById('task-link-modal').style.display = 'none';
         if (editingLinkSpaceId === 0 || window._isModalOpenedFromCommandCenter) {
             import('./defaultDashboard.js').then(m => m.renderDefaultDashboard());
+        } else if (editingLinkSpaceId === 'sandbox') {
+            if (window._refreshSandbox) window._refreshSandbox(); // 🟢 Refresh Sandbox UI หลังเซฟลิงก์
         } else {
             onRenderCallback();
         }
@@ -1299,6 +1588,23 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
         else if (task.completed) { if(archiveListUI) archiveListUI.innerHTML += liContent; } 
         else { if(taskListUI) taskListUI.innerHTML += liContent; }
     });
+
+    // 🟢 NEW: Apply syntax highlighting to all rendered tasks after insertion
+    if (taskListUI) {
+        taskListUI.querySelectorAll('.task-actual-text').forEach(el => {
+            applySyntaxHighlighting(el);
+        });
+    }
+    if (archiveListUI) {
+        archiveListUI.querySelectorAll('.task-actual-text').forEach(el => {
+            applySyntaxHighlighting(el);
+        });
+    }
+    if (trashListUI) {
+        trashListUI.querySelectorAll('.task-actual-text').forEach(el => {
+            applySyntaxHighlighting(el);
+        });
+    }
 
     trashContainer.style.display = trashListUI.children.length > 0 ? 'block' : 'none';
 

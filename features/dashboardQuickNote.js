@@ -61,7 +61,7 @@ export function renderDashboardQuickNote() {
             </div>
             <div class="note-controls" style="display:flex; gap: 4px; align-items: center;">
                 <button class="btn-icon" id="db-note-pin" title="Pin note to stay visible in all spaces" style="color: ${state.isPinned ? 'var(--primary-color)' : 'inherit'}; opacity: ${state.isPinned ? '1' : '0.5'}"><svg class="svg-icon-sm"><use href="#icon-pin"></use></svg></button>
-                <button class="btn-icon" id="db-note-keep-toggle" title="Toggle Google Keep Mode" style="opacity: ${isKeepMode ? '1' : '0.5'}">💡</button>
+                <button class="btn-icon" id="db-note-keep-toggle" title="Toggle Google Keep Mode" style="opacity: ${isKeepMode ? '1' : '0.5'}"><svg class="svg-icon-sm"><use href="#icon-keep"></use></svg></button>
                 <button class="btn-icon" id="db-note-keep-edit" title="Change Keep Link" style="display: ${isKeepMode && state.keepUrl ? 'inline-flex' : 'none'};"><svg class="svg-icon-sm"><use href="#icon-edit"></use></svg></button>
                 <button class="btn-icon" id="db-note-collapse" title="Collapse / Expand"><svg class="svg-icon-sm"><use href="#icon-chevron-${state.collapsed ? 'up' : 'down'}"></use></svg></button>
                 <button class="btn-icon" id="db-note-close" style="font-size: 16px; opacity: 0.6; width: 24px; height: 24px;">✕</button>

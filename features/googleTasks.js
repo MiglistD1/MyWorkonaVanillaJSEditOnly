@@ -26,6 +26,26 @@ function setIsGoogleSyncEnabled(enabled) {
     chrome.storage.local.set({ 'isGoogleSyncEnabled': enabled });
 }
 
+/**
+ * 🎵 สร้างเสียงคลิกเบาๆ เพื่อเป็น Feedback การเปลี่ยนสถานะ
+ */
+function playClickSound() {
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1200, ctx.currentTime);
+        gain.gain.setValueAtTime(0, ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.05, ctx.currentTime + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.1);
+    } catch (e) {}
+}
+
 export function initGoogleTasks(callbacks) {
     const { onRender } = callbacks;
     onRenderRef = onRender;
@@ -58,13 +78,13 @@ export function initGoogleTasks(callbacks) {
             const space = getCurrentSpace();
             if (space) {
                 space.isSpecificListEnabled = !space.isSpecificListEnabled;
-                // ถ้าเปิดครั้งแรก ให้ใช้ List ปัจจุบันเป็นค่าเริ่มต้น
-                if (space.isSpecificListEnabled && !space.googleTaskListId) {
-                    space.googleTaskListId = currentGoogleListId;
+                // หากปิดการใช้งาน ให้เคลียร์ ID เฉพาะของ Space ทิ้งเพื่อให้กลับไปใช้ Global
+                if (!space.isSpecificListEnabled) {
+                    delete space.googleTaskListId;
                 }
                 saveData(true); // 🟢 บันทึกทันทีเพื่อป้องกันข้อมูลเด้งกลับตอน Sync
                 updateGoogleTaskUI(space);
-                syncAllGoogleTasks();
+                playClickSound(); // 🔊 เล่นเสียงเมื่อกดปุ่มสลับโหมด
             }
         }
 
@@ -180,9 +200,10 @@ export async function fetchGoogleLists() {
                 } else {
                     setCurrentGoogleListId(newListId);
                 }
-                saveData();
+                saveData(true); // 🟢 บันทึกทันทีเพื่อให้สถานะ Lock (สีแดง) ติดทันทีและป้องกันข้อมูลกระโดดกลับ
                 syncAllGoogleTasks();
                 if (onRenderRef) onRenderRef();
+                playClickSound(); // 🔊 เล่นเสียงเมื่อเลือกรายการสำเร็จ (Lock สำเร็จ)
             };
         });
         if (space) updateGoogleTaskUI(space);
@@ -198,11 +219,16 @@ export function updateGoogleTaskUI(space) {
     if (!space || !btn || !select) return;
 
     const isEnabled = !!space.isSpecificListEnabled;
-    btn.classList.toggle('active', isEnabled);
-    btn.title = isEnabled ? "Space-Specific List: ON" : "Space-Specific List: OFF";
+    const isChosen = !!space.googleTaskListId;
+
+    // 🟢 แสดงสีแดงเมื่อ Lock สำเร็จ (มี ID เฉพาะ) และสีเขียวเมื่อเพิ่งเปิด (ยังไม่ได้เลือกรายการใหม่)
+    btn.classList.toggle('active', isEnabled && isChosen);
+    btn.classList.toggle('ready', isEnabled && !isChosen);
+    btn.title = isEnabled ? (isChosen ? "Space-Specific List: Locked" : "Ready to Lock: Please select a list below") : "Global List Mode";
 
     const listIdToSet = isEnabled ? (space.googleTaskListId || currentGoogleListId) : currentGoogleListId;
     if (select.value !== listIdToSet) select.value = listIdToSet;
+    select.disabled = false; // 🔓 ปลดล็อคให้เปลี่ยนรายการได้ตามต้องการ
 }
 
 export async function syncAllGoogleTasks() {
@@ -211,8 +237,12 @@ export async function syncAllGoogleTasks() {
 
     let hasChanged = false; // ประกาศไว้ที่ระดับบนสุดของฟังก์ชันเพื่อให้ทุกส่วนเข้าถึงได้
 
-    // 1. โหลดข้อมูลล่าสุดจาก Storage (สำคัญมากสำหรับการรันใน Background Service Worker)
-    await new Promise(resolve => loadData(resolve));
+    // 🟢 แก้ไขบัค Revert: ถ้าทำงานอยู่ในหน้าเว็บ (UI) ให้ใช้ข้อมูลในแรม ไม่ต้องโหลดจาก Disk
+    // เพื่อป้องกันข้อมูลที่เพิ่งเปลี่ยนถูกข้อมูลเก่าใน Disk เขียนทับระหว่างจังหวะบันทึก
+    if (typeof window === 'undefined') {
+        await new Promise(resolve => loadData(resolve));
+    }
+
     const res = await chrome.storage.local.get(['googleAuthToken', 'savedGoogleTasksListId', 'isGoogleSyncEnabled']);
     
     googleAuthToken = res.googleAuthToken; // อัปเดต Token ใน Module
@@ -260,6 +290,7 @@ export async function syncAllGoogleTasks() {
                         const isDone = gt.status === 'completed';
                         if (t.completed !== isDone) {
                             t.completed = isDone;
+                            t.isDeleted = false; // If Google says it's completed/uncompleted, it's not in local trash
                             t.completedAt = isDone ? (t.completedAt || Date.now()) : null;
                             if (isDone) t.isProminent = false;
                             hasChanged = true;
@@ -270,6 +301,7 @@ export async function syncAllGoogleTasks() {
                                     if (!sub || sub.completed) return;
                                     sub.completed = true;
                                     // Auto-Complete Subtasks in Google Tasks backend if synced
+                                    sub.isDeleted = false; // Also ensure subtasks are not marked as deleted
                                     if (sub.googleTaskId && syncEnabled && googleAuthToken) {
                                         fetchGoogleAPI(`/lists/${syncListId}/tasks/${sub.googleTaskId}`, 'PATCH', { status: 'completed' });
                                     }
@@ -329,6 +361,7 @@ export async function syncAllGoogleTasks() {
                     targetSpace.tasks.push({
                         text: cleanTitle,
                         completed: gt.status === 'completed',
+                        isDeleted: false, // Newly added tasks from Google are never deleted
                         dueDate: gt.due ? formatDate(gt.due) : null,
                         createdAt: Date.now(),
                         googleTaskId: gt.id,
@@ -347,6 +380,11 @@ export async function syncAllGoogleTasks() {
     }
     // แจ้งเตือน UI ว่าซิงค์เสร็จสิ้น
     chrome.runtime.sendMessage({ type: 'GOOGLE_TASKS_SYNC_COMPLETE' }).catch(() => {});
+
+    // 🟢 NEW: Call onRenderRef directly after sync completes to ensure UI update
+    if (onRenderRef) {
+        onRenderRef();
+    }
 }
 
 function updateLoginUI() {
@@ -402,3 +440,13 @@ export const getGoogleAuthToken = () => googleAuthToken;
 export const getCurrentGoogleListId = () => currentGoogleListId;
 export const getIsGoogleSyncEnabled = () => isGoogleSyncEnabled; // เปลี่ยนชื่อเพื่อหลีกเลี่ยงความขัดแย้ง
 export const getGoogleStatus = () => ({ googleAuthToken, isGoogleSyncEnabled, currentGoogleListId }); // เก็บไว้เพื่อความเข้ากันได้ย้อนหลังหากโมดูลอื่นใช้
+
+/**
+ * 🎯 ฟังก์ชันหา List ID ที่ถูกต้องสำหรับ Space (ใช้ทั้ง Global และ Specific)
+ */
+export function getTargetListId(space) {
+    if (space && space.isSpecificListEnabled && space.googleTaskListId) {
+        return space.googleTaskListId;
+    }
+    return currentGoogleListId;
+}

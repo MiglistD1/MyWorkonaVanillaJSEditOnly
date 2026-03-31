@@ -12,6 +12,7 @@ const svgMenu = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" str
 let flowItems = [];
 let editingFlowItemId = null;
 let refreshInterval = null;
+let isCreatingNewStep = false; // 🟢 ตัวเช็คว่ากำลังสร้าง Step ใหม่ (เพื่อใช้ลบออกหากกดยกเลิก)
 let isFlowDataLoaded = false; // 🟢 ตัวเช็คสถานะการโหลด
 let editingFlowItemTags = []; // ตัวแปรชั่วคราวสำหรับเก็บ Tag ที่เลือกใน Modal
 
@@ -269,6 +270,23 @@ export async function saveFlow() {
 }
 
 /**
+ * 🔄 ตรวจสอบและรีเซ็ตสถานะ Completed สำหรับงานที่ทำซ้ำได้ (Repeatable)
+ * เพื่อให้งานกลับมาพร้อมให้กดได้ใหม่ในวันถัดไปโดยไม่ต้องกด Uncheck เอง
+ */
+function checkAndResetFlowItems() {
+    let hasChanged = false;
+    flowItems.forEach(item => {
+        if (item.isCompleted && item.repeatConfig?.enabled) {
+            if (isRepeatMet(item)) {
+                item.isCompleted = false;
+                hasChanged = true;
+            }
+        }
+    });
+    if (hasChanged) saveFlow();
+}
+
+/**
  * Main Export: Renders the Smart Flow section
  */
 export function renderSmartFlow(container) {
@@ -386,11 +404,12 @@ export function renderSmartFlow(container) {
             focusConfig: { enabled: false, minutes: 25 },
             habitConfig: { enabled: false }, // 🟢 เพิ่มการตั้งค่า Habit Tracker
             scheduleConfig: { enabled: false, days: [], hour: 9, min: 0 },
-            repeatConfig: { enabled: false, interval: 1, lastCompletedDate: null }, // เพิ่ม Repeat Config
+            repeatConfig: { enabled: true, interval: 1, lastCompletedDate: null }, // 🟢 Default ให้เปิด Repeat 1 วันไว้เลย
             dependencies: [],
             isCompleted: false
         };
         flowItems.push(newItem);
+        isCreatingNewStep = true; // 🟢 มาร์คว่าเป็นการสร้างใหม่
         saveFlow().then(() => {
             renderFlowList();
             openSmartFlowSettingsModal(newItem.id); // เปิดหน้าต่างตั้งค่าทันทีหลังสร้าง
@@ -507,6 +526,8 @@ function renderFlowList() {
     const archivedContainer = document.getElementById('sf-archived-container');
     if (!listEl) return;
 
+    checkAndResetFlowItems(); // 🟢 รีเซ็ตสถานะก่อนวาดรายการ
+
     // ID to Index mapping for dependency display
     const idToNumMap = {};
     flowItems.forEach((item, idx) => idToNumMap[item.id] = idx + 1);
@@ -555,12 +576,19 @@ function renderFlowList() {
     listEl.innerHTML = itemsToRender.map(({ item, index, depsMet, schedMet, repeatMet, canExecute, isLocked, isExpanded }) => {
         const rowNum = index + 1;
         const completedClass = item.isCompleted ? 'completed' : '';
+        const linkedClass = item.linkedSpaceId ? 'sf-linked-step' : ''; // 🟢 เพิ่ม class สำหรับ step ที่มีลิงก์
         const lockedClass = isLocked ? 'sf-locked' : '';
         const countdownText = !schedMet && !item.isCompleted ? getScheduleCountdown(item) : "";
         const repeatCountdownText = !repeatMet && item.isCompleted ? getRepeatCountdown(item) : "";
         let disabledReason = "";
         if (!depsMet) disabledReason = "Complete previous steps first";
         else if (!schedMet) disabledReason = "Not yet time for this step";
+
+        // 🟢 Requirement 2: ป้าย Habit Tracker สวยๆ
+        const habitBadge = (item.habitConfig && item.habitConfig.enabled) ? `<span class="sf-habit-indicator-badge"><svg class="svg-icon-sm" style="width:10px;height:10px;"><use href="#icon-sparkles"></use></svg>Habit Tracker</span>` : '';
+
+        // 🟢 ทำให้ข้อความ +Habit Tracker มีสีเขียวผ่าน HTML
+        const displayDesc = (item.description || "").replace(/\+Habit Tracker/g, '<span class="sf-habit-tag">+Habit Tracker</span>');
 
         // Map dependency IDs to visual row numbers
         const depLabels = item.dependencies
@@ -569,7 +597,7 @@ function renderFlowList() {
             .join(', ');
 
         return `
-            <li class="smart-flow-item ${completedClass} ${lockedClass}" data-id="${item.id}" data-index="${index}" style="position:relative;">
+            <li class="smart-flow-item ${completedClass} ${lockedClass} ${linkedClass}" data-id="${item.id}" data-index="${index}" style="position:relative;">
                 <div class="drag-handle">${dragHandleIcon()}</div>
                 <div class="smart-flow-number">${rowNum}</div>
                 
@@ -582,6 +610,7 @@ function renderFlowList() {
                 <div class="smart-flow-content">
                     <div style="display:flex; align-items:center; gap:8px;">
                         <div class="smart-flow-title" contenteditable="true" data-id="${item.id}">${item.title}</div>
+                        ${habitBadge}
                         ${(item.tags && item.tags.length > 0) ? `
                             <div class="sf-item-tags-badge" title="${item.tags.join(', ')}"><svg class="svg-icon-sm" style="width:10px; height:10px;"><use href="#icon-tag"></use></svg><span>${item.tags.length}</span></div>
                         ` : ''}
@@ -591,13 +620,15 @@ function renderFlowList() {
                         ${countdownText ? `<div class="sf-countdown-timer">${countdownText}</div>` : ''}
                     </div>
                     <div class="smart-flow-desc">
-                        ${item.description} 
+                        ${displayDesc} 
                         ${depLabels ? `<span class="flow-dep-tag">Requires ${depLabels}</span>` : ''}
                     </div>
                 </div>
 
                 <div class="smart-flow-actions-container ${isExpanded ? 'expanded' : ''} ${flowState.showActions ? 'global-expand' : ''}">
                     <div class="flow-actions-menu-popup">
+                        <button class="btn-icon flow-opt-note" data-id="${item.id}" title="Edit Session Note"><svg class="svg-icon-sm"><use href="#icon-notebook"></use></svg></button>
+                        <button class="btn-icon flow-opt-reset" data-id="${item.id}" title="Reset & Unlock Step"><svg class="svg-icon-sm"><use href="#icon-rotate-ccw"></use></svg></button>
                         <button class="btn-icon flow-opt-deps" data-id="${item.id}" title="Dependencies"><svg class="svg-icon-sm"><use href="#icon-link"></use></svg></button>
                         <button class="btn-icon flow-opt-settings" data-id="${item.id}" title="Settings"><svg class="svg-icon-sm"><use href="#icon-settings"></use></svg></button>
                         <button class="btn-icon flow-opt-archive" data-id="${item.id}" title="Archive">${svgArchive}</button>
@@ -611,6 +642,11 @@ function renderFlowList() {
 
     initSortable();
     attachFlowEvents(listEl);
+
+    // 🟢 Apply syntax highlighting to both title and description after rendering
+    listEl.querySelectorAll('.smart-flow-title, .smart-flow-desc').forEach(el => {
+        applySyntaxHighlighting(el);
+    });
 
     // 🟢 Render Archived Items
     const archivedItems = flowItems.filter(item => item.isArchived);
@@ -953,7 +989,7 @@ function checkDependencies(item) {
 function attachFlowEvents(listEl) {
     // 1. Completion Toggle
     listEl.querySelectorAll('.smart-flow-action-btn').forEach(btn => {
-        btn.onclick = (e) => {
+        btn.onclick = async (e) => {
             const id = btn.dataset.id;
             const item = flowItems.find(fi => fi.id === id);
             if (!item) return;
@@ -973,16 +1009,21 @@ function attachFlowEvents(listEl) {
                 // Reorder: Move to bottom
                 const idx = flowItems.indexOf(item);
                 
-                // 🌟 Quest Loot Scanner
+                // 🌟 Quest Loot Scanner: Scan both Title and Description
                 if (window.processRewardScanner) {
-                    window.processRewardScanner(item.title, false, { x: e.clientX, y: e.clientY }, 'flow');
+                    const combinedText = `${item.title} ${item.description || ''}`;
+                    window.processRewardScanner(combinedText, false, { x: e.clientX, y: e.clientY }, 'flow');
                 }
                 flowItems.splice(idx, 1);
                 flowItems.push(item);
 
                 item.repeatConfig.lastCompletedDate = new Date().toDateString(); // บันทึกวันที่ทำเสร็จ
-                // Simulation Trigger
-                simulateWorkflow(item);
+                
+                // 🟢 Simulation Trigger: หากมี Linked Space ให้เรียกระบบ Transition
+                if (item.linkedSpaceId) {
+                    await simulateWorkflow(item);
+                    return; // หยุดการเซฟ/เรนเดอร์ปกติ เพื่อให้ simulateWorkflow จัดการเองหลัง Popup
+                }
 
                 // --- Success Celebration Check ---
                 // ตรวจสอบว่าใน "มุมมองปัจจุบัน" มีงานที่ยังไม่เสร็จเหลืออยู่ไหม
@@ -1036,9 +1077,14 @@ function attachFlowEvents(listEl) {
         el.onblur = () => {
             const id = el.dataset.id;
             const item = flowItems.find(fi => fi.id === id);
-            if (item && el.innerText.trim()) {
-                item.title = el.innerText.trim();
-                saveFlow();
+            if (item) {
+                const newText = el.innerText.trim();
+                if (el.classList.contains('smart-flow-title')) {
+                    if (newText) item.title = newText;
+                } else {
+                    item.description = newText;
+                }
+                saveFlow().then(renderFlowList);
             }
         };
         el.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); el.blur(); } };
@@ -1053,10 +1099,12 @@ function attachFlowEvents(listEl) {
         const settingsBtn = target.closest('.flow-opt-settings');
         const deleteBtn = target.closest('.flow-opt-delete');
         const archiveBtn = target.closest('.flow-opt-archive');
+        const resetBtn = target.closest('.flow-opt-reset');
+        const noteBtn = target.closest('.flow-opt-note');
 
-        if (!depsBtn && !settingsBtn && !deleteBtn && !archiveBtn) return;
+        if (!depsBtn && !settingsBtn && !deleteBtn && !archiveBtn && !resetBtn && !noteBtn) return;
         
-        const id = (depsBtn || settingsBtn || deleteBtn || archiveBtn).dataset.id;
+        const id = (depsBtn || settingsBtn || deleteBtn || archiveBtn || resetBtn || noteBtn).dataset.id;
         const item = flowItems.find(fi => fi.id === id);
         if (!item) return;
 
@@ -1068,51 +1116,130 @@ function attachFlowEvents(listEl) {
         } else if (archiveBtn) {
             item.isArchived = true;
             saveFlow().then(() => renderSmartFlow(document.getElementById('smart-flow-container')));
+        } else if (resetBtn) {
+            // 🟢 ล้างสถานะให้กลับมาเป็นงานใหม่ พร้อมกดซ้ำได้ทันที
+            item.isCompleted = false;
+            if (item.repeatConfig) item.repeatConfig.lastCompletedDate = null;
+            saveFlow().then(renderFlowList);
+        } else if (noteBtn) {
+            // 🟢 Requirement 1: แก้ไข Note ได้ตลอดเวลาจากเมนู 3 จุด
+            const spaces = getSpaces();
+            const targetSpace = spaces.find(s => String(s.id) === String(item.linkedSpaceId));
+            showWorkflowTransitionPopup(item, targetSpace || { name: 'this space' }, true);
         } else if (depsBtn) {
             openSmartFlowDependenciesModal(id);
         } else if (settingsBtn) {
+            isCreatingNewStep = false; // 🟢 มาร์คว่าเป็นการแก้ไขงานเดิม
             openSmartFlowSettingsModal(item.id);
         }
     });
 }
 
-function simulateWorkflow(item) {
+/**
+ * 🚀 ระบบแสดงหน้าต่างยืนยันก่อนสลับพื้นที่ทำงาน
+ */
+async function showWorkflowTransitionPopup(item, targetSpace, onlyNote = false) {
+    const modalId = 'sf-transition-modal';
+    let modal = document.getElementById(modalId);
+    
+    if (!modal) {
+        const html = `
+            <div class="modal-overlay" id="${modalId}" style="z-index: 20000;">
+                <div class="modal-content" style="width: 400px; text-align: center; padding: 30px; border-radius: 16px;">
+                    <div style="font-size: 40px; margin-bottom: 15px;">🚀</div>
+                    <h2 id="sf-trans-title" style="margin: 0 0 10px 0; font-size: 20px;"></h2>
+                    <p id="sf-trans-desc" style="color: var(--text-muted); font-size: 14px; line-height: 1.5; margin-bottom: 20px;"></p>
+                    
+                    <div style="background: var(--bg-body); padding: 15px; border-radius: 10px; margin-bottom: 20px; text-align: left; border: 1px solid var(--border-color);">
+                        <label style="font-size: 11px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; display: block; margin-bottom: 8px;">Session Notes / Message:</label>
+                        <textarea id="sf-trans-note" class="settings-input" style="height: 80px; resize: none; font-size: 13px;" placeholder="What are we focusing on in this space?"></textarea>
+                    </div>
+
+                    <div id="sf-trans-habit-info" style="display: none; align-items: center; justify-content: center; gap: 8px; color: #16a34a; font-weight: 700; font-size: 13px; margin-bottom: 25px;">
+                        <svg class="svg-icon-sm" style="width:16px; height:16px;"><use href="#icon-sparkles"></use></svg>
+                        Habit Tracker will be opened
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1.5fr; gap: 12px;">
+                        <button class="btn btn-outline" id="sf-btn-trans-cancel" style="justify-content: center; padding: 10px;">Stay Here</button>
+                        <button class="btn btn-primary" id="sf-btn-trans-confirm" style="justify-content: center; padding: 10px; font-weight: 800;">Enter Space</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', html);
+        modal = document.getElementById(modalId);
+    }
+
+    // 🟢 Requirement 3: เน้นชื่อ Space ให้โดดเด่น
+    document.getElementById('sf-trans-title').innerText = onlyNote ? "📝 Session Note" : `Enter Space: ${targetSpace.name}`;
+    document.getElementById('sf-trans-desc').innerHTML = `Proceed to <span class="sf-trans-target-space">${targetSpace.name}</span> to continue <strong>"${item.title}"</strong>.`;
+    document.getElementById('sf-trans-habit-info').style.display = (item.habitConfig && item.habitConfig.enabled) ? 'flex' : 'none';
+    
+    // 🟢 Requirement 1: ข้อมูล Note ไม่หายไป (ดึงจาก item.note)
+    document.getElementById('sf-trans-note').value = item.note || "";
+    document.getElementById('sf-btn-trans-confirm').innerText = onlyNote ? "Save Note" : "Enter Space";
+
+    modal.style.display = 'flex';
+    document.getElementById('sf-trans-note').focus();
+
+    return new Promise((resolve) => {
+        document.getElementById('sf-btn-trans-confirm').onclick = () => {
+            item.note = document.getElementById('sf-trans-note').value.trim();
+            saveFlow(); // บันทึกโน้ตลงฐานข้อมูล
+            modal.style.display = 'none';
+            resolve(true);
+        };
+        document.getElementById('sf-btn-trans-cancel').onclick = () => {
+            modal.style.display = 'none';
+            resolve(false);
+        };
+    });
+}
+
+async function simulateWorkflow(item) {
     if (!item.linkedSpaceId) return;
 
-    // 1. คลายโฟลเดอร์ถ้าถูกพับอยู่ (เพื่อให้ Sidebar ทำงานได้ถูกต้อง)
+    // หาข้อมูล Space เป้าหมาย
     const spaces = getSpaces();
     const targetSpace = spaces.find(s => String(s.id) === String(item.linkedSpaceId));
-    if (targetSpace) {
-        const folderName = targetSpace.folder || 'General';
-        const settings = getAppSettings();
-        if (settings.collapsedFolders && settings.collapsedFolders.includes(folderName)) {
-            settings.collapsedFolders = settings.collapsedFolders.filter(f => f !== folderName);
-            saveData();
-            renderSidebar(); // อัปเดต UI Sidebar ให้กางออก
-        }
+    if (!targetSpace) return;
+
+    // 🟢 แสดงหน้าต่างยืนยันก่อนสลับ
+    const confirmed = await showWorkflowTransitionPopup(item, targetSpace);
+    if (!confirmed) {
+        // ถ้ากดยกเลิก ให้เปลี่ยนสถานะกลับเป็นไม่เสร็จ (เผื่อกดผิด)
+        item.isCompleted = false;
+        saveFlow().then(renderFlowList);
+        return;
     }
 
-    // 2. จำลองการคลิกที่รายการใน Sidebar เพื่อรัน logic การเปลี่ยน Space
+    // 1. คลายโฟลเดอร์ถ้าถูกพับอยู่
+    const folderName = targetSpace.folder || 'General';
+    const settings = getAppSettings();
+    if (settings.collapsedFolders && settings.collapsedFolders.includes(folderName)) {
+        settings.collapsedFolders = settings.collapsedFolders.filter(f => f !== folderName);
+        saveData();
+        renderSidebar();
+    }
+
+    // 2. สลับ Space
     const sidebarItem = document.querySelector(`#spacebar .space-item[data-id="${item.linkedSpaceId}"]`);
-    if (sidebarItem) {
-        sidebarItem.click();
-    }
+    if (sidebarItem) sidebarItem.click();
 
-    // 3. เริ่ม Focus Mode ถ้าตั้งค่าไว้ (หน่วงเวลาเล็กน้อยเพื่อให้เปลี่ยน Space เสร็จก่อน)
-    if (item.focusConfig && item.focusConfig.enabled && targetSpace) {
-        // ตั้งค่าตัวจับเวลา Global ของ Smart Flow
+    // 3. เริ่ม Focus Mode
+    if (item.focusConfig && item.focusConfig.enabled) {
         flowState.focusMode = true;
         flowState.isFocusRunning = true;
         flowState.focusTimeLeft = (item.focusConfig.minutes || 25) * 60;
         flowState.isPaused = false;
         flowState.focusPopupState.isOpen = true;
-        
         saveData();
-        saveFlow(); // 🟢 บันทึกลง Storage ทันที
+        saveFlow();
     }
 
-    // 4. เปิด Habit Tracker ถ้าตั้งค่าไว้ (หน่วงเวลาเพื่อให้หน้า Space โหลด UI เสร็จก่อน)
-    if (item.habitConfig && item.habitConfig.enabled && targetSpace) {
+    // 4. เปิด Habit Tracker
+    if (item.habitConfig && item.habitConfig.enabled) {
         setTimeout(() => {
             import('./habitSheet.js').then(m => m.openHabitModal(targetSpace));
         }, 350);
@@ -1138,7 +1265,7 @@ function dragHandleIcon() {
 }
 
 function playIcon() {
-    return `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
+    return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
 }
 
 function checkIcon() {
@@ -1150,7 +1277,7 @@ function initSmartFlowSettingsModal() {
     if (document.getElementById('smart-flow-settings-modal')) return; // Already initialized
 
     const modalHTML = `
-        <div class="modal-overlay" id="smart-flow-settings-modal" style="z-index: 1200;">
+        <div class="modal-overlay" id="smart-flow-settings-modal" style="z-index: 12000;">
             <div class="modal-content" style="width: 400px;">
                 <h3 style="margin-top:0; font-size:18px; display:flex; align-items:center; gap:8px;">⚙️ Workflow Step Settings</h3>
                 
@@ -1160,7 +1287,7 @@ function initSmartFlowSettingsModal() {
                 </div>
                 <div class="settings-group">
                     <label>Description:</label>
-                    <input type="text" id="sf-setting-description" class="settings-input" placeholder="Auto-generated if Linked Space is set">
+                    <div id="sf-setting-description" class="settings-input" contenteditable="true" style="min-height: 34px; height: auto;" placeholder="Auto-generated if Linked Space is set"></div>
                 </div>
                 <div class="settings-group">
                     <label>Linked Space:</label>
@@ -1313,7 +1440,15 @@ function initSmartFlowSettingsModal() {
     };
 
     saveBtn.onclick = saveSmartFlowSettings;
-    cancelBtn.onclick = () => modal.style.display = 'none';
+    cancelBtn.onclick = () => {
+        if (isCreatingNewStep) {
+            // 🟢 ถ้าเป็นงานใหม่ที่เพิ่งกดสร้างแล้วกดยกเลิก ให้ลบทิ้งทันที
+            flowItems = flowItems.filter(fi => fi.id !== editingFlowItemId);
+            saveFlow().then(renderFlowList);
+        }
+        isCreatingNewStep = false;
+        modal.style.display = 'none';
+    };
 }
 
 function openSmartFlowSettingsModal(itemId) {
@@ -1323,7 +1458,17 @@ function openSmartFlowSettingsModal(itemId) {
 
     const modal = document.getElementById('smart-flow-settings-modal');
     document.getElementById('sf-setting-title').value = item.title;
-    document.getElementById('sf-setting-description').value = item.description;
+    
+    const sfSettingDescInput = document.getElementById('sf-setting-description');
+    sfSettingDescInput.innerText = item.description || "";
+    applySyntaxHighlighting(sfSettingDescInput);
+    
+    // 🟢 NEW: Add input event for autocomplete and highlighting to the settings title input
+    const sfSettingTitleInput = document.getElementById('sf-setting-title');
+    sfSettingTitleInput.oninput = (e) => { handleTagAutocomplete(e, () => flowState.managedTags || []); applySyntaxHighlighting(sfSettingTitleInput); };
+
+    // 🟢 Add input event for description in settings
+    sfSettingDescInput.oninput = (e) => { handleTagAutocomplete(e, () => flowState.managedTags || []); applySyntaxHighlighting(sfSettingDescInput); };
 
     // 🟢 จัดการส่วนการเลือก Tag แบบใหม่ (จิ้มเลือก)
     editingFlowItemTags = [...(item.tags || [])];
@@ -1363,7 +1508,14 @@ function openSmartFlowSettingsModal(itemId) {
     document.getElementById('sf-setting-min').value = String(sched.min || 0).padStart(2, '0');
 
     // Populate Repeat Config
-    const repeat = item.repeatConfig || { enabled: false, interval: 1, lastCompletedDate: null };
+    const repeat = item.repeatConfig || { enabled: true, interval: 1, lastCompletedDate: null };
+    
+    // 🟢 Requirement: หากยังไม่มีการตั้งค่าใดๆ เลย ให้บังคับเปิด Repeat On : 1 วันไว้ก่อนเพื่อความสะดวก
+    if (!sched.enabled && !repeat.enabled) {
+        repeat.enabled = true;
+        repeat.interval = 1;
+    }
+
     document.getElementById('sf-setting-repeat-enabled').checked = repeat.enabled;
     document.getElementById('sf-repeat-config-wrapper').style.display = repeat.enabled ? 'flex' : 'none';
     document.getElementById('sf-setting-repeat-interval').value = repeat.interval || 1;
@@ -1430,6 +1582,15 @@ async function saveSmartFlowSettings() {
     const item = flowItems.find(fi => fi.id === editingFlowItemId);
     if (!item) return;
 
+    // 🟢 Validation: ตรวจสอบว่าต้องเปิด Schedule หรือ Repeat อย่างใดอย่างหนึ่ง
+    const scheduleEnabled = document.getElementById('sf-setting-schedule-enabled').checked;
+    const repeatEnabled = document.getElementById('sf-setting-repeat-enabled').checked;
+
+    if (!scheduleEnabled && !repeatEnabled) {
+        alert("⚠️ Workflow Step must have either 'Schedule' or 'Repeat Interval' enabled to save changes.");
+        return;
+    }
+
     item.title = document.getElementById('sf-setting-title').value.trim();
     item.linkedSpaceId = document.getElementById('sf-setting-linked-space').value || null;
     item.tags = [...editingFlowItemTags];
@@ -1466,7 +1627,7 @@ async function saveSmartFlowSettings() {
     item.dependencies = selectedDeps;
 
     // Determine description: prioritize generated if linked space/focus is set, otherwise use manual input
-    let manualDescription = document.getElementById('sf-setting-description').value.trim();
+    let manualDescription = document.getElementById('sf-setting-description').innerText.trim();
     let generatedDescription = "";
     
     if (item.linkedSpaceId) {
@@ -1495,6 +1656,7 @@ async function saveSmartFlowSettings() {
     // If neither, default.
     item.description = generatedDescription || manualDescription || "Click settings to link a space";
 
+    isCreatingNewStep = false; // 🟢 เซฟสำเร็จแล้ว ไม่ใช่การสร้างใหม่อีกต่อไป
     await saveFlow();
     document.getElementById('smart-flow-settings-modal').style.display = 'none';
     renderSmartFlowTagBar(); // อัปเดตรายการ Tag ในแถบกรองด้วย
@@ -1580,7 +1742,7 @@ function initSmartFlowDependenciesModal() {
     if (document.getElementById('smart-flow-deps-modal')) return;
 
     const modalHTML = `
-        <div class="modal-overlay" id="smart-flow-deps-modal" style="z-index: 1200;">
+        <div class="modal-overlay" id="smart-flow-deps-modal" style="z-index: 12000;">
             <div class="modal-content" style="width: 350px;">
                 <h3 style="margin-top:0; font-size:18px; display:flex; align-items:center; gap:8px;">🔗 Set Dependencies</h3>
                 <p style="font-size:12px; color:var(--text-muted); margin-bottom:15px;">Select steps that must be completed before this one:</p>
@@ -1755,10 +1917,10 @@ function showSfAddTagPopup(anchorEl) {
     const popup = document.createElement('div');
     popup.id = 'sf-add-tag-popup';
     popup.className = 'sf-focus-popup'; 
+    popup.style.width = '180px';
+    popup.style.visibility = 'hidden'; // ซ่อนเพื่อวัดขนาดก่อนจัดตำแหน่ง
     
     const rect = anchorEl.getBoundingClientRect();
-    popup.style.cssText = `top: ${rect.bottom + 8}px; left: ${rect.left}px; width: 180px;`;
-
     popup.innerHTML = `
         <div style="font-weight:800; font-size:12px; margin-bottom:10px; display:flex; align-items:center; gap:6px;">
             <svg class="svg-icon-sm"><use href="#icon-tag"></use></svg> Create New Tag
@@ -1768,6 +1930,19 @@ function showSfAddTagPopup(anchorEl) {
     `;
 
     document.body.appendChild(popup);
+    
+    // 🟢 Smart Positioning: ป้องกันล้นขอบล่างและขอบขวา
+    const popupHeight = popup.offsetHeight;
+    let top = rect.bottom + 8;
+    if (top + popupHeight > window.innerHeight) top = rect.top - popupHeight - 8;
+    
+    let left = rect.left;
+    if (left + 180 > window.innerWidth) left = window.innerWidth - 190;
+
+    popup.style.top = `${top}px`;
+    popup.style.left = `${Math.max(10, left)}px`;
+    popup.style.visibility = 'visible';
+
     const input = popup.querySelector('#sf-new-tag-input');
     input.focus();
 
@@ -1846,7 +2021,13 @@ function showSfTagContextMenu(e, tag) {
     }
 
     menu.style.top = `${top}px`;
-    menu.style.left = `${rect.right + window.scrollX - menuRect.width}px`; // Align right
+    
+    // 🟢 ป้องกันล้นขอบซ้าย/ขวา
+    let left = rect.right + window.scrollX - menuRect.width;
+    if (left + menuRect.width > window.innerWidth) left = window.innerWidth - menuRect.width - 10;
+    if (left < 10) left = 10;
+
+    menu.style.left = `${left}px`;
     menu.style.visibility = 'visible';
 
     // Hover effects

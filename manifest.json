@@ -22,7 +22,8 @@
     "declarativeNetRequestWithHostAccess"
   ],
   "host_permissions": [
-    "*://keep.google.com/*"
+    "*://keep.google.com/*",
+    "*://tasks.google.com/*"
   ],
   "declarative_net_request": {
     "rule_resources": [

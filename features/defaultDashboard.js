@@ -38,9 +38,9 @@ export async function renderDefaultDashboard() {
             <button class="btn-icon btn-dashboard-note-toggle" title="Dashboard Quick Note" style="margin-right: 10px; ${settings.dashboardQuickNote?.isOpen ? 'color: var(--primary-color); border: 1px solid var(--primary-color); background: rgba(47, 128, 237, 0.1);' : ''}">
                 <svg class="svg-icon-sm"><use href="#icon-pencil"></use></svg>
             </button>
-            <button id="btn-master-open-rewards" class="btn-icon" title="🌟 Quest Loot & Rewards" style="color: #f59e0b; font-size: 16px; width: 32px; height: 32px; margin-right: 10px;">🌟</button>
-            ${isMinimized('todo') ? `<div class="minimized-bubble" data-id="todo" title="Restore Todo List">✅</div>` : ''}
-            ${isMinimized('flow') ? `<div class="minimized-bubble" data-id="flow" title="Restore Smart Flow">🚀</div>` : ''}
+            <button id="btn-master-open-rewards" class="btn-icon" title="Quest Loot & Rewards" style="color: #f59e0b; width: 32px; height: 32px; margin-right: 10px;"><svg class="svg-icon-lg"><use href="#icon-sparkles"></use></svg></button>
+            ${isMinimized('todo') ? `<div class="minimized-bubble" data-id="todo" title="Restore Todo List"><svg class="svg-icon-sm"><use href="#icon-check-square"></use></svg></div>` : ''}
+            ${isMinimized('flow') ? `<div class="minimized-bubble" data-id="flow" title="Restore Smart Flow"><svg class="svg-icon-sm"><use href="#icon-sparkles"></use></svg></div>` : ''}
         </div>
 
         <div id="cc-widget-grid" class="dashboard-grid-inner ${uiState.isLocked ? 'is-locked' : ''}">
@@ -631,7 +631,17 @@ function initMasterEvents() {
                     task.isProminent = true;
                     task.originalIndex = taskIndex;
                     const [movedTask] = space.tasks.splice(taskIndex, 1);
-                    space.tasks.unshift(movedTask);
+                    
+                    // 🟢 FIFO Flagging: ค้นหาตำแหน่งสุดท้ายของกลุ่มงานที่ติดธงอยู่แล้ว เพื่อต่อท้าย
+                    let lastProminentIdx = -1;
+                    for (let i = 0; i < space.tasks.length; i++) {
+                        if (space.tasks[i].isProminent) {
+                            lastProminentIdx = i;
+                        } else {
+                            break; // เจอส่วนงานปกติแล้ว ให้หยุดหา
+                        }
+                    }
+                    space.tasks.splice(lastProminentIdx + 1, 0, movedTask);
                 }
                 saveData();
                 renderDefaultDashboard();

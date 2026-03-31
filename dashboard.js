@@ -33,6 +33,18 @@ function handleSpaceChange(newId, isNewSpace) {
     resetUndoStack();
     document.getElementById('quick-search-input').value = "";
 
+    // Reset Google Task Embed View on space change to default state
+    const btnToggleGTask = document.getElementById('btn-toggle-gtask-embed');
+    if (btnToggleGTask && btnToggleGTask.classList.contains('active')) {
+        btnToggleGTask.classList.remove('active');
+        document.getElementById('gtask-embed-container').style.display = 'none';
+        document.getElementById('gtask-iframe').src = "";
+        document.querySelector('.task-input-bar').style.display = 'flex';
+        document.getElementById('task-list').style.display = 'block';
+        document.getElementById('archived-tasks-details').style.display = 'block';
+        document.getElementById('trash-tasks-details').style.display = 'block';
+    }
+
     saveData();
     renderAll();
     updateArchivedStateUI();
@@ -124,7 +136,11 @@ document.addEventListener('DOMContentLoaded', () => {
         initTodoManager({ 
             fetchGoogleAPI: fetchGoogleAPI,
             getGoogleAuthToken: () => getGoogleStatus().googleAuthToken,
-            getCurrentGoogleListId: () => getGoogleStatus().currentGoogleListId,
+            // 🟢 ปรับปรุงให้รองรับการส่ง Space เข้าไปตรวจสอบ Specific List
+            getCurrentGoogleListId: (space) => {
+                const s = space || getCurrentSpace();
+                return (s && s.isSpecificListEnabled && s.googleTaskListId) ? s.googleTaskListId : getGoogleStatus().currentGoogleListId;
+            },
             isGoogleSyncEnabled: () => getGoogleStatus().isGoogleSyncEnabled,
             onRender: renderAll
         });
@@ -162,6 +178,48 @@ document.addEventListener('DOMContentLoaded', () => {
         if (btnCollapseLaunchers) {
             btnCollapseLaunchers.addEventListener('click', () => {
                 document.querySelector('.topbar').classList.toggle('launchers-collapsed');
+            });
+        }
+
+        // Google Tasks Embed Toggle Logic
+        const btnToggleGTask = document.getElementById('btn-toggle-gtask-embed');
+        const gtaskContainer = document.getElementById('gtask-embed-container');
+        const gtaskIframe = document.getElementById('gtask-iframe');
+        const taskInputBar = document.querySelector('.task-input-bar');
+        const taskList = document.getElementById('task-list');
+        const archivedTasks = document.getElementById('archived-tasks-details');
+        const trashTasks = document.getElementById('trash-tasks-details');
+        const listSelect = document.getElementById('google-task-list-select');
+
+        if (btnToggleGTask) {
+            btnToggleGTask.onclick = () => {
+                const isActive = btnToggleGTask.classList.toggle('active');
+                if (isActive) {
+                    const listId = listSelect ? listSelect.value : "@default";
+                    // 🟢 เปลี่ยนจาก /embed/ เป็น /canvas เพื่อแก้บัค 403 Forbidden
+                    gtaskIframe.src = `https://tasks.google.com/canvas?listid=${listId}`;
+                    gtaskContainer.style.display = 'block';
+                    taskInputBar.style.display = 'none';
+                    taskList.style.display = 'none';
+                    archivedTasks.style.display = 'none';
+                    trashTasks.style.display = 'none';
+                } else {
+                    gtaskContainer.style.display = 'none';
+                    gtaskIframe.src = "";
+                    taskInputBar.style.display = 'flex';
+                    taskList.style.display = 'block';
+                    archivedTasks.style.display = 'block';
+                    trashTasks.style.display = 'block';
+                }
+            };
+        }
+
+        if (listSelect) {
+            listSelect.addEventListener('change', () => {
+                if (btnToggleGTask && btnToggleGTask.classList.contains('active')) {
+                    // 🟢 เปลี่ยน URL ให้สอดคล้องกันเมื่อมีการเปลี่ยน List
+                    gtaskIframe.src = `https://tasks.google.com/canvas?listid=${listSelect.value}`;
+                }
             });
         }
 

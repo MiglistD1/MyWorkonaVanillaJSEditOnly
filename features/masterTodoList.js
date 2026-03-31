@@ -1,10 +1,10 @@
-import { getSpaces, saveData, getAppSettings, setCurrentSpaceId, getFilterTags } from '../core/storage.js';
+import { getSpaces, saveData, getAppSettings, setCurrentSpaceId, getFilterTags, loadData } from '../core/storage.js';
 import Sortable from '../sortable.esm.js';
 import { googleTasksIcon } from '../core/icons.js';
-import { getGoogleStatus, fetchGoogleAPI, fetchGoogleLists, getGoogleAuthToken, getCurrentGoogleListId, getIsGoogleSyncEnabled, createGoogleTask, syncAllGoogleTasks } from './googleTasks.js';
+import { getGoogleStatus, fetchGoogleAPI, fetchGoogleLists, getGoogleAuthToken, getCurrentGoogleListId, getIsGoogleSyncEnabled, createGoogleTask, syncAllGoogleTasks, getTargetListId } from './googleTasks.js';
 import { openTaskEditModal, openTaskLinkModal } from './todoManager.js';
 import { handleMiniTagClick } from '../components/modals.js';
-import { generateTaskHTML, attachSubtaskEventListeners, attachTaskInlineEditListeners, handleTagAutocomplete } from '../core/ui-helpers.js';
+import { generateTaskHTML, attachSubtaskEventListeners, attachTaskInlineEditListeners, handleTagAutocomplete, applySyntaxHighlighting } from '../core/ui-helpers.js';
     const taskInput = document.getElementById('master-task-input');
     const spaceSelect = document.getElementById('master-space-selector');
 
@@ -106,6 +106,11 @@ export function renderMasterTodoList(container) {
         ${totalTasks === 0 ? '<p style="text-align:center; color:var(--text-muted); margin-top:40px; font-size:13px;">Your Command Center is empty. Start by adding a task!</p>' : ''}
     `;
 
+    // 🟢 NEW: Apply syntax highlighting to all task texts in the master list after rendering
+    container.querySelectorAll('.task-actual-text').forEach(el => {
+        applySyntaxHighlighting(el);
+    });
+
     initMasterEvents();
 
     const onRefresh = () => { if (window.renderDefaultDashboard) window.renderDefaultDashboard(); };
@@ -171,7 +176,7 @@ export function renderMasterTodoList(container) {
                 task = space.tasks[pIdx]?.subtasks?.[index];
             }
             if (task && task.googleTaskId && getGoogleAuthToken()) {
-                const listId = getCurrentGoogleListId() || '@default';
+                const listId = getTargetListId(space);
                 fetchGoogleAPI(`/lists/${listId}/tasks/${task.googleTaskId}`, 'DELETE');
             }
             if (type === 'task') space.tasks.splice(index, 1);
@@ -322,7 +327,8 @@ function initMasterEvents() {
             const status = getGoogleStatus();
             if (status.isGoogleSyncEnabled && status.googleAuthToken) {
                 taskInput.placeholder = "Syncing...";
-                const gTask = await fetchGoogleAPI(`/lists/${status.currentGoogleListId}/tasks`, 'POST', { title: `${text} (S: ${targetSpace.name})` });
+                const listId = getTargetListId(targetSpace);
+                const gTask = await fetchGoogleAPI(`/lists/${listId}/tasks`, 'POST', { title: `${text} (S: ${targetSpace.name})` });
                 if (gTask && gTask.id) newTask.googleTaskId = gTask.id;
             }
             targetSpace.tasks.push(newTask);
@@ -495,12 +501,13 @@ function initMasterEvents() {
                     const status = getGoogleStatus();
                     if (!status.googleAuthToken) return alert("Please connect to Google first");
 
+                    const listId = getTargetListId(space);
                     if (subtask.googleTaskId) {
-                        await fetchGoogleAPI(`/lists/${status.currentGoogleListId}/tasks/${subtask.googleTaskId}`, 'DELETE');
+                        await fetchGoogleAPI(`/lists/${listId}/tasks/${subtask.googleTaskId}`, 'DELETE');
                         subtask.googleTaskId = null;
                     } else {
                         if (!parentTask.googleTaskId) return alert("Sync main task first to nest subtasks.");
-                        const gTask = await createGoogleTask(status.currentGoogleListId, { title: subtask.text }, parentTask.googleTaskId);
+                        const gTask = await createGoogleTask(listId, { title: subtask.text }, parentTask.googleTaskId);
                         if (gTask?.id) subtask.googleTaskId = gTask.id;
                     }
                     saveData(); onRefresh();
@@ -520,12 +527,11 @@ function initMasterEvents() {
                     const status = getGoogleStatus();
                     if (!status.googleAuthToken) return alert("Please connect to Google first");
 
+                    const listId = getTargetListId(space);
                     if (task.googleTaskId) {
-                        const listId = space.isSpecificListEnabled ? (space.googleTaskListId || status.currentGoogleListId) : status.currentGoogleListId;
                         await fetchGoogleAPI(`/lists/${listId}/tasks/${task.googleTaskId}`, 'DELETE');
                         task.googleTaskId = null;
                     } else {
-                        const listId = space.isSpecificListEnabled ? (space.googleTaskListId || status.currentGoogleListId) : status.currentGoogleListId;
                         const gTask = await createGoogleTask(listId, { title: `${task.text} (S: ${space.name})` });
                         if (gTask?.id) task.googleTaskId = gTask.id;
                     }
@@ -546,7 +552,8 @@ function initMasterEvents() {
                     task.completedAt = Date.now();
                     task.isProminent = false;
                     if (task.googleTaskId && getGoogleAuthToken()) {
-                        fetchGoogleAPI(`/lists/${getCurrentGoogleListId()}/tasks/${task.googleTaskId}`, 'PATCH', { status: 'completed' });
+                        const listId = getTargetListId(space);
+                        fetchGoogleAPI(`/lists/${listId}/tasks/${task.googleTaskId}`, 'PATCH', { status: 'completed' });
                     }
                     if (task.subtasks) task.subtasks.forEach(s => s.completed = true);
                     saveData(); onRefresh();
@@ -565,7 +572,8 @@ function initMasterEvents() {
                 if (subtask) {
                     subtask.completed = true;
                     if (subtask.googleTaskId && getGoogleAuthToken()) {
-                        fetchGoogleAPI(`/lists/${getCurrentGoogleListId()}/tasks/${subtask.googleTaskId}`, 'PATCH', { status: 'completed' });
+                        const listId = getTargetListId(space);
+                        fetchGoogleAPI(`/lists/${listId}/tasks/${subtask.googleTaskId}`, 'PATCH', { status: 'completed' });
                     }
                     saveData(); onRefresh();
                 }
@@ -672,9 +680,9 @@ function initMasterEvents() {
                     // 🟢 FIFO Flagging: ค้นหาตำแหน่งสุดท้ายของกลุ่มงานที่ติดธงอยู่แล้ว
                     let lastProminentIdx = -1;
                     for (let i = 0; i < space.tasks.length; i++) {
-                        if (space.tasks[i].isProminent && space.tasks[i] !== movedTask) {
+                        if (space.tasks[i].isProminent) {
                             lastProminentIdx = i;
-                        } else if (!space.tasks[i].isProminent) {
+                        } else {
                             break;
                         }
                     }

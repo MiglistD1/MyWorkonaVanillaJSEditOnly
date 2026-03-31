@@ -1,5 +1,5 @@
 import { svgTag, dragHandleSvg, googleTasksIcon, svgEdit, svgTrashRed, svgPencil, svgRestore, svgArchive } from './icons.js';
-import { getShortDate, getAppSettings } from './storage.js';
+import { getShortDate, getAppSettings, getUnitCharFromThai, getFilterTags } from './storage.js';
 
 export function generateMiniTagsBtn(itemTags, type, index) {
   const count = itemTags ? itemTags.length : 0;
@@ -137,6 +137,7 @@ export function generateTaskHTML(task, index, {
     const isActuallyDeleted = task.isDeleted; // For trash-specific styling and buttons
 
     const appSettings = getAppSettings();
+    const templateClass = task.isFromTemplate ? 'is-from-template' : '';
     const focusedTask = appSettings.focusedTask;
     const isFocused = focusedTask && focusedTask.spaceId === spaceId && focusedTask.createdAt === task.createdAt; // 🟢 ตรวจสอบ createdAt ที่ถูกต้อง
     const focusActiveClass = isFocused ? 'is-focus-active' : '';
@@ -305,7 +306,7 @@ export function generateTaskHTML(task, index, {
 
     const itemType = isSubtask ? 'subtask' : 'task';
     return ` 
-    <li class="${isSubtask ? 'subtask-item' : 'task-item'} ${draggableClass} ${prominentClass} ${focusActiveClass}" data-index="${index}" data-type="${itemType}" ${isMasterView ? `data-space-id="${spaceId}"` : ''} style="list-style: none; width: 100%; margin-bottom: 0px; border-bottom: 1px solid transparent; opacity: ${isActuallyDeleted ? '0.7' : '1'};">
+    <li class="${isSubtask ? 'subtask-item' : 'task-item'} ${draggableClass} ${prominentClass} ${focusActiveClass} ${templateClass}" data-index="${index}" data-type="${itemType}" ${isMasterView ? `data-space-id="${spaceId}"` : ''} style="list-style: none; width: 100%; margin-bottom: 0px; border-bottom: 1px solid transparent; opacity: ${isActuallyDeleted ? '0.7' : '1'};">
         <div class="item-main-row" style="display: flex; align-items: center; gap: 6px; padding: 2px 0; width: 100%; min-height: 28px;">
             ${handleHTML}
             ${!isSubtask ? `
@@ -450,7 +451,7 @@ export function attachTaskInlineEditListeners(container, getSpaceFn, callbacks =
             const space = getSpaceFn(li);
             if (!space) return;
 
-            const newText = e.target.innerText.trim();
+            let newText = e.target.innerText.trim();
             let taskObj = null;
 
             if (type === 'task') {
@@ -461,6 +462,42 @@ export function attachTaskInlineEditListeners(container, getSpaceFn, callbacks =
             }
 
             if (taskObj) {
+                // 🟢 NEW: Auto-tagging Logic (เหมือนฟังก์ชันเก่าในช่อง Add Task)
+                // 1. แทนที่ทางลัด #1 ด้วยป้ายที่กำลังกรองอยู่
+                const currentFilters = (getFilterTags() || []).filter(t => !['ALL', 'UNTAGGED', 'AI', 'HALF SCREEN'].includes(t.toUpperCase()));
+                if (newText.includes('#1') && currentFilters.length > 0) {
+                    const filterTagsString = currentFilters.map(t => '#' + t).join(' ');
+                    newText = newText.replace(/#1/g, filterTagsString);
+                }
+
+                // 2. สแกนหา #ป้ายกำกับ และย้ายเข้าสู่ระบบ Tags
+                const tagMatches = newText.match(/#([^\s#]+)/g);
+                if (tagMatches) {
+                    const extracted = tagMatches.map(t => t.substring(1)); // ตัด # ออก
+                    
+                    // เพิ่มเข้าในตัวงาน (Task)
+                    if (!taskObj.tags) taskObj.tags = [];
+                    extracted.forEach(t => {
+                        if (!taskObj.tags.some(ext => ext.toLowerCase() === t.toLowerCase())) {
+                            taskObj.tags.push(t);
+                        }
+                    });
+
+                    // เพิ่มเข้าในรายการป้ายของ Space (ถ้าเป็นของใหม่)
+                    if (space && !space.tags) space.tags = [];
+                    if (space) {
+                        extracted.forEach(t => {
+                            if (!space.tags.some(st => st.toLowerCase() === t.toLowerCase())) {
+                                space.tags.push(t);
+                            }
+                        });
+                    }
+
+                    // ลบแท็กออกจากเนื้อความ และถ้าข้อความว่างให้ใช้แท็กแรกเป็นชื่อแทน
+                    newText = newText.replace(/#([^\s#]+)/g, '').trim();
+                    if (newText === "" && extracted.length > 0) newText = extracted[0];
+                }
+
                 // 🟢 หากช่องชื่อว่างเปล่าและกด Enter ให้ลบ Task นั้นทิ้งอัตโนมัติ
                 if (newText === "" && wasEnter && typeof callbacks.onDeleteEmptyTask === 'function') {
                     callbacks.onDeleteEmptyTask(space, idx, type, li);
@@ -514,52 +551,64 @@ export function applySyntaxHighlighting(el) {
     if (!el || !el.isContentEditable) return;
 
     const selection = window.getSelection();
-    if (selection.rangeCount === 0) return;
-    
-    const range = selection.getRangeAt(0);
-    const preCaretRange = range.cloneRange();
-    preCaretRange.selectNodeContents(el);
-    preCaretRange.setEnd(range.endContainer, range.endOffset);
-    const caretOffset = preCaretRange.toString().length;
+    let isFocused = false;
+    let caretOffset = 0;
+
+    // 🟢 Fix: Only track selection if the cursor is actually inside THIS element
+    if (selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        if (el.contains(range.commonAncestorContainer)) {
+            isFocused = true;
+            const preCaretRange = range.cloneRange();
+            preCaretRange.selectNodeContents(el);
+            preCaretRange.setEnd(range.endContainer, range.endOffset);
+            caretOffset = preCaretRange.toString().length;
+        }
+    }
 
     const text = el.innerText;
     const escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const highlighted = escaped
-        .replace(/(@reward([\d.]*)([bti]):([^\s]+))/gi, '<span class="hl-reward" data-type="$3">$1</span>')
-        .replace(/(@reward:([^\s]+))/gi, '<span class="hl-reward" data-type="big">$1</span>')
+        .replace(/(@รางวัล([\d.]+)(บาท|นาที|อัน)_([^\s]+))/gi, (match, p1, p2, p3, p4) => {
+            const unitChar = getUnitCharFromThai(p3);
+            return `<span class="hl-reward" data-type="${unitChar}">${p1}</span>`;
+        })
+        .replace(/(@รางวัล_([^\s]+))/gi, '<span class="hl-reward" data-type="big">$1</span>')
         .replace(/(^|\s)(#[^\s#]+)/g, '$1<span class="hl-tag">$2</span>');
 
     if (el.innerHTML !== highlighted) {
         el.innerHTML = highlighted;
 
-        // Restore Caret Position (ป้องกันเคอร์เซอร์กระโดดไปหน้าสุด)
-        const newRange = document.createRange();
-        let charCount = 0;
-        let nodeFound = false;
+        // 🟢 Only restore if we were actually focused here
+        if (isFocused) {
+            const newRange = document.createRange();
+            let charCount = 0;
+            let nodeFound = false;
 
-        function traverseNodes(node) {
-            if (nodeFound) return;
-            if (node.nodeType === Node.TEXT_NODE) {
-                const nextCharCount = charCount + node.length;
-                if (caretOffset <= nextCharCount) {
-                    newRange.setStart(node, caretOffset - charCount);
-                    newRange.collapse(true);
-                    nodeFound = true;
-                }
-                charCount = nextCharCount;
-            } else {
-                for (let i = 0; i < node.childNodes.length; i++) {
-                    traverseNodes(node.childNodes[i]);
+            function traverseNodes(node) {
+                if (nodeFound) return;
+                if (node.nodeType === Node.TEXT_NODE) {
+                    const nextCharCount = charCount + node.length;
+                    if (caretOffset <= nextCharCount) {
+                        newRange.setStart(node, caretOffset - charCount);
+                        newRange.collapse(true);
+                        nodeFound = true;
+                    }
+                    charCount = nextCharCount;
+                } else {
+                    for (let i = 0; i < node.childNodes.length; i++) {
+                        traverseNodes(node.childNodes[i]);
+                    }
                 }
             }
+            traverseNodes(el);
+            if (!nodeFound) {
+                newRange.selectNodeContents(el);
+                newRange.collapse(false);
+            }
+            selection.removeAllRanges();
+            selection.addRange(newRange);
         }
-        traverseNodes(el);
-        if (!nodeFound) {
-            newRange.selectNodeContents(el);
-            newRange.collapse(false);
-        }
-        selection.removeAllRanges();
-        selection.addRange(newRange);
     }
 }
 
@@ -570,6 +619,9 @@ export function handleTagAutocomplete(e, getTagsFn) {
     const input = e.target;
     const isContentEditable = input.isContentEditable;
     const value = isContentEditable ? input.innerText : input.value;
+    
+    // 🟢 เก็บฟังก์ชันดึง Tag ไว้สำหรับใช้ในกรณี Chained Autocomplete (บาท_ -> Category)
+    window._lastAutocompleteGetTagsFn = getTagsFn;
     
     let cursorFallback;
     if (isContentEditable) {
@@ -589,23 +641,23 @@ export function handleTagAutocomplete(e, getTagsFn) {
     const lastWord = words[words.length - 1];
 
     // 🟢 1. จัดการ @reward Autocomplete
-    if (lastWord.startsWith('@reward')) {
+    if (lastWord.startsWith('@รางวัล')) {
         const rData = window.getRewardSystemData ? window.getRewardSystemData() : null;
         if (!rData) return;
 
         // ตรวจสอบว่ากำลังพิมพ์ส่วน Category ของ b: หรือ t: อยู่หรือไม่
-        const moneyMatch = lastWord.match(/^@reward[\d.]*b:(.*)$/i);
-        const timeMatch = lastWord.match(/^@reward[\d.]*t:(.*)$/i);
-        const itemMatch = lastWord.match(/^@reward[\d.]*i:(.*)$/i);
-        const lootMatch = lastWord.match(/^@reward:(.*)$/i); // 🟢 เพิ่มรองรับ @reward:
+        const moneyMatch = lastWord.match(/^@รางวัล[\d.]*บาท_(.*)$/i);
+        const timeMatch = lastWord.match(/^@รางวัล[\d.]*นาที_(.*)$/i);
+        const itemMatch = lastWord.match(/^@รางวัล[\d.]*อัน_(.*)$/i);
+        const lootMatch = lastWord.match(/^@รางวัล_([^\s]*)$/i); // 🟢 เพิ่มรองรับ @รางวัล_
 
         // 🟢 เพิ่มระบบช่วยเลือกประเภทรางวัล (b:, t:, i:, :) หากยังพิมพ์ไม่ครบ
         if (!moneyMatch && !timeMatch && !itemMatch && !lootMatch) {
-            const typeQuery = lastWord.match(/^@reward([\d.]*)(.*)$/i);
+            const typeQuery = lastWord.match(/^@รางวัล([\d.]*)(.*)$/i);
             if (typeQuery) {
                 const hasNumber = typeQuery[1] !== "";
-                const currentPart = typeQuery[2].toLowerCase();
-                const suggestions = hasNumber ? ["b:", "t:", "i:"] : ["b:", "t:", "i:", ":"];
+                const currentPart = typeQuery[2]; // This will be like "บาท_" or "นาที_"
+                const suggestions = hasNumber ? ["บาท_", "นาที_", "อัน_"] : ["บาท_", "นาที_", "อัน_", "_"]; // Suggestions for units
                 const filtered = suggestions.filter(s => s.startsWith(currentPart));
                 
                 if (filtered.length > 0) {
@@ -659,8 +711,11 @@ export function handleTagAutocomplete(e, getTagsFn) {
  * 🛠️ Helper: แทรกข้อความ Autocomplete และจัดการเคอร์เซอร์
  */
 function insertAutocompleteText(input, before, selected, after, isContentEditable) {
-    const newVal = before + selected + ' ' + after;
-    const newPos = (before + selected + ' ').length;
+    // 🟢 Chained Logic: ถ้าคำที่เลือกจบด้วย _ แสดงว่ายังไม่จบงาน ไม่ต้องเคาะเว้นวรรค
+    const isStepped = selected.endsWith('_');
+    const suffix = isStepped ? '' : ' ';
+    const newVal = before + selected + suffix + after;
+    const newPos = (before + selected + suffix).length;
 
     if (isContentEditable) {
         input.innerText = newVal;
@@ -688,6 +743,14 @@ function insertAutocompleteText(input, before, selected, after, isContentEditabl
         input.focus();
         input.setSelectionRange(newPos, newPos);
     }
+
+    // 🟢 บังคับให้เรียก Autocomplete อีกครั้งทันทีเพื่อความต่อเนื่อง
+    if (isStepped) {
+        const fakeEvent = { target: input };
+        setTimeout(() => {
+            handleTagAutocomplete(fakeEvent, window._lastAutocompleteGetTagsFn || (() => []));
+        }, 10);
+    }
 }
 
 let activeDropdown = null;
@@ -697,10 +760,23 @@ function showTagAutocompleteDropdown(input, tags, onSelect, icon = '#') {
     closeTagAutocompleteDropdown();
 
     const rect = input.getBoundingClientRect();
+    const viewportHeight = window.innerHeight;
+    const maxDropdownHeight = 250; // ตรงกับ CSS max-height
+    const estimatedHeight = Math.min(tags.length * 35 + 12, maxDropdownHeight); // คำนวณความสูงโดยประมาณ
     const dropdown = document.createElement('div');
     dropdown.className = 'tag-autocomplete-dropdown';
-    dropdown.style.left = `${rect.left + window.scrollX}px`;
-    dropdown.style.top = `${rect.bottom + window.scrollY + 2}px`;
+    
+    // 🟢 ป้องกันล้นขอบขวา
+    let left = rect.left + window.scrollX;
+    if (left + 200 > window.innerWidth) left = window.innerWidth - 210;
+    dropdown.style.left = `${Math.max(10, left)}px`;
+    
+    // 🟢 Smart Positioning: สลับขึ้นด้านบนหาก Popup จะหลุดขอบล่างของหน้าจอ
+    let top = rect.bottom + window.scrollY + 2;
+    if (rect.bottom + estimatedHeight > viewportHeight) {
+        top = rect.top + window.scrollY - estimatedHeight - 2;
+    }
+    dropdown.style.top = `${top}px`;
     dropdown.style.width = `${rect.width}px`;
     focusedTagIndex = -1;
 

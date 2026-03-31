@@ -1,5 +1,5 @@
 import { svgTrashRed, svgPencil } from '../core/icons.js';
-import { getSpaces, saveData } from '../core/storage.js';
+import { getSpaces, saveData, getThaiUnit, getUnitCharFromThai } from '../core/storage.js';
 import { saveFlow } from './smartFlow.js';
 import { fetchGoogleAPI, getGoogleStatus } from './googleTasks.js';
 
@@ -124,7 +124,7 @@ async function syncLootWithGoogleTasks() {
 
             for (const cat of categories) {
                 const amount = (rewardData.wallets[type]?.[cat] || 0);
-                const expectedTitle = `${amount.toFixed(2)}${unit} สำหรับ #${cat.toLowerCase()}`; // 🟢 บังคับเป็น #lowercase
+                const expectedTitle = `@รางวัล${amount.toFixed(2)}${getThaiUnit(unit)}_${cat.toLowerCase()}`; // 🟢 บังคับเป็น #lowercase
                 const lastSynced = (rewardData.lastSyncAmounts[type]?.[cat] || 0);
                 
                 let taskId = rewardData.walletTaskIds[type][cat];
@@ -132,8 +132,8 @@ async function syncLootWithGoogleTasks() {
                 let googleAmount = null;
 
                 if (gTask && gTask.status !== 'completed') {
-                    const escapedCat = cat.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                    const titleRegex = new RegExp(`^([\\d.]+)(?:${unit}) (?:สำหรับ|for) #${escapedCat}$`, 'i'); // 🟢 ตรวจสอบรูปแบบที่มี #
+                    const escapedCat = cat.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // Escape special characters for regex
+                    const titleRegex = new RegExp(`^@รางวัล([\\d.]+)(บาท|นาที|อัน)_(${escapedCat})$`, 'i'); // 🟢 ตรวจสอบรูปแบบใหม่
                     const match = gTask.title.match(titleRegex);
                     if (match) googleAmount = parseFloat(match[1]);
                 }
@@ -269,9 +269,9 @@ async function syncLootWithGoogleTasks() {
 
             // 2. ตรวจสอบหมวดเงิน/เวลาปกติ (Logic เดิมที่มีอยู่)
             const anyMatch = gt.title.match(/^([\d.]+)([btx]) (?:สำหรับ|for) #(.+)$/i); // 🟢 รองรับรูปแบบที่มี #
-            if (anyMatch) {
+            if (anyMatch) { // Match groups: [full_match, amount, thai_unit, category]
                 const [_, val, unitChar, catName] = anyMatch;
-                const detectedType = unitChar === 'b' ? 'money' : (unitChar === 'm' ? 'time' : 'item');
+                const detectedType = getUnitCharFromThai(unitChar) === 'b' ? 'money' : (getUnitCharFromThai(unitChar) === 't' ? 'time' : 'item'); // Convert Thai unit back to char
                 const cats = detectedType === 'money' ? rewardData.moneyCategories : (detectedType === 'time' ? rewardData.timeCategories : rewardData.itemCategories);
                 
                 if (cats.includes(catName) && !Object.values(rewardData.walletTaskIds[detectedType]).includes(gt.id)) {
@@ -321,10 +321,10 @@ async function forceSyncFromGoogle() {
             if (gt.status === 'completed') return;
 
             // 1. ตรวจสอบ Wallet: [amount][unit] สำหรับ #[cat]
-            const walletMatch = gt.title.match(/^([\d.]+)([btx]) (?:สำหรับ|for) #(.+)$/i);
+            const walletMatch = gt.title.match(/^@รางวัล([\d.]+)(บาท|นาที|อัน)_(.+)$/i); // Updated regex
             if (walletMatch) {
                 const [_, val, unitChar, catName] = walletMatch;
-                const type = unitChar === 'b' ? 'money' : (unitChar === 'm' ? 'time' : 'item');
+                const type = getUnitCharFromThai(unitChar) === 'b' ? 'money' : (getUnitCharFromThai(unitChar) === 't' ? 'time' : 'item'); // Convert Thai unit back to char
                 const cats = type === 'money' ? rewardData.moneyCategories : (type === 'time' ? rewardData.timeCategories : rewardData.itemCategories);
                 
                 const realCat = cats.find(c => c.toLowerCase() === catName.toLowerCase());
@@ -396,6 +396,16 @@ async function forceSyncToGoogle() {
 
 export function initRewardSystem() {
     loadRewardData();
+
+    // Listen for Google Tasks sync completion to refresh reward modal
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+        if (message.type === 'GOOGLE_TASKS_SYNC_COMPLETE') {
+            const modal = document.getElementById('reward-modal');
+            if (modal && modal.style.display === 'flex') {
+                renderRewardContent();
+            }
+        }
+    });
     
     // 🟢 1. ส่งออกข้อมูลเพื่อให้ระบบ Autocomplete ใน ui-helpers.js ดึงไปใช้แสดง Popup
     window.getRewardSystemData = () => rewardData;
@@ -425,54 +435,53 @@ export function initRewardSystem() {
 
         const currentCount = (source === 'habit') ? rewardData.habitCount : (source === 'flow' ? rewardData.flowCount : rewardData.globalTaskCompletionCount);
 
-        // 1. Money Scanner: @reward[num]b:[cat]
-        const moneyMatch = taskText.match(/@reward([\d.]+)b:([^\s]+)/i);
-        if (moneyMatch) {
-            const cat = moneyMatch[2];
-            // 🟢 ตรวจสอบว่าหมวดหมู่ตรงกับที่ตั้งค่าไว้หรือไม่
+        // 🟢 1. Money Scanner: รองรับรางวัลหลายรายการ (ใช้ matchAll)
+        const moneyMatches = taskText.matchAll(/@รางวัล([\d.]+)บาท_([^\s]+)/gi);
+        for (const match of moneyMatches) {
+            const amount = parseFloat(match[1]);
+            const cat = match[2];
             const matchedCat = rewardData.moneyCategories.find(c => c.toLowerCase() === cat.toLowerCase());
             if (matchedCat) {
                 if (!rewardData.wallets.money) rewardData.wallets.money = {};
-                const amount = parseFloat(moneyMatch[1]);
                 rewardData.wallets.money[matchedCat] = (rewardData.wallets.money[matchedCat] || 0) + amount;
-                if (coords) triggerLootDropAnimation(`💰 +${moneyMatch[1]}b`, coords.x, coords.y, isTab2Mission);
+                if (coords) triggerLootDropAnimation(`💰 +${amount}บาท`, coords.x, coords.y, isTab2Mission);
                 found = true;
             }
         }
 
-        // 2. Time Scanner: @reward[num]t:[cat]
-        const timeMatch = taskText.match(/@reward([\d.]+)t:([^\s]+)/i);
-        if (timeMatch) {
-            const cat = timeMatch[2];
+        // 🟢 2. Time Scanner: รองรับรางวัลหลายรายการ (ใช้ matchAll)
+        const timeMatches = taskText.matchAll(/@รางวัล([\d.]+)นาที_([^\s]+)/gi);
+        for (const match of timeMatches) {
+            const amount = parseFloat(match[1]);
+            const cat = match[2];
             const matchedCat = rewardData.timeCategories.find(c => c.toLowerCase() === cat.toLowerCase());
             if (matchedCat) {
                 if (!rewardData.wallets.time) rewardData.wallets.time = {};
-                const amount = parseFloat(timeMatch[1]);
                 rewardData.wallets.time[matchedCat] = (rewardData.wallets.time[matchedCat] || 0) + amount;
-                if (coords) triggerLootDropAnimation(`⏳ +${timeMatch[1]}m`, coords.x, coords.y, isTab2Mission);
+                if (coords) triggerLootDropAnimation(`⏳ +${amount}นาที`, coords.x, coords.y, isTab2Mission);
                 found = true;
             }
         }
 
-        // 3. Item Wallet Scanner: @reward[num]i:[itemName]
-        const itemWalletMatch = taskText.match(/@reward([\d.]+)i:([^\s]+)/i);
-        if (itemWalletMatch) {
-            const cat = itemWalletMatch[2].replace(/_/g, ' ');
+        // 🟢 3. Item Wallet Scanner: รองรับรางวัลหลายรายการ (ใช้ matchAll)
+        const itemWalletMatches = taskText.matchAll(/@รางวัล([\d.]+)อัน_([^\s]+)/gi);
+        for (const match of itemWalletMatches) {
+            const amount = parseFloat(match[1]);
+            const cat = match[2].replace(/_/g, ' ');
             const matchedCat = rewardData.itemCategories.find(c => c.toLowerCase() === cat.toLowerCase());
             if (matchedCat) {
                 if (!rewardData.wallets.item) rewardData.wallets.item = {};
-                const amount = parseFloat(itemWalletMatch[1]);
                 rewardData.wallets.item[matchedCat] = (rewardData.wallets.item[matchedCat] || 0) + amount;
-                if (coords) triggerLootDropAnimation(`🎁 +${itemWalletMatch[1]} ${matchedCat}`, coords.x, coords.y, isTab2Mission);
+                if (coords) triggerLootDropAnimation(`🎁 +${amount} ${matchedCat}`, coords.x, coords.y, isTab2Mission);
                 found = true;
             }
         }
 
-        // 4. Big Item Scanner: @reward:[itemName]
-        const itemMatch = taskText.match(/@reward:([^\s]+)/i);
-        if (itemMatch) {
-            const itemName = itemMatch[1].replace(/_/g, ' ');
-            rewardData.lootList.unshift({ // เพิ่มไอเทมเข้าในรายการ Loot
+        // 🟢 4. Big Item Scanner: รองรับรางวัลหลายรายการ (ใช้ matchAll)
+        const bigItemMatches = taskText.matchAll(/@รางวัล_([^\s]+)/gi);
+        for (const match of bigItemMatches) {
+            const itemName = match[1].replace(/_/g, ' ');
+            rewardData.lootList.unshift({
                 id: Date.now() + Math.random(),
                 name: itemName,
                 date: new Date().toLocaleDateString(),
@@ -510,7 +519,7 @@ export function initRewardSystem() {
                     const targetCat = rule.category || (rule.type === 'money' ? 'Bonus' : (rule.type === 'time' ? 'Relax' : 'Loot'));
                     if (!rewardData.wallets[rule.type]) rewardData.wallets[rule.type] = {};
                     rewardData.wallets[rule.type][targetCat] = (rewardData.wallets[rule.type][targetCat] || 0) + rule.value;
-                    rewardDesc = `+${rule.value}${rule.type === 'money' ? 'b' : (rule.type === 'time' ? 'm' : 'x')} (${targetCat})`;
+                    rewardDesc = `+${rule.value}${rule.type === 'money' ? 'บาท' : (rule.type === 'time' ? 'นาที' : 'อัน')} (${targetCat})`;
                 } else {
                     rewardDesc = rule.rewardName;
                 }
@@ -518,7 +527,7 @@ export function initRewardSystem() {
                 rewardData.lootList.unshift({
                     id: Date.now() + 1,
                     name: `⚡ COMBO: ${rule.rewardName} (${rewardDesc})`,
-                    date: new Date().toLocaleDateString(),
+                date: new Date().toLocaleDateString(), // Use toLocaleDateString for consistent format
                     isSpecial: true
                 });
                 
@@ -568,7 +577,7 @@ export function initRewardSystem() {
 
     // UI Global Listeners
     document.addEventListener('click', (e) => {
-        if (e.target.closest('#btn-master-open-rewards')) {
+        if (e.target.closest('#btn-master-open-rewards') || e.target.closest('#btn-open-rewards-topbar')) {
             openRewardModal();
         }
         if (e.target.id === 'btn-close-reward-modal') {
@@ -658,9 +667,7 @@ function renderRewardContent() {
         <div class="reward-pane" style="display: ${activeTab === '1' ? 'block' : 'none'}">
             <!-- 🟢 Google Sync Controls -->
             <div class="customize-section" style="margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; padding: 12px; background: var(--bg-body);">
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <div style="background: #34a853; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 14px;">G</div>
-                    <div style="font-size: 12px; font-weight: 700;">Google Tasks Sync</div>
+                <div style="display: flex; align-items: center; gap: 10px;"Tasks Sync</div>
                 </div>
                 <div style="display: flex; gap: 4px; margin-right: 5px; align-items: center;">
                     <button class="btn btn-outline" id="btn-toggle-sync-tools" title="Toggle Sync Tools" style="padding: 2px 6px; min-width: 24px; display: flex; align-items: center; justify-content: center;">
@@ -823,8 +830,12 @@ function renderRewardContent() {
     // --- Floating & Draggable Setup ---
     const modalContent = document.querySelector('.reward-modal-content');
     if (modalContent) {
-        modalContent.style.left = `${rewardData.pos.x}px`;
-        modalContent.style.top = `${rewardData.pos.y}px`;
+        // 🟢 ตรวจสอบตำแหน่งให้อยู่ใน Viewport เสมอ (ป้องกันหน้าต่างหายเมื่อย่อ Browser)
+        const safeX = Math.max(10, Math.min(window.innerWidth - 430, rewardData.pos.x));
+        const safeY = Math.max(10, Math.min(window.innerHeight - 400, rewardData.pos.y));
+        
+        modalContent.style.left = `${safeX}px`;
+        modalContent.style.top = `${safeY}px`;
         setupRewardDrag(modalContent);
     }
 
@@ -1124,8 +1135,16 @@ function showCreateMissionPopup(anchorEl) {
     
     // Positioning logic (Simplified)
     const rect = anchorEl.getBoundingClientRect();
-    popup.style.top = `${rect.bottom + 8}px`;
-    popup.style.left = `${Math.max(10, rect.left - 150)}px`;
+    const popupWidth = 300;
+    const popupHeight = 280; // Estimated
+
+    let top = rect.bottom + 8;
+    if (top + popupHeight > window.innerHeight) top = rect.top - popupHeight - 8;
+    let left = rect.left - 150;
+    if (left + popupWidth > window.innerWidth) left = window.innerWidth - popupWidth - 10;
+
+    popup.style.top = `${top}px`;
+    popup.style.left = `${Math.max(10, left)}px`;
 
     popup.querySelector('#btn-confirm-create-mission').onclick = () => {
         const name = popup.querySelector('#ms-new-name').value.trim();
@@ -1208,9 +1227,9 @@ function showComboRulesPopup(anchorEl) {
             <div style="display:grid; grid-template-columns: 1fr 1.5fr; gap:6px; margin-top:5px; margin-bottom:10px;">
                 <input type="number" id="combo-val" class="settings-input" style="padding:4px;" placeholder="Value">
                 <select id="combo-reward-type" class="settings-input" style="padding:4px; font-size:11px;">
-                    <option value="money">Money (b)</option>
-                    <option value="time">Time (m)</option>
-                    <option value="item">Item / Loot</option>
+                    <option value="money">Money (บาท)</option>
+                    <option value="time">Time (นาที)</option>
+                    <option value="item">Item (อัน)</option>
                 </select>
             </div>
 
@@ -1229,7 +1248,7 @@ function showComboRulesPopup(anchorEl) {
                         <div style="font-size:11px; font-weight:800;">${rule.rewardName}</div>
                         <div style="font-size:10px; color:var(--text-muted);">
                             Every ${rule.target} ${rule.source}s ${rule.withinDays ? `in ${rule.withinDays}d` : ''} ${rule.spaceId ? '(Space)' : '(Global)'} 
-                            → ${rule.value}${rule.type === 'money' ? 'b' : (rule.type === 'time' ? 'm' : 'x')} [${rule.category || 'Default'}]
+                            → ${rule.value}${getThaiUnit(rule.type === 'money' ? 'b' : (rule.type === 'time' ? 't' : 'i'))} [${rule.category || 'Default'}]
                         </div>
                     </div>
                     <button class="btn-icon del-combo-btn" data-id="${rule.id}" style="color:red; transform:scale(0.8);">${svgTrashRed}</button>
@@ -1347,7 +1366,7 @@ function showCategoriesPopup(anchorEl) {
         <div style="font-weight:800; font-size:12px; margin-bottom:12px;">🏷️ Manage Categories</div>
         
         <div class="settings-group">
-            <label style="font-size:10px; opacity:0.7;">Money Categories (b) (Ex: @reward10b:Work)</label>
+            <label style="font-size:10px; opacity:0.7;">Money Categories (บาท) (Ex: @รางวัล10บาท_Work)</label>
             <div style="display:flex; gap:5px; margin-bottom:8px;">
                 <input type="text" id="pop-money-input" class="settings-input" style="padding:4px; font-size:11px;" placeholder="New...">
                 <button class="btn btn-primary" id="pop-add-money" style="padding:2px 8px; font-size:10px;">Add</button>
@@ -1358,7 +1377,7 @@ function showCategoriesPopup(anchorEl) {
         </div>
 
         <div class="settings-group" style="margin-top:15px;">
-            <label style="font-size:10px; opacity:0.7;">Item Categories (i) (Ex: @reward1i:Coffee)</label>
+            <label style="font-size:10px; opacity:0.7;">Item Categories (อัน) (Ex: @รางวัล1อัน_Coffee)</label>
             <div style="display:flex; gap:5px; margin-bottom:8px;">
                 <input type="text" id="pop-item-input" class="settings-input" style="padding:4px; font-size:11px;" placeholder="New...">
                 <button class="btn btn-primary" id="pop-add-item" style="padding:2px 8px; font-size:10px;">Add</button>
@@ -1380,7 +1399,7 @@ function showCategoriesPopup(anchorEl) {
         </div>
 
         <div class="settings-group" style="margin-top:15px;">
-            <label style="font-size:10px; opacity:0.7;">Time Categories (t) (Ex: @reward15t:Gaming)</label>
+            <label style="font-size:10px; opacity:0.7;">Time Categories (นาที) (Ex: @รางวัล15นาที_Gaming)</label>
             <div style="display:flex; gap:5px; margin-bottom:8px;">
                 <input type="text" id="pop-time-input" class="settings-input" style="padding:4px; font-size:11px;" placeholder="New...">
                 <button class="btn btn-primary" id="pop-add-time" style="padding:2px 8px; font-size:10px;">Add</button>
@@ -1504,7 +1523,7 @@ function renderWithdrawalLists() {
     const renderRow = (cat, type) => {
         const amount = (rewardData.wallets[type]?.[cat] || 0);
         const lastTime = rewardData.lastWithdrawals[type][cat] || "Never";
-        const unit = type === 'money' ? 'b' : (type === 'time' ? 'm' : 'x');
+        const unit = type === 'money' ? 'บาท' : (type === 'time' ? 'นาที' : 'อัน');
         const icon = type === 'money' ? '💰' : (type === 'time' ? '⏳' : '🎁');
 
         const li = document.createElement('li');

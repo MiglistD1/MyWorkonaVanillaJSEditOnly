@@ -39,8 +39,9 @@ body { margin: 0; font-family: var(--app-font); display: flex; height: 100vh; ba
 .btn-icon:hover { color: var(--text-main); background: var(--border-color);}
 .btn-icon { box-sizing: border-box; } /* แก้ไข: เพิ่ม box-sizing เพื่อป้องกันปุ่มล้นออกจาก popup */
 
-/* 🔵 ทำให้ปุ่ม Toggle ดูโดดเด่นเมื่อ Sidebar ถูกซ่อน (Auto-collapse) */
-#btn-toggle-spacebar.sidebar-hidden {
+/* 🔵 ทำให้ปุ่มควบคุมดูโดดเด่นเมื่อ Sidebar ถูกซ่อน (Auto-collapse) */
+#btn-toggle-spacebar.sidebar-hidden,
+#btn-command-center-topbar.sidebar-hidden {
   background-color: var(--primary-color) !important;
   color: white !important;
   box-shadow: 0 4px 12px rgba(47, 128, 237, 0.4);
@@ -586,13 +587,53 @@ body { margin: 0; font-family: var(--app-font); display: flex; height: 100vh; ba
 }
 
 /* 🔴 Space specific list toggle button - Prominent Red Style */
+#btn-toggle-specific-list {
+    position: relative;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 4px;
+}
+
 #btn-toggle-specific-list.active {
     color: #ef4444 !important;
     background: rgba(239, 68, 68, 0.15) !important;
     border: 1px solid #ef4444 !important;
     box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
     transform: scale(1.15);
-    border-radius: 4px;
+}
+
+/* 🟢 Space specific list toggle button - Ready State (Green) */
+#btn-toggle-specific-list.ready {
+    color: #10b981 !important;
+    background: rgba(16, 185, 129, 0.15) !important;
+    border: 1px solid #10b981 !important;
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+    transform: scale(1.1);
+}
+
+/* 🟢 Badge number for Ready state (shows '1' on green, disappears on red) */
+#btn-toggle-specific-list.ready::after {
+    content: attr(data-badge);
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    background: #10b981;
+    color: white;
+    font-size: 9px;
+    font-weight: 900;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--bg-card);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    animation: badgePop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes badgePop {
+    0% { transform: scale(0); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
 }
 
 .task-input { flex: 1; border: none; background: transparent; color: var(--text-main); font-size: 15px; outline: none; font-family: var(--app-font); padding: 6px 10px; font-weight: 400; min-width: 50px;}
@@ -662,7 +703,7 @@ body { margin: 0; font-family: var(--app-font); display: flex; height: 100vh; ba
 .custom-color-slot::-webkit-color-swatch-wrapper { padding: 0; }
 .custom-color-slot::-webkit-color-swatch { border: none; border-radius: 50%; }
 
-.modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 11000; backdrop-filter: blur(4px); transition: all 0.3s ease;}
+.modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 13000; backdrop-filter: blur(4px); transition: all 0.3s ease;}
 .modal-content { background: var(--bg-card); width: 340px; border-radius: 8px; padding: 25px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); border: 1px solid var(--border-color);}
 
 /* --- Tag Selection Modal Improvements --- */
@@ -844,10 +885,10 @@ input:checked + .slider:before { transform: translateX(16px); }
     background: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: 12px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.25);
     padding: 15px;
     width: 280px;
-    z-index: 12000;
+    z-index: 14000;
     box-sizing: border-box; /* 🟢 บังคับให้คำนวณความกว้างรวม Padding */
     max-height: 80vh; /* 🟢 จำกัดความสูงไม่ให้เกิน 80% ของหน้าจอ */
     overflow-y: auto;  /* 🟢 เพิ่ม Scrollbar ถ้าเนื้อหายาวเกินไป */
@@ -1157,6 +1198,8 @@ details[open] > .details-summary .summary-chevron {
     padding: 10px 20px 20px 20px; /* 🟢 ลดพื้นที่ว่างด้านบนสุดของ Grid */
     flex: 1;
     /* จัดการการ Scroll ภายใน Dashboard เองเพื่อให้แสดงผลถูกต้องบน Desktop */
+    grid-template-rows: min-content 1fr;
+    align-content: start;
     overflow-y: auto; 
     min-height: 0; /* สำคัญเพื่อให้ flex scroll ทำงาน */
 }
@@ -1205,7 +1248,7 @@ details[open] > .details-summary .summary-chevron {
     grid-column: 1 / -1; /* ให้แถบวงกลมกินพื้นที่เต็มความกว้าง */
     display: flex;
     gap: 12px;
-    margin-bottom: 5px; /* 🟢 ลดระยะห่างก่อนถึงตัว Widget */
+    margin-bottom: 0; /* 🟢 ใช้ Grid Gap แทนเพื่อความแม่นยำ ป้องกันช่องว่างขยายผิดปกติ */
     min-height: 44px; /* 🟢 ปรับให้พอดีกับขนาดปุ่ม */
     align-items: center;
     padding: 0 10px;
@@ -1250,6 +1293,11 @@ details[open] > .details-summary .summary-chevron {
     color: var(--primary-color) !important;
     fill: none !important;
     stroke: var(--primary-color) !important;
+}
+
+#btn-toggle-gtask-embed.active {
+    color: var(--primary-color) !important;
+    opacity: 1 !important;
 }
 
 /* --- Schedule Mode Checkbox Styles (Removed as per new Google Tasks style) --- */
@@ -1675,10 +1723,10 @@ details[open] > .details-summary .summary-chevron {
     background: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: 12px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.3);
     padding: 15px;
     width: 200px;
-    z-index: 10000;
+    z-index: 15000;
     animation: fadeIn 0.2s ease;
 }
 
@@ -1799,8 +1847,8 @@ details[open] > .details-summary .summary-chevron {
     background: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.15);
-    z-index: 11000;
+    box-shadow: 0 12px 35px rgba(0,0,0,0.2);
+    z-index: 15000;
     max-height: 200px;
     overflow-y: auto;
     padding: 6px;
@@ -1831,6 +1879,24 @@ details[open] > .details-summary .summary-chevron {
     min-width: 0;
 }
 
+/* 📂 Folder Space Counter: นับจำนวน Space ในแต่ละโฟลเดอร์อัตโนมัติ */
+.folder-group { counter-reset: space-count; }
+.folder-group .space-item { counter-increment: space-count; }
+.folder-header-main::after {
+    content: "(" counter(space-count) ")";
+    font-size: 10px;
+    margin-left: 5px;
+    opacity: 0.6;
+    font-weight: 400;
+    flex-shrink: 0;
+}
+
+/* ซ่อนตัวเลขเมื่อเอาเมาส์ชี้ หรือเมื่อโฟลเดอร์ถูกล็อค (โชว์ปุ่ม Action) เพื่อไม่ให้รกและทับกัน */
+.folder-header:hover .folder-header-main::after,
+.folder-group:has(.active-lock) .folder-header-main::after {
+    display: none;
+}
+
 /* 📄 Expand full name only for active space */
 .space-item.active .space-name-text {
     white-space: normal;
@@ -1854,6 +1920,25 @@ details[open] > .details-summary .summary-chevron {
 .folder-group.folder-expanded {
     background-color: rgba(34, 197, 94, 0.08); /* สีเขียวจางๆ */
     border-color: rgba(34, 197, 94, 0.15);
+}
+
+/* 📌 Pinned Space Logic */
+.space-item.is-pinned {
+    border-left: 3px solid var(--primary-color) !important;
+    padding-left: 9px !important;
+}
+
+/* 📌 บังคับให้แสดงเนื้อหาโฟลเดอร์หากมีรายการสำคัญ (Pinned, Active, หรือกำลังทำงาน) แม้จะพับโฟลเดอร์อยู่ก็ตาม */
+.folder-group:has(.is-pinned, .active, .is-working) .folder-content.is-collapsed {
+    height: auto !important;
+    overflow: visible !important;
+    margin-bottom: 10px !important;
+    margin-left: 40px !important; /* 🟢 บังคับให้รักษาการเยื้องซ้ายไว้ แม้โฟลเดอร์จะพับอยู่ */
+}
+
+/* ซ่อนรายการที่ไม่สำคัญเมื่อโฟลเดอร์ถูกพับ (จะเหลือ Pinned, Active, และ Working spaces) */
+.folder-group.folder-collapsed .space-item:not(.is-pinned):not(.active):not(.is-working) {
+    display: none !important;
 }
 
 .dark-mode .folder-group.folder-expanded {
@@ -1901,16 +1986,17 @@ details[open] > .details-summary .summary-chevron {
     align-items: center;
     background: rgba(245, 158, 11, 0.12);
     color: #d97706;
-    padding: 0 6px;
+    padding: 1px 6px;
     border-radius: 4px;
     border: 1px solid rgba(245, 158, 11, 0.3);
     font-weight: 700;
     text-decoration: none !important;
+    font-size: 11px; /* 🟢 ลดขนาดตัวอักษรรางวัลลงเพื่อให้ดูไม่รกตา */
     margin: 0 2px;
     vertical-align: baseline;
 }
 
-.hl-reward::before { margin-right: 4px; font-size: 14px; }
+.hl-reward::before { margin-right: 4px; font-size: 12px; } /* 🟢 ลดขนาดไอคอน emoji ให้สมดุลกับตัวหนังสือ */
 .hl-reward[data-type="b"]::before { content: "💰"; }
 .hl-reward[data-type="t"]::before { content: "⏳"; }
 .hl-reward[data-type="i"]::before { content: "🎁"; }
@@ -1975,4 +2061,78 @@ details[open] > .details-summary .summary-chevron {
 .btn-focus-task.active {
     background: #ef4444; /* สีแดงสำหรับปุ่มปิดโฟกัส */
 }
+
+/* 📑 Template Task Styles */
+.task-item.is-from-template {
+    background-color: rgba(251, 146, 60, 0.15) !important; /* พื้นหลังสีส้มอ่อน */
+    border: 1px solid rgba(251, 146, 60, 0.3) !important;
+    border-left: 4px solid #fb923c !important;
+    margin-bottom: 4px !important;
+    border-radius: 6px !important;
+}
+
+.dark-mode .task-item.is-from-template {
+    background-color: rgba(251, 146, 60, 0.1) !important;
+    border-color: rgba(251, 146, 60, 0.2) !important;
+    border-left-color: #d97706 !important;
+}
+
+/* 🚀 Smart Flow Linked Step Highlighting */
+.smart-flow-item.sf-linked-step {
+    border-left: 4px solid var(--primary-color) !important;
+    background: linear-gradient(90deg, rgba(47, 128, 237, 0.05) 0%, var(--bg-card) 100%) !important;
+}
+
+.dark-mode .smart-flow-item.sf-linked-step {
+    background: linear-gradient(90deg, rgba(47, 128, 237, 0.1) 0%, var(--bg-card) 100%) !important;
+}
+
+.sf-habit-tag {
+    color: #16a34a !important;
+    font-weight: 700;
+}
+
+/* 🏷️ Smart Flow Habit Badge */
+.sf-habit-indicator-badge {
+    background: #f0fdf4;
+    color: #166534;
+    border: 1px solid #bbf7d0;
+    padding: 1px 8px;
+    border-radius: 10px;
+    font-size: 9px;
+    font-weight: 800;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    text-transform: uppercase;
+    vertical-align: middle;
+}
+.dark-mode .sf-habit-indicator-badge { background: rgba(22, 163, 74, 0.15); color: #4ade80; border-color: rgba(34, 197, 94, 0.3); }
+
+/* 🚀 Transition Popup Highlight */
+.sf-trans-target-space { color: var(--primary-color); font-weight: 800; background: rgba(47, 128, 237, 0.1); padding: 0 6px; border-radius: 4px; border: 1px solid rgba(47, 128, 237, 0.2); }
+
+/* 🚀 Habit Tracker - Task Generator Button Styles */
+.btn-generate-from-temp {
+    border: 1.5px solid rgba(16, 185, 129, 0.3) !important;
+    background: rgba(16, 185, 129, 0.08) !important;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-generate-from-temp:hover {
+    background: #10b981 !important;
+    color: white !important;
+    border-color: #10b981 !important;
+    transform: scale(1.1) translateY(-1px);
+    box-shadow: 0 4px 8px rgba(16, 185, 129, 0.25);
+}
+
+.btn-generate-from-temp:active {
+    transform: scale(0.85) translateY(0);
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+    transition-duration: 0.1s !important;
 }
