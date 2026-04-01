@@ -524,11 +524,13 @@ export function initTodoManager(callbacks) {
             
             if (task.linkData && task.linkData.url) {
                 e.preventDefault();
-                if (task.linkData.isSideview && chrome.sidePanel) {
-                    chrome.sidePanel.setOptions({ path: task.linkData.url, enabled: true });
-                    chrome.sidePanel.open({ windowId: chrome.windows.WINDOW_ID_CURRENT });
+                const targetUrl = task.linkData.url;
+                const sourceId = 'todo_item_' + (task.id || task.createdAt);
+
+                if (window.splitViewManager) {
+                    window.splitViewManager.open(targetUrl, sourceId);
                 } else {
-                    window.open(task.linkData.url, '_blank');
+                    window.open(targetUrl, '_blank'); // Fallback
                 }
             } else {
                 openTaskLinkModal(idx, pIdx !== null, pIdx);

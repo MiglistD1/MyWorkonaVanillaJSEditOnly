@@ -4,6 +4,7 @@ window.splitViewManager = {
     isActive: false,
     currentUrl: '',
     currentSourceId: 'default', // ไว้จำว่าเปิดมาจากปุ่มไหน จะได้เซฟถูกที่
+    lockState: 'none', // 'none', 'soft', 'hard'
     panelWidth: 50, // เริ่มต้นที่ 50% (50vw)
 
     // 1. ฟังก์ชันเริ่มต้น (สร้าง DOM อัตโนมัติเมื่อเรียกใช้ครั้งแรก)
@@ -32,73 +33,23 @@ window.splitViewManager = {
                 transform: translateX(0); /* เลื่อนโชว์ออกมา */
             }
 
-            /* 📱 ระบบ Responsive เมื่อ Split View ทำงาน หรือ Browser ถูกย่อ */
-            /* 1. ซ่อน Sidebar เมื่อพื้นที่ฝั่งซ้ายแคบลง */
-            html body.sf-compact-sidebar #sidebar-wrapper,
-            html body.sf-compact-sidebar #spacebar {
-                display: none !important;
-            }
-
-            /* 2. ดัน Topbar และ Workspace ให้ชิดซ้ายสุด (เนื่องจาก Sidebar หายไป) */
-            html body.sf-compact-sidebar .topbar,
-            html body.sf-compact-sidebar .workspace,
-            html body.sf-compact-sidebar #schedule-mode-bar,
-            html body.sf-compact-sidebar #focus-mode-bar {
-                left: 0 !important;
-                width: 100% !important;
-                margin-left: 0 !important;
-            }
-
-            /* 3. ปรับโครงสร้างหลัก (Tabs, Resources, Tasks) ให้ซ้อนกันเป็นแนวตั้ง */
-            html body.sf-stack-vertical #main-grid {
-                display: flex !important;
-                flex-direction: column !important;
-                /* grid-template-columns: none !important; -- ไม่จำเป็นเมื่อใช้ display: flex */
-                gap: 20px !important;
-                height: auto !important;
-                overflow-y: visible !important;
-            }
-
-            /* 4. ปรับขนาด Card ให้เต็มความกว้างในโหมดแนวตั้ง */
-            html body.sf-stack-vertical .card {
-                width: 100% !important;
-                min-width: 0 !important;
-            }
-
-            /* ปรับแต่งส่วนประกอบย่อยให้เล็กลง */
-            html body.sf-compact-sidebar .launcher-group-label { display: none !important; } /* ซ่อนชื่อกลุ่ม Launcher */
-            html body.sf-compact-sidebar .topbar { padding: 0 10px !important; }
-
-            /* 5. Ensure launchers-bar wraps correctly in compact mode */
-            html body.sf-compact-sidebar .launchers-bar {
-                flex-wrap: wrap !important;
-                justify-content: flex-start !important;
-                gap: 8px !important;
-                padding: 8px 10px !important;
-            }
-            html body.sf-compact-sidebar .launcher-group {
-                margin-right: 0 !important;
-            }
-            html body.sf-compact-sidebar .launcher-separator {
-                display: none !important;
-            }
-            html body.sf-compact-sidebar .launcher-add-btn {
-                margin-top: 0 !important;
-            }
-
             /* แถบปรับขนาด (Resizer) เลียนแบบ Chrome */
             #panel-resizer {
                 position: absolute;
                 top: 0;
-                left: -4px;
-                width: 8px;
+                left: -1px;
+                width: 2px;
                 height: 100%;
                 cursor: ew-resize;
-                background: transparent;
+                background: var(--border-color);
                 z-index: 10000;
+                transition: all 0.2s ease;
             }
-            #panel-resizer:hover {
-                background: rgba(26, 115, 232, 0.5); /* สีฟ้าๆ เวลานำเมาส์ไปวาง */
+            #panel-resizer:hover, #panel-resizer:active {
+                width: 6px;
+                left: -3px;
+                background: var(--primary-color);
+                box-shadow: 0 0 8px rgba(47, 128, 237, 0.4);
             }
 
             /* แถบ Popup / Toolbar ด้านบนสุด */
@@ -123,8 +74,22 @@ window.splitViewManager = {
                 color: #3c4043;
                 transition: all 0.2s;
             }
-            .panel-btn:hover { background: #f1f3f4; }
-            .btn-close { border: none; font-weight: bold; font-size: 16px; padding: 4px 8px;}
+            .panel-btn:hover { background: var(--hover-bg); }
+            .panel-btn svg { width: 14px; height: 14px; display: block; }
+            
+            /* Lock States Styles */
+            #btn-lock-panel.lock-soft { 
+                color: #10b981; 
+                border-color: #10b981; 
+                background: rgba(16, 185, 129, 0.05); 
+            }
+            #btn-lock-panel.lock-hard { 
+                color: #ef4444; 
+                border-color: #ef4444; 
+                background: rgba(239, 68, 68, 0.05); 
+            }
+            
+            .btn-close { border: none; font-size: 16px; padding: 4px 8px;}
             .btn-close:hover { background: #fce8e6; color: #d93025; }
 
             /* พื้นที่แสดงเว็บ */
@@ -137,6 +102,11 @@ window.splitViewManager = {
         `;
         document.head.appendChild(style);
 
+        // Minimal Icons
+        const iconLock = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>`;
+        const iconUnlock = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path></svg>`;
+        const iconRefresh = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>`;
+
         // สร้างโครงสร้าง HTML
         const panelHTML = `
             <div id="custom-split-panel">
@@ -144,8 +114,8 @@ window.splitViewManager = {
                 
                 <div id="panel-toolbar">
                     <div class="toolbar-group">
-                        <button id="btn-save-panel" class="panel-btn">💾 บันทึก (Save)</button>
-                        <button id="btn-refresh-50" class="panel-btn">🔄 คืนค่า 50%</button>
+                        <button id="btn-lock-panel" class="panel-btn" title="Toggle Lock Mode">${iconUnlock}</button>
+                        <button id="btn-refresh-50" class="panel-btn" title="Reset to 50%">${iconRefresh}</button>
                     </div>
                     <button id="btn-close-panel" class="panel-btn btn-close">✕</button>
                 </div>
@@ -158,7 +128,7 @@ window.splitViewManager = {
         // ผูกเหตุการณ์ (Event Listeners) ให้ปุ่มต่างๆ
         document.getElementById('btn-close-panel').addEventListener('click', () => this.close());
         document.getElementById('btn-refresh-50').addEventListener('click', () => this.resetRatio());
-        document.getElementById('btn-save-panel').addEventListener('click', () => this.saveState());
+        document.getElementById('btn-lock-panel').addEventListener('click', () => this.toggleLock());
 
         this.setupResizer();
     },
@@ -176,8 +146,17 @@ window.splitViewManager = {
 
         // ตรวจสอบว่ามีข้อมูลที่เซฟไว้ไหม
         const savedUrl = localStorage.getItem(`splitview_saved_${sourceId}`);
-        const savedWidth = localStorage.getItem('splitview_width_vw');
         
+        // โหลดสถานะ Lock และขนาดเฉพาะ (ถ้ามี Hard Lock)
+        const savedLock = localStorage.getItem(`splitview_lock_${sourceId}`);
+        const specificWidth = localStorage.getItem(`splitview_width_${sourceId}`);
+        const globalWidth = localStorage.getItem('splitview_width_vw');
+
+        this.lockState = savedLock || 'none';
+        this.updateLockButtonUI();
+
+        const savedWidth = (this.lockState === 'hard' && specificWidth) ? specificWidth : globalWidth;
+
         // ถ้าเซฟความกว้างไว้ ให้ดึงมาใช้ ถ้าไม่มีให้ใช้ 50%
         if (savedWidth) {
             this.panelWidth = parseFloat(savedWidth);
@@ -190,18 +169,18 @@ window.splitViewManager = {
         iframe.src = savedUrl ? savedUrl : url;
 
         // สไลด์เปิดหน้าต่าง (และ Popup ก็จะติดมาด้วยทันที)
-        document.body.style.transition = 'padding-right 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)';
         panel.classList.add('open');
         
-        // ขยับเนื้อหาเว็บหลักให้หลบ Side Panel (เลียนแบบ Chrome)
-        document.body.style.paddingRight = `${this.panelWidth}vw`;
+        // เพิ่ม class และตั้งค่า CSS Variable เพื่อให้ CSS จัดการ Responsive
+        document.body.classList.add('custom-split-active');
+        document.body.style.setProperty('--split-panel-width', this.panelWidth + 'vw');
 
-        this.updateResponsiveLayout();
+        // 🟢 1. สั่งหด Sidebar อัตโนมัติ (ใช้คลาสมาตรฐานเพื่อให้ปุ่ม Toggle ยังทำงานได้)
+        const spacebar = document.getElementById('spacebar');
+        if (spacebar) spacebar.classList.add('collapsed');
 
-        // Dispatch resize event after transition finishes
-        setTimeout(() => {
-            window.dispatchEvent(new Event('resize'));
-        }, 300);
+        // 🟢 2. คำนวณความแคบของพื้นที่ฝั่งซ้ายทันที
+        this.updateTightLayout();
     },
 
     // 3. ฟังก์ชันปิดหน้าต่าง
@@ -215,36 +194,16 @@ window.splitViewManager = {
         // สไลด์เก็บหน้าต่าง
         panel.classList.remove('open');
         
-        // คืนพื้นที่ให้เว็บหลัก
-        document.body.style.paddingRight = '0';
+        // ลบ class และ CSS Variable
+        document.body.classList.remove('custom-split-active', 'split-view-tight');
+        document.body.style.removeProperty('--split-panel-width');
+
+        // 🟢 คืนค่า Sidebar (ถ้าต้องการให้กลับมาเด้งเหมือนเดิมเมื่อปิด Side View)
+        const spacebar = document.getElementById('spacebar');
+        if (spacebar) spacebar.classList.remove('collapsed');
 
         // เคลียร์ iframe เพื่อคืนหน่วยความจำ (หน่วงเวลาให้ Animation สไลด์ปิดเสร็จก่อน)
         setTimeout(() => { iframe.src = ''; }, 300);
-
-        this.updateResponsiveLayout();
-        window.dispatchEvent(new Event('resize'));
-    },
-
-    // 🟢 ระบบคำนวณ Responsive Layout อัตโนมัติ
-    updateResponsiveLayout: function() {
-        if (!this.isActive) {
-            document.body.classList.remove('sf-compact-sidebar', 'sf-stack-vertical');
-            // 🔥 หลอกว่ามีการย่อหน้าต่างเพื่อให้ระบบอื่นๆ (เช่น Sortable) คำนวณขนาดใหม่
-            window.dispatchEvent(new Event('resize'));
-            return;
-        }
-
-        // คำนวณพื้นที่ Pixel ที่เหลือสำหรับใช้งาน App ส่วนหลัก
-        const panelWidthPx = (this.panelWidth * window.innerWidth) / 100;
-        const availWidthPx = window.innerWidth - panelWidthPx;
-
-        document.body.classList.toggle('sf-compact-sidebar', availWidthPx < 950);
-        document.body.classList.toggle('sf-stack-vertical', availWidthPx < 750);
-        
-        // 🔥 ไม้ตาย: สั่ง Dispatch Resize Event
-        // วิธีนี้จะทำให้โค้ด JavaScript ของคุณที่ใช้ window.addEventListener('resize', ...) ทำงานทันที
-        // แม้ว่าขนาด Browser จริงๆ จะไม่ได้เปลี่ยนก็ตาม
-        window.dispatchEvent(new Event('resize'));
     },
 
     // 4. ฟังก์ชันรีเซ็ต 50%
@@ -253,13 +212,70 @@ window.splitViewManager = {
         const panel = document.getElementById('custom-split-panel');
         panel.style.width = '50vw';
         
-        if (this.isActive) {
-            document.body.style.paddingRight = '50vw';
-        }
+        // ตั้งค่า CSS Variable
+        document.body.style.setProperty('--split-panel-width', '50vw');
         
         // เซฟค่าใหม่ลง LocalStorage
         localStorage.setItem('splitview_width_vw', 50);
-        this.updateResponsiveLayout();
+        this.updateTightLayout();
+    },
+
+    // 🟢 ระบบคำนวณพื้นที่ฝั่งซ้ายอัตโนมัติ
+    updateTightLayout: function() {
+        const panelWidthPx = (this.panelWidth * window.innerWidth) / 100;
+        const leftWidthPx = window.innerWidth - panelWidthPx;
+        const spacebar = document.getElementById('spacebar');
+        
+        // 🟢 บังคับหด Sidebar ถ้าพื้นที่เหลือน้อยกว่า 900px แม้ผู้ใช้จะเคยกางไว้
+        if (leftWidthPx < 900 && spacebar && !spacebar.classList.contains('collapsed')) {
+            spacebar.classList.add('collapsed');
+        }
+
+        if (leftWidthPx < 1100) {
+            document.body.classList.add('split-view-tight');
+        } else {
+            document.body.classList.remove('split-view-tight');
+        }
+    },
+
+    // 4. ฟังก์ชันสลับสถานะ Lock
+    toggleLock: function() {
+        if (this.lockState === 'none') {
+            this.lockState = 'soft';
+        } else if (this.lockState === 'soft') {
+            this.lockState = 'hard';
+            // เซฟค่าขนาดและสถานะลง Storage ถาวรสำหรับ ID นี้
+            localStorage.setItem(`splitview_lock_${this.currentSourceId}`, 'hard');
+            localStorage.setItem(`splitview_width_${this.currentSourceId}`, this.panelWidth);
+        } else {
+            this.lockState = 'none';
+            localStorage.removeItem(`splitview_lock_${this.currentSourceId}`);
+            localStorage.removeItem(`splitview_width_${this.currentSourceId}`);
+        }
+        this.updateLockButtonUI();
+    },
+
+    updateLockButtonUI: function() {
+        const btn = document.getElementById('btn-lock-panel');
+        if (!btn) return;
+
+        const iconLock = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>`;
+        const iconUnlock = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path></svg>`;
+
+        btn.classList.remove('lock-soft', 'lock-hard');
+        
+        if (this.lockState === 'soft') {
+            btn.classList.add('lock-soft');
+            btn.innerHTML = iconLock;
+            btn.title = "Soft Lock (Green): Local resize active";
+        } else if (this.lockState === 'hard') {
+            btn.classList.add('lock-hard');
+            btn.innerHTML = iconLock;
+            btn.title = "Hard Lock (Red): Resize disabled & Saved";
+        } else {
+            btn.innerHTML = iconUnlock;
+            btn.title = "Unlocked: Global resize active";
+        }
     },
 
     // 5. ฟังก์ชันเซฟสถานะ
@@ -282,7 +298,16 @@ window.splitViewManager = {
         let isResizing = false;
 
         resizer.addEventListener('mousedown', (e) => {
+            if (this.lockState === 'hard') {
+                // ถ้า Hard Lock ให้สั่นปุ่ม Lock เพื่อบอกว่าปรับไม่ได้
+                const lockBtn = document.getElementById('btn-lock-panel');
+                lockBtn.animate([{ transform: 'translateX(-2px)' }, { transform: 'translateX(2px)' }], { duration: 100, iterations: 3 });
+                return;
+            }
+
+            e.preventDefault(); // 🟢 ป้องกันการคลุมดำเวลาลาก
             isResizing = true;
+            document.body.style.userSelect = 'none'; // 🟢 ปิดการเลือกข้อความชั่วคราว
             document.body.style.cursor = 'ew-resize';
             // ป้องกัน iframe ขโมยเหตุการณ์ลากเมาส์
             document.getElementById('panel-iframe').style.pointerEvents = 'none'; 
@@ -302,20 +327,27 @@ window.splitViewManager = {
 
             this.panelWidth = newWidthVw;
             panel.style.width = `${newWidthVw}vw`;
-            document.body.style.paddingRight = `${newWidthVw}vw`;
-            this.updateResponsiveLayout();
-            window.dispatchEvent(new Event('resize'));
+            document.body.style.setProperty('--split-panel-width', newWidthVw + 'vw');
+
+            // 🟢 อัปเดต Layout แบบ Real-time ขณะลาก
+            this.updateTightLayout();
         });
 
         document.addEventListener('mouseup', () => {
             if (isResizing) {
                 isResizing = false;
+                document.body.style.userSelect = ''; // 🟢 คืนค่าการเลือกข้อความ
                 document.body.style.cursor = 'default';
                 document.getElementById('panel-iframe').style.pointerEvents = 'auto';
                 // เซฟขนาดอัตโนมัติเมื่อปล่อยเมาส์
-                localStorage.setItem('splitview_width_vw', this.panelWidth);
-                this.updateResponsiveLayout();
-                window.dispatchEvent(new Event('resize'));
+                if (this.lockState === 'none') {
+                    localStorage.setItem('splitview_width_vw', this.panelWidth);
+                } else {
+                    // ถ้าเป็น Soft หรือ Hard Lock ให้เซฟแยก ID
+                    localStorage.setItem(`splitview_width_${this.currentSourceId}`, this.panelWidth);
+                }
+                
+                this.updateTightLayout();
             }
         });
     }
