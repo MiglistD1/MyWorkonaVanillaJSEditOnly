@@ -524,18 +524,14 @@ export function initTodoManager(callbacks) {
             
             if (task.linkData && task.linkData.url) {
                 e.preventDefault();
+                e.stopPropagation();
 
-                // 🟢 Split View Router: บังคับใช้ внутренний iframe หากโหมดแยกหน้าจอเปิดอยู่
-                if (window.splitViewManager && window.splitViewManager.isActive && task.linkData.url.startsWith('http')) {
-                    window.splitViewManager.loadIntoRightPane(task.linkData.url);
-                    return;
-                }
+                const targetUrl = task.linkData.url;
 
-                if (task.linkData.isSideview && chrome.sidePanel) {
-                    chrome.sidePanel.setOptions({ path: task.linkData.url, enabled: true });
-                    chrome.sidePanel.open({ windowId: chrome.windows.WINDOW_ID_CURRENT });
+                if (window.splitViewManager && window.splitViewManager.isActive) {
+                    window.splitViewManager.loadIntoRightPane(targetUrl);
                 } else {
-                    window.open(task.linkData.url, '_blank');
+                    openOrFocusTab(targetUrl);
                 }
             } else {
                 openTaskLinkModal(idx, pIdx !== null, pIdx);

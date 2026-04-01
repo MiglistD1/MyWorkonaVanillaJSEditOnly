@@ -39,9 +39,9 @@ export function initGoogleTasksLauncher() {
 export function openGoogleTasks(isSideView) {
     // Full screen embedded version of Google Tasks
     const targetUrl = "https://tasks.google.com/";
-    if (isSideView && chrome.sidePanel) {
-        chrome.sidePanel.setOptions({ path: targetUrl, enabled: true });
-        chrome.sidePanel.open({ windowId: chrome.windows.WINDOW_ID_CURRENT });
+    
+    if (window.splitViewManager && window.splitViewManager.isActive) {
+        window.splitViewManager.loadIntoRightPane(targetUrl);
     } else {
         openOrFocusTab(targetUrl);
     }

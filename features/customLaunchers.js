@@ -241,78 +241,16 @@ function createLauncherBtn(item) {
         }
 
         // Click to Open
-        btn.addEventListener('click', () => {
-            // 🟢 Split View Router: ตรวจสอบโหมดหน้าจอแยกก่อนเปิด Side Panel หรือ Resize Window
-            if (window.splitViewManager && window.splitViewManager.isActive && item.url.startsWith('http')) {
-                window.splitViewManager.loadIntoRightPane(item.url);
-                return;
-            }
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
 
-            if (item.type === 'local') {
-                if (item.isSplitWindows) {
-                    const pos = item.localAppPos || 'right';
-                    const browserLeft = (pos === 'right') ? 0 : Math.floor(window.screen.availWidth / 2);
-                    const halfWidth = Math.floor(window.screen.availWidth / 2);
-                    const screenHeight = window.screen.availHeight;
+            const targetUrl = item.url;
 
-                    // 1. Move Browser to the opposite side
-                    chrome.windows.getCurrent({}, (win) => {
-                        chrome.windows.update(win.id, { left: browserLeft, top: 0, width: halfWidth, height: screenHeight, state: 'normal' });
-                    });
-                    // 2. Open App (Native Host will handle moving App)
-                    chrome.runtime.sendNativeMessage('com.myworkona.launcher', { path: item.url, name: item.name, splitView: true, side: pos }, (response) => {
-                        if (chrome.runtime.lastError) console.error(chrome.runtime.lastError);
-                        if (response && response.status === 'error') alert("Launcher Error: " + response.message);
-                    });
-                } else {
-                    chrome.runtime.sendNativeMessage('com.myworkona.launcher', { path: item.url, name: item.name, splitView: false }, (response) => {
-                        if (response && response.status === 'error') alert("Launcher Error: " + response.message);
-                    });
-                }
+            if (window.splitViewManager && window.splitViewManager.isActive) {
+                window.splitViewManager.loadIntoRightPane(targetUrl);
             } else {
-                // Default: Web
-                if (item.isWebSplit) {
-                    chrome.windows.getCurrent({}, (win) => {
-                        const halfWidth = Math.floor(window.screen.availWidth / 2);
-                        const screenHeight = window.screen.availHeight;
-                        
-                        // 1. Move Browser to Left Half
-                        chrome.windows.update(win.id, { left: 0, top: 0, width: halfWidth, height: screenHeight, state: 'normal' });
-                        
-                        // 2. Open URL
-                        if (item.isWebNewWindow) {
-                            const pos = item.webNewWindowPos || 'right';
-                            const newLeft = (pos === 'right') ? halfWidth : 0;
-                            const browserLeft = (pos === 'right') ? 0 : halfWidth;
-
-                            // Move Browser to the opposite side
-                            chrome.windows.update(win.id, { left: browserLeft, top: 0, width: halfWidth, height: screenHeight, state: 'normal' });
-
-                            // Open in New Window on selected side
-                            chrome.windows.create({ 
-                                url: item.url, 
-                                left: newLeft, 
-                                top: 0, 
-                                width: halfWidth, 
-                                height: screenHeight, 
-                                focused: true 
-                            });
-                        } else {
-                            // Original logic: just open in existing window (which is now half-screen)
-                            if (item.isSideView) {
-                                chrome.sidePanel.setOptions({ path: item.url, enabled: true });
-                                chrome.sidePanel.open({ windowId: win.id });
-                            } else {
-                                openOrFocusTab(item.url);
-                            }
-                        }
-                    });
-                } else if (item.isSideView) {
-                    chrome.sidePanel.setOptions({ path: item.url, enabled: true });
-                    chrome.sidePanel.open({ windowId: chrome.windows.WINDOW_ID_CURRENT });
-                } else {
-                    openOrFocusTab(item.url);
-                }
+                openOrFocusTab(targetUrl);
             }
         });
 

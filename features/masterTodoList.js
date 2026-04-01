@@ -593,17 +593,15 @@ function initMasterEvents() {
 
                 if (task.linkData?.url) {
                     e.preventDefault();
+                    e.stopPropagation();
 
-                    // 🟢 Split View Router
+                    const targetUrl = task.linkData.url;
+
                     if (window.splitViewManager && window.splitViewManager.isActive) {
-                        window.splitViewManager.loadIntoRightPane(task.linkData.url);
-                        return;
+                        window.splitViewManager.loadIntoRightPane(targetUrl);
+                    } else {
+                        openOrFocusTab(targetUrl);
                     }
-
-                    if (task.linkData.isSideview && chrome.sidePanel) {
-                        chrome.sidePanel.setOptions({ path: task.linkData.url, enabled: true });
-                        chrome.sidePanel.open({ windowId: chrome.windows.WINDOW_ID_CURRENT });
-                    } else { window.open(task.linkData.url, '_blank'); }
                 } else {
                     openTaskLinkModal(idx, pIdx !== null, pIdx, sid);
                 }

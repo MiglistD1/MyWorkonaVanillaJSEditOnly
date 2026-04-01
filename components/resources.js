@@ -313,51 +313,14 @@ export function initResources(callbacks) {
             const anchor = e.target.closest('a');
             if (anchor && anchor.href) {
                 e.preventDefault();
+                e.stopPropagation();
 
-                // 🟢 Split View Router: ต้องทำงานก่อน Side Panel หรือ Split Window ของ Chrome เสมอ
-                if (window.splitViewManager && window.splitViewManager.isActive && anchor.href.startsWith('http')) {
-                    window.splitViewManager.loadIntoRightPane(anchor.href);
-                    return;
-                }
+                const targetUrl = anchor.href;
 
-                const li = e.target.closest('li');
-                if (li) {
-                    const index = parseInt(li.getAttribute('data-index'));
-                    const type = li.getAttribute('data-type');
-                    const arr = type === 'resource' ? space.resources : space.driveFiles;
-                    const item = arr[index];
-                    if (!item) return;
-
-                    // 1. ตรวจสอบว่าเป็น Local Program หรือไม่ (เช็คว่าไม่ได้ขึ้นต้นด้วย http)
-                    const isLocalProgram = item.url && !item.url.startsWith('http') && !item.url.startsWith('chrome');
-                    // 2. ตรวจสอบว่าต้องการโหมด Half Screen หรือไม่ (เช็คจาก Tag)
-                    const isHalfScreenTag = item.tags && item.tags.some(t => t.toUpperCase() === 'HALF SCREEN');
-
-                    if (isLocalProgram) {
-                        // --- 🟢 จัดการเปิดโปรแกรมในเครื่องผ่าน Native Messaging ---
-                        const useSplit = item.isSideView && isHalfScreenTag;
-
-                        if (useSplit) {
-                            // ถ้าเปิด Sideview และมีป้าย Half screen -> ย่อ Browser ลงครึ่งจอ
-                            chrome.windows.getCurrent({}, (win) => {
-                                const width = Math.floor(window.screen.availWidth / 2);
-                                const height = window.screen.availHeight;
-                                chrome.windows.update(win.id, { left: 0, top: 0, width: width, height: height, state: 'normal' });
-                            });
-                        }
-
-                        chrome.runtime.sendNativeMessage('com.myworkona.launcher', { 
-                            path: item.url, 
-                            name: item.title, 
-                            splitView: useSplit 
-                        });
-                    } else if (item.isSideView && chrome.sidePanel) {
-                        // --- การทำงานปกติสำหรับ Web Link: เปิดใน Side Panel ---
-                        chrome.sidePanel.setOptions({ path: item.url, enabled: true });
-                        chrome.sidePanel.open({ windowId: chrome.windows.WINDOW_ID_CURRENT });
-                    } else {
-                        openOrFocusTab(e.target.href);
-                    }
+                if (window.splitViewManager && window.splitViewManager.isActive) {
+                    window.splitViewManager.loadIntoRightPane(targetUrl);
+                } else {
+                    openOrFocusTab(targetUrl);
                 }
             }
 
