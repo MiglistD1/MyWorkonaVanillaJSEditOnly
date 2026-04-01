@@ -593,14 +593,10 @@ function initMasterEvents() {
 
                 if (task.linkData?.url) {
                     e.preventDefault();
-                    const targetUrl = task.linkData.url;
-                    const sourceId = 'todo_item_' + (task.id || task.createdAt);
-
-                    if (window.splitViewManager) {
-                        window.splitViewManager.open(targetUrl, sourceId);
-                    } else {
-                        window.open(targetUrl, '_blank'); // Fallback
-                    }
+                    if (task.linkData.isSideview && chrome.sidePanel) {
+                        chrome.sidePanel.setOptions({ path: task.linkData.url, enabled: true });
+                        chrome.sidePanel.open({ windowId: chrome.windows.WINDOW_ID_CURRENT });
+                    } else { window.open(task.linkData.url, '_blank'); }
                 } else {
                     openTaskLinkModal(idx, pIdx !== null, pIdx, sid);
                 }

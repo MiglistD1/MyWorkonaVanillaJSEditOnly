@@ -39,6 +39,7 @@ export function initGoogleTasksLauncher() {
 export function openGoogleTasks(isSideView) {
     // Full screen embedded version of Google Tasks
     const targetUrl = "https://tasks.google.com/";
+    // คืนค่าเป็น native behavior เพื่อไม่ให้กระทบส่วนอื่นของโปรเจกต์ตามคำขอ
     if (isSideView && chrome.sidePanel) {
         chrome.sidePanel.setOptions({ path: targetUrl, enabled: true });
         chrome.sidePanel.open({ windowId: chrome.windows.WINDOW_ID_CURRENT });

@@ -255,12 +255,25 @@ export function initTodoManager(callbacks) {
         };
     }
 
-    if (btnOpenGTasks) {
-        btnOpenGTasks.onclick = () => {
-            const settings = getAppSettings();
-            openGoogleTasks(settings.isGoogleTaskSideView);
-        };
-    }
+    // 🟢 แก้ไข: ใช้ Event Delegation และ stopImmediatePropagation เพื่อป้องกันตัวการ "แอบสั่งงาน" อื่นๆ
+    document.addEventListener('click', (e) => {
+        const openBtn = e.target.closest('#btn-sf-open-tasks');
+        if (!openBtn) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation(); // 🔴 หยุดการทำงานของ Listener อื่นๆ ที่อาจจะมาแอบดักจับ Class ของปุ่มนี้
+
+        // 🟢 ดึงสถานะจากปุ่ม Toggle ตัวจริงในหน้าจอ (Real-time Lookup)
+        const realSideBtn = document.getElementById('btn-sf-tasks-side-view');
+        const isSideViewActive = realSideBtn && realSideBtn.classList.contains('active-side-view');
+
+        if (isSideViewActive && window.splitViewManager) {
+            window.splitViewManager.open("https://tasks.google.com/", 'google-tasks-card');
+        } else {
+            openGoogleTasks(false);
+        }
+    }, true); // ใช้ capture phase เพื่อให้ดักได้เร็วที่สุด
 
     if (btnSideGTasks) {
         btnSideGTasks.onclick = () => {
@@ -524,13 +537,11 @@ export function initTodoManager(callbacks) {
             
             if (task.linkData && task.linkData.url) {
                 e.preventDefault();
-                const targetUrl = task.linkData.url;
-                const sourceId = 'todo_item_' + (task.id || task.createdAt);
-
-                if (window.splitViewManager) {
-                    window.splitViewManager.open(targetUrl, sourceId);
+                if (task.linkData.isSideview && chrome.sidePanel) {
+                    chrome.sidePanel.setOptions({ path: task.linkData.url, enabled: true });
+                    chrome.sidePanel.open({ windowId: chrome.windows.WINDOW_ID_CURRENT });
                 } else {
-                    window.open(targetUrl, '_blank'); // Fallback
+                    window.open(task.linkData.url, '_blank');
                 }
             } else {
                 openTaskLinkModal(idx, pIdx !== null, pIdx);
