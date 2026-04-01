@@ -54,7 +54,7 @@ body { margin: 0; font-family: var(--app-font); display: flex; height: 100vh; ba
     display: inline-flex;
 }
 
-.workspace { flex: 1; display: flex; flex-direction: column; overflow: hidden; transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1); min-width: 0; container-type: inline-size; container-name: dashboard; }
+.workspace { flex: 1; display: flex; flex-direction: column; overflow: hidden; transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1); min-width: 0;}
 .topbar { background: var(--bg-body); padding: 15px 30px; display: flex; align-items: center; gap: 15px; flex-wrap: nowrap; position: sticky; top: 0; z-index: 1010; border-bottom: 1px solid var(--border-color); box-shadow: 0 2px 5px rgba(0,0,0,0.05); transition: background 0.3s ease, backdrop-filter 0.3s ease, box-shadow 0.3s ease; }
 
 /* --- Topbar Scrolled State (Premium Blur Effect) --- */
@@ -71,9 +71,7 @@ body { margin: 0; font-family: var(--app-font); display: flex; height: 100vh; ba
 .utility-group { display: flex; align-items: center; gap: 10px; margin-left: auto; transition: all 0.2s ease; }
 .utility-actions-row { display: flex; align-items: center; gap: 10px; }
 
-@media (max-width: 1100px) { .topbar { flex-wrap: wrap; } }
-
-@container dashboard (max-width: 1100px) {
+@media (max-width: 1100px) {
   .utility-group { display: none; }
   #btn-utility-more { display: flex !important; }
   .topbar { flex-wrap: wrap; }
@@ -123,11 +121,6 @@ body { margin: 0; font-family: var(--app-font); display: flex; height: 100vh; ba
     font-size: 11px !important;
   }
 }
-
-/* Fallback class for forced mobile layout */
-body.is-mobile-view .utility-group { display: none; }
-body.is-mobile-view #btn-utility-more { display: flex !important; }
-body.is-mobile-view .topbar { flex-wrap: wrap; }
 
 .search-container { display: flex; align-items: center; background: var(--bg-card); border-radius: 6px; padding: 5px 12px; border: 1px solid var(--border-color); width: 250px;}
 .search-container input { border: none; background: transparent; outline: none; flex: 1; padding: 5px; color: var(--text-main); font-family: inherit; font-size: 13px;}
@@ -241,7 +234,7 @@ body.is-mobile-view .topbar { flex-wrap: wrap; }
 }
 
 /* Desktop Grid Layout & Collapsing Logic */
-@container dashboard (min-width: 1101px) {
+@media (min-width: 1101px) {
     .content-grid {
         grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.3fr);
         padding: 0 30px 30px;
@@ -261,7 +254,7 @@ body.is-mobile-view .topbar { flex-wrap: wrap; }
     font-size: 13px !important;
 }
 /* Responsive Layout: Adjust display for screens smaller than 1100px (e.g., split screen) */
-@container dashboard (max-width: 1100px) {
+@media (max-width: 1100px) {
   .content-grid { grid-template-columns: 1fr !important; overflow-y: visible !important; height: auto !important; }
   .workspace { overflow-y: auto !important; }
   .card { max-height: none !important; margin-bottom: 10px; overflow: visible !important; } 
@@ -315,11 +308,6 @@ body.is-mobile-view .topbar { flex-wrap: wrap; }
     pointer-events: none;
   }
 }
-
-/* Force single column if mobile class is active */
-body.is-mobile-view .content-grid { grid-template-columns: 1fr !important; overflow-y: visible !important; height: auto !important; }
-body.is-mobile-view .workspace { overflow-y: auto !important; }
-body.is-mobile-view .card { max-height: none !important; margin-bottom: 10px; overflow: visible !important; }
 
 .card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); display: flex; flex-direction: column; max-height: 85vh; min-width: 0; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); overflow: hidden;}
 .card-header { padding: 15px 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; font-weight: 700; color: var(--text-main); font-size: 15px; white-space: nowrap; position: sticky; top: 0; background: var(--bg-card); z-index: 10;}
@@ -1224,7 +1212,7 @@ details[open] > .details-summary .summary-chevron {
 }
 
 /* แสดงผล 2 คอลัมน์เมื่อหน้าจอกว้างกว่า 1000px (Desktop & Laptop) */
-@container dashboard (min-width: 1000px) {
+@media (min-width: 1000px) {
     .dashboard-grid {
         grid-template-columns: 1.5fr 1fr;
     }

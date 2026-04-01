@@ -13,23 +13,9 @@ export function initGoogleTasksLauncher() {
     }
 
     if (btn) {
-        btn.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-
-            // 1. Extract the target URL based on the current object
-            const targetUrl = "https://tasks.google.com/";
-
-            // 2. Generate a unique ID for this specific button so the manager can save its individual state
-            const sourceId = 'google_tasks_launcher';
-
-            // 3. Open the custom split view
-            if (window.splitViewManager) {
-                window.splitViewManager.open(targetUrl, sourceId);
-            } else {
-                console.error("splitViewManager not found!");
-                window.open(targetUrl, '_blank'); // Fallback
-            }
+        btn.addEventListener('click', () => {
+            const isSideView = sideBtn && sideBtn.classList.contains('active-side-view');
+            openGoogleTasks(isSideView);
         });
     }
 
@@ -43,22 +29,9 @@ export function initGoogleTasksLauncher() {
             return;
         }
         if (target.closest('#master-btn-open-tasks')) {
-            e.preventDefault();
-            e.stopPropagation();
-
-            // 1. Extract the target URL based on the current object
-            const targetUrl = "https://tasks.google.com/";
-
-            // 2. Generate a unique ID for this specific button so the manager can save its individual state
-            const sourceId = 'master_google_tasks_launcher';
-
-            // 3. Open the custom split view
-            if (window.splitViewManager) {
-                window.splitViewManager.open(targetUrl, sourceId);
-            } else {
-                console.error("splitViewManager not found!");
-                window.open(targetUrl, '_blank'); // Fallback
-            }
+            const mSideBtn = document.getElementById('master-tasks-side-view-btn');
+            const isSideView = mSideBtn && mSideBtn.classList.contains('active-side-view');
+            openGoogleTasks(isSideView);
         }
     });
 }
@@ -66,8 +39,9 @@ export function initGoogleTasksLauncher() {
 export function openGoogleTasks(isSideView) {
     // Full screen embedded version of Google Tasks
     const targetUrl = "https://tasks.google.com/";
-    if (isSideView) {
-        window.splitViewManager.open(targetUrl, 'google_tasks_launcher');
+    if (isSideView && chrome.sidePanel) {
+        chrome.sidePanel.setOptions({ path: targetUrl, enabled: true });
+        chrome.sidePanel.open({ windowId: chrome.windows.WINDOW_ID_CURRENT });
     } else {
         openOrFocusTab(targetUrl);
     }

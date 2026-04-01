@@ -524,20 +524,11 @@ export function initTodoManager(callbacks) {
             
             if (task.linkData && task.linkData.url) {
                 e.preventDefault();
-                e.stopPropagation();
-
-                // 1. Extract the target URL based on the current object
-                const targetUrl = task.linkData.url;
-
-                // 2. Generate a unique ID for this specific button so the manager can save its individual state
-                const sourceId = 'task_link_' + (task.id || task.createdAt);
-
-                // 3. Open the custom split view
-                if (window.splitViewManager) {
-                    window.splitViewManager.open(targetUrl, sourceId);
+                if (task.linkData.isSideview && chrome.sidePanel) {
+                    chrome.sidePanel.setOptions({ path: task.linkData.url, enabled: true });
+                    chrome.sidePanel.open({ windowId: chrome.windows.WINDOW_ID_CURRENT });
                 } else {
-                    console.error("splitViewManager not found!");
-                    window.open(targetUrl, '_blank'); // Fallback
+                    window.open(task.linkData.url, '_blank');
                 }
             } else {
                 openTaskLinkModal(idx, pIdx !== null, pIdx);
