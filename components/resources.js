@@ -310,8 +310,16 @@ export function initResources(callbacks) {
             }
 
             // Handle smart tab opening for resource links
-            if (e.target.tagName === 'A' && e.target.href) {
+            const anchor = e.target.closest('a');
+            if (anchor && anchor.href) {
                 e.preventDefault();
+
+                // 🟢 Split View Router: ต้องทำงานก่อน Side Panel หรือ Split Window ของ Chrome เสมอ
+                if (window.splitViewManager && window.splitViewManager.isActive && anchor.href.startsWith('http')) {
+                    window.splitViewManager.loadIntoRightPane(anchor.href);
+                    return;
+                }
+
                 const li = e.target.closest('li');
                 if (li) {
                     const index = parseInt(li.getAttribute('data-index'));

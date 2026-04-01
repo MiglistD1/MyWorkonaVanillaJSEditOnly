@@ -242,6 +242,12 @@ function createLauncherBtn(item) {
 
         // Click to Open
         btn.addEventListener('click', () => {
+            // 🟢 Split View Router: ตรวจสอบโหมดหน้าจอแยกก่อนเปิด Side Panel หรือ Resize Window
+            if (window.splitViewManager && window.splitViewManager.isActive && item.url.startsWith('http')) {
+                window.splitViewManager.loadIntoRightPane(item.url);
+                return;
+            }
+
             if (item.type === 'local') {
                 if (item.isSplitWindows) {
                     const pos = item.localAppPos || 'right';

@@ -39,6 +39,9 @@ export async function renderDefaultDashboard() {
                 <svg class="svg-icon-sm"><use href="#icon-pencil"></use></svg>
             </button>
             <button id="btn-master-open-rewards" class="btn-icon" title="Quest Loot & Rewards" style="color: #f59e0b; width: 32px; height: 32px; margin-right: 10px;"><svg class="svg-icon-lg"><use href="#icon-sparkles"></use></svg></button>
+            <button id="btn-toggle-split-view" class="btn btn-outline btn-split-toggle ${window.splitViewManager?.isActive ? 'active' : ''}" title="Toggle Split View Mode" style="font-size: 10px; height: 28px; padding: 0 10px; margin-right: 10px;">
+                Split Mode: <span>${window.splitViewManager?.isActive ? 'ON' : 'OFF'}</span>
+            </button>
             ${isMinimized('todo') ? `<div class="minimized-bubble" data-id="todo" title="Restore Todo List"><svg class="svg-icon-sm"><use href="#icon-check-square"></use></svg></div>` : ''}
             ${isMinimized('flow') ? `<div class="minimized-bubble" data-id="flow" title="Restore Smart Flow"><svg class="svg-icon-sm"><use href="#icon-sparkles"></use></svg></div>` : ''}
         </div>
@@ -156,6 +159,12 @@ export async function renderDefaultDashboard() {
     const noteBtn = container.querySelector('.btn-dashboard-note-toggle');
     if (noteBtn) {
         noteBtn.onclick = () => toggleDashboardQuickNote();
+    }
+
+    // Split View Toggle
+    const splitBtn = container.querySelector('#btn-toggle-split-view');
+    if (splitBtn) {
+        splitBtn.onclick = () => window.toggleSplitViewMode();
     }
 
     // 3. Global Dashboard UI Updates

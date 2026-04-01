@@ -593,6 +593,13 @@ function initMasterEvents() {
 
                 if (task.linkData?.url) {
                     e.preventDefault();
+
+                    // 🟢 Split View Router
+                    if (window.splitViewManager && window.splitViewManager.isActive) {
+                        window.splitViewManager.loadIntoRightPane(task.linkData.url);
+                        return;
+                    }
+
                     if (task.linkData.isSideview && chrome.sidePanel) {
                         chrome.sidePanel.setOptions({ path: task.linkData.url, enabled: true });
                         chrome.sidePanel.open({ windowId: chrome.windows.WINDOW_ID_CURRENT });

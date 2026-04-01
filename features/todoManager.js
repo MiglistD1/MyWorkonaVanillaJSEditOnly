@@ -524,6 +524,13 @@ export function initTodoManager(callbacks) {
             
             if (task.linkData && task.linkData.url) {
                 e.preventDefault();
+
+                // 🟢 Split View Router: บังคับใช้ внутренний iframe หากโหมดแยกหน้าจอเปิดอยู่
+                if (window.splitViewManager && window.splitViewManager.isActive && task.linkData.url.startsWith('http')) {
+                    window.splitViewManager.loadIntoRightPane(task.linkData.url);
+                    return;
+                }
+
                 if (task.linkData.isSideview && chrome.sidePanel) {
                     chrome.sidePanel.setOptions({ path: task.linkData.url, enabled: true });
                     chrome.sidePanel.open({ windowId: chrome.windows.WINDOW_ID_CURRENT });
