@@ -221,6 +221,17 @@
             <span>✅ <span id="header-tasks-text">Tasks & Notes</span></span>
           </div>
           <div style="display:flex; align-items:center; gap:10px;">
+             <div id="gtask-switch-wrapper" class="gtask-switch-group">
+                <div id="sf-google-task-view-controls" style="display: none; align-items:center; gap:4px;">
+                    <button id="btn-sf-open-tasks" class="btn-icon app-btn" title="Open Google Tasks" style="color:#2684fc; padding: 4px;">
+                        <svg viewBox="0 0 24 24" fill="currentColor" style="width:18px;height:18px;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"></path></svg>
+                    </button>
+                    <button id="btn-sf-tasks-side-view" class="btn-icon app-btn side-view-toggle" title="Toggle Side View" style="padding: 4px;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="15" y1="3" x2="15" y2="21"></line></svg>
+                    </button>
+                </div>
+                <button id="btn-toggle-gtask-view" class="btn-gtask-toggle-text" title="Switch View Mode">Switch Google Task</button>
+             </div>
              <div style="position: relative;">
                 <button class="btn-icon" id="btn-google-apps-menu" title="Google Integrations" style="padding: 6px;">
                     <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M4 8h4V4H4v4zm6 12h4v-4h-4v4zm-6 0h4v-4H4v4zm0-6h4v-4H4v4zm6 0h4v-4h-4v4zm6-10v4h4V4h-4zm-6 4h4V4h-4v4zm6 6h4v-4h-4v4zm0 6h4v-4h-4v4z"/></svg>
@@ -261,7 +272,6 @@
                 <button id="btn-toggle-prominent-tasks" class="btn-icon" title="Toggle Next Up Visibility" style="padding: 2px; opacity: 0.6;"><svg class="svg-icon-sm"><use href="#icon-flag"></use></svg></button>
                 <button id="btn-expand-all-subtasks" class="btn-icon" title="Expand All Subtasks" style="padding: 2px; opacity: 0.6;"><svg class="svg-icon-sm"><use href="#icon-chevrons-down"></use></svg></button>
                 <button id="btn-collapse-all-subtasks" class="btn-icon" title="Collapse All Subtasks" style="padding: 2px; opacity: 0.6;"><svg class="svg-icon-sm"><use href="#icon-chevrons-up"></use></svg></button>
-                <button id="btn-toggle-gtask-embed" class="btn-icon" title="Switch to Google Tasks View" style="padding: 2px; opacity: 0.6;"><svg class="svg-icon-sm"><use href="#icon-google-minimal"></use></svg></button>
                 <button id="btn-todo-templates" class="btn btn-outline" style="font-size: 11px; padding: 2px 8px; margin-left: 5px;">📑 Templates</button>
               </div>
               <div id="google-task-controls" class="google-task-menu" style="display:none;">
@@ -277,10 +287,6 @@
                  <input type="date" id="new-task-date" class="task-date-input" title="Set Due Date">
               </div>
               <button class="btn btn-primary" id="btn-add-task" style="padding: 5px 12px; flex-shrink: 0; font-size: 13px; margin-left: 4px;">Add</button>
-            </div>
-            
-            <div id="gtask-embed-container" style="display: none; height: 500px; margin-top: 10px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color);">
-                <iframe id="gtask-iframe" src="" style="width: 100%; height: 100%; border: none;"></iframe>
             </div>
 
             <ul class="task-list drag-container" id="task-list"></ul>

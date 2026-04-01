@@ -18,6 +18,7 @@ import { generateMiniTagsBtn, generateTaskHTML, attachSubtaskEventListeners, att
 import { svgRefresh, svgSpinner } from '../core/icons.js';
 import { syncAllGoogleTasks, createGoogleTask, updateGoogleTaskUI } from './googleTasks.js';
 import { checkAndResetHabits, renderHabitList } from './habitSheet.js';
+import { openGoogleTasks } from './googleTasksLauncher.js';
 
 // State & Callbacks
 let fetchGoogleAPI = null;
@@ -225,6 +226,52 @@ export function initTodoManager(callbacks) {
         };
     }
     applyTaskSectionsOrder();
+
+    // ☁️ Google Task View Toggle Logic
+    const btnToggleGView = document.getElementById('btn-toggle-gtask-view');
+    const btnOpenGTasks = document.getElementById('btn-sf-open-tasks');
+    const btnSideGTasks = document.getElementById('btn-sf-tasks-side-view');
+    const tasksCard = document.getElementById('tasks-card');
+
+    const updateGTaskViewUI = () => {
+        const settings = getAppSettings();
+        const isActive = !!settings.isGoogleTaskView;
+        if (tasksCard) tasksCard.classList.toggle('gtask-view-active', isActive);
+        if (btnSideGTasks) btnSideGTasks.classList.toggle('active-side-view', !!settings.isGoogleTaskSideView);
+
+        // Update Toggle Button Content
+        if (btnToggleGView) {
+            btnToggleGView.innerHTML = isActive ? `<div class="gtask-active-indicator"></div>` : "Switch Google Task";
+            btnToggleGView.className = isActive ? "btn-gtask-toggle-circle" : "btn-gtask-toggle-text";
+        }
+    };
+
+    if (btnToggleGView) {
+        btnToggleGView.onclick = () => {
+            const settings = getAppSettings();
+            settings.isGoogleTaskView = !settings.isGoogleTaskView;
+            saveData();
+            updateGTaskViewUI();
+        };
+    }
+
+    if (btnOpenGTasks) {
+        btnOpenGTasks.onclick = () => {
+            const settings = getAppSettings();
+            openGoogleTasks(settings.isGoogleTaskSideView);
+        };
+    }
+
+    if (btnSideGTasks) {
+        btnSideGTasks.onclick = () => {
+            const settings = getAppSettings();
+            settings.isGoogleTaskSideView = !settings.isGoogleTaskSideView;
+            saveData();
+            updateGTaskViewUI();
+        };
+    }
+
+    updateGTaskViewUI(); // เรียกใช้ครั้งแรกเพื่อรักษาสถานะเดิม
 
     // Edit Modal Events
     document.getElementById('btn-close-task-edit').addEventListener('click', () => { document.getElementById('task-edit-modal').style.display = 'none'; }); //
