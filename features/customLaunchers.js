@@ -245,12 +245,18 @@ function createLauncherBtn(item) {
             e.preventDefault();
             e.stopPropagation();
 
+            // 1. Extract the target URL based on the current object
             const targetUrl = item.url;
 
-            if (window.splitViewManager && window.splitViewManager.isActive) {
-                window.splitViewManager.loadIntoRightPane(targetUrl);
+            // 2. Generate a unique ID for this specific button so the manager can save its individual state
+            const sourceId = 'launcher_' + item.id;
+
+            // 3. Open the custom split view
+            if (window.splitViewManager) {
+                window.splitViewManager.open(targetUrl, sourceId);
             } else {
-                openOrFocusTab(targetUrl);
+                console.error("splitViewManager not found!");
+                window.open(targetUrl, '_blank'); // Fallback
             }
         });
 
