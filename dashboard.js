@@ -14,8 +14,8 @@ import { applyAppSettings, initSettingsManager } from './core/settings-manager.j
 import { initSearchManager } from './core/searchManager.js';
 import { initRewardSystem } from './features/rewardSystem.js';
 import { initContentManager, renderMainContent, renderAll } from './core/contentManager.js';
-import { openOrFocusTab } from './core/ui-helpers.js';
 import './features/splitViewManager.js';
+import { openOrFocusTab } from './core/ui-helpers.js';
 import { initDashboardQuickNote } from './features/dashboardQuickNote.js';
 import { 
   getAppSettings, saveData, loadData, getSpaces,
@@ -103,9 +103,6 @@ document.addEventListener('DOMContentLoaded', () => {
         applyAppSettings();
         initContentManager();
         initSearchManager({ onRender: renderMainContent });
-
-        // Initialize Split View Framework
-        if (window.splitViewManager) window.splitViewManager.init();
         initSettingsManager({ onRenderAll: renderAll });
         
         // Initialize Components

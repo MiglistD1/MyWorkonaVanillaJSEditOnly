@@ -49,12 +49,6 @@ export function getFaviconUrl(tabUrl, favIconUrl) {
  * @param {string} url The target URL to open.
  */
 export function openOrFocusTab(url) {
-    // 🟢 Split View Router: ถ้าโหมดหน้าจอแยกเปิดอยู่ ให้โหลดลง Pane ขวาภายในแอปแทนการเปิด Tab ใหม่
-    if (window.splitViewManager && window.splitViewManager.isActive) {
-        window.splitViewManager.loadIntoRightPane(url);
-        return;
-    }
-
     if (typeof chrome === 'undefined' || !chrome.tabs) {
         window.open(url, '_blank');
         return;

@@ -116,17 +116,9 @@ export function initTabs(callbacks) {
             }
 
             // Handle smart tab opening
-            const anchor = e.target.closest('a');
-            if (anchor && anchor.href) {
+            if (e.target.tagName === 'A' && e.target.href) {
                 e.preventDefault();
-
-                // 🟢 Split View Router
-                if (window.splitViewManager && window.splitViewManager.isActive && anchor.href.startsWith('http')) {
-                    window.splitViewManager.loadIntoRightPane(anchor.href);
-                    return;
-                }
-
-                openOrFocusTab(anchor.href);
+                openOrFocusTab(e.target.href);
             }
         });
     }

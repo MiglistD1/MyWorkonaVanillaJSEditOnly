@@ -97,9 +97,24 @@ export function initGoogleKeep() {
 
         // 3. เปิด Google Keep
         if (target.closest('#master-btn-open-keep')) {
-            const mSideBtn = document.getElementById('master-keep-side-view-btn');
-            const isSideView = mSideBtn && mSideBtn.classList.contains('active-side-view');
-            openKeepWithTag(getEffectiveKeepTag(), isSideView);
+            e.preventDefault();
+            e.stopPropagation();
+
+            // 1. Extract the target URL based on the current object
+            let targetUrl = 'https://keep.google.com/';
+            const tag = getEffectiveKeepTag();
+            if (tag) targetUrl += `#label/${encodeURIComponent(tag)}`;
+
+            // 2. Generate a unique ID for this specific button so the manager can save its individual state
+            const sourceId = 'master_google_keep_launcher';
+
+            // 3. Open the custom split view
+            if (window.splitViewManager) {
+                window.splitViewManager.open(targetUrl, sourceId);
+            } else {
+                console.error("splitViewManager not found!");
+                window.open(targetUrl, '_blank'); // Fallback
+            }
         }
     });
 
@@ -111,9 +126,25 @@ export function initGoogleKeep() {
     }
 
     if (btnOpen) {
-        btnOpen.addEventListener('click', () => {
-            const isSideView = keepSideBtn && keepSideBtn.classList.contains('active-side-view');
-            openKeepWithTag(getEffectiveKeepTag(), isSideView);
+        btnOpen.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            // 1. Extract the target URL based on the current object
+            let targetUrl = 'https://keep.google.com/';
+            const tag = getEffectiveKeepTag();
+            if (tag) targetUrl += `#label/${encodeURIComponent(tag)}`;
+
+            // 2. Generate a unique ID for this specific button so the manager can save its individual state
+            const sourceId = 'google_keep_launcher';
+
+            // 3. Open the custom split view
+            if (window.splitViewManager) {
+                window.splitViewManager.open(targetUrl, sourceId);
+            } else {
+                console.error("splitViewManager not found!");
+                window.open(targetUrl, '_blank'); // Fallback
+            }
         });
     }
 
@@ -249,8 +280,8 @@ export function openKeepWithTag(tag, isSideView) {
         targetUrl += `#label/${encodedTag}`;
     }
 
-    if (window.splitViewManager && window.splitViewManager.isActive) {
-        window.splitViewManager.loadIntoRightPane(targetUrl);
+    if (isSideView) {
+        window.splitViewManager.open(targetUrl, 'google_keep_launcher');
     } else {
         openOrFocusTab(targetUrl);
     }

@@ -22,8 +22,10 @@
     "declarativeNetRequestWithHostAccess"
   ],
   "host_permissions": [
-    "*://keep.google.com/*",
-    "*://tasks.google.com/*"
+    "*://*.google.com/*",
+    "*://*.youtube.com/*",
+    "*://*.googleusercontent.com/*",
+    "https://music.youtube.com/*"
   ],
   "declarative_net_request": {
     "rule_resources": [

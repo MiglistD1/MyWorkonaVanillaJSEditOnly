@@ -310,17 +310,31 @@ export function initResources(callbacks) {
             }
 
             // Handle smart tab opening for resource links
-            const anchor = e.target.closest('a');
-            if (anchor && anchor.href) {
+            if (e.target.tagName === 'A' && e.target.href) {
                 e.preventDefault();
                 e.stopPropagation();
 
-                const targetUrl = anchor.href;
+                const li = e.target.closest('li');
+                if (li) {
+                    const index = parseInt(li.getAttribute('data-index'));
+                    const type = li.getAttribute('data-type');
+                    const arr = type === 'resource' ? space.resources : space.driveFiles;
+                    const item = arr[index];
+                    if (!item) return;
 
-                if (window.splitViewManager && window.splitViewManager.isActive) {
-                    window.splitViewManager.loadIntoRightPane(targetUrl);
-                } else {
-                    openOrFocusTab(targetUrl);
+                    // 1. Extract the target URL based on the current object
+                    const targetUrl = item.url;
+
+                    // 2. Generate a unique ID for this specific button so the manager can save its individual state
+                    const sourceId = 'resource_card_' + (item.id || index);
+
+                    // 3. Open the custom split view
+                    if (window.splitViewManager) {
+                        window.splitViewManager.open(targetUrl, sourceId);
+                    } else {
+                        console.error("splitViewManager not found!");
+                        window.open(targetUrl, '_blank'); // Fallback
+                    }
                 }
             }
 

@@ -4,43 +4,17 @@
     "priority": 1,
     "action": {
       "type": "modifyHeaders",
-      "requestHeaders": [
-        { "header": "Referer", "operation": "set", "value": "https://keep.google.com/" },
-        { "header": "Origin", "operation": "remove" },
-        { "header": "Sec-Fetch-Site", "operation": "set", "value": "same-origin" }
-      ],
       "responseHeaders": [
         { "header": "X-Frame-Options", "operation": "remove" },
         { "header": "Frame-Options", "operation": "remove" },
-        { "header": "Content-Security-Policy", "operation": "remove" },
-        { "header": "Cross-Origin-Resource-Policy", "operation": "remove" }
+        { "header": "Content-Security-Policy", "operation": "remove" }
       ]
     },
     "condition": {
-      "urlFilter": "||keep.google.com",
-      "resourceTypes": ["sub_frame"]
-    }
-  },
-  {
-    "id": 2,
-    "priority": 1,
-    "action": {
-      "type": "modifyHeaders",
-      "requestHeaders": [
-        { "header": "Referer", "operation": "set", "value": "https://tasks.google.com/" },
-        { "header": "Origin", "operation": "remove" },
-        { "header": "Sec-Fetch-Site", "operation": "set", "value": "same-origin" }
-      ],
-      "responseHeaders": [
-        { "header": "X-Frame-Options", "operation": "remove" },
-        { "header": "Frame-Options", "operation": "remove" },
-        { "header": "Content-Security-Policy", "operation": "remove" },
-        { "header": "Cross-Origin-Resource-Policy", "operation": "remove" }
+      "urlFilter": "*",
+      "resourceTypes": [
+        "sub_frame"
       ]
-    },
-    "condition": {
-      "urlFilter": "||tasks.google.com",
-      "resourceTypes": ["sub_frame"]
     }
   }
 ]
