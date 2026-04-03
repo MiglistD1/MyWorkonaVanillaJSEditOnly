@@ -18,9 +18,15 @@ body { margin: 0; font-family: var(--app-font); display: flex; height: 100vh; ba
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 .spin { animation: spin 1s linear infinite; }
 
-.svg-icon { width: 16px; height: 16px; vertical-align: middle; stroke-width: 2; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; transition: transform 0.2s ease;}
-.svg-icon-sm { width: 15px; height: 15px; vertical-align: middle; stroke-width: 2; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; color: inherit;}
-.svg-icon-lg { width: 22px; height: 22px; vertical-align: middle; stroke-width: 2; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round;}
+.svg-icon, .svg-icon-sm, .svg-icon-lg, svg:not(.sf-watch-progress-ring) { 
+    stroke-width: 1.2px !important;
+    stroke: currentColor !important; /* 🟢 บังคับให้ไอคอนมีสีเสมอ (แก้ไอคอนหาย) */
+    vector-effect: non-scaling-stroke;
+}
+
+.svg-icon { width: 16px; height: 16px; vertical-align: middle; fill: none; stroke-linecap: round; stroke-linejoin: round; transition: transform 0.2s ease;}
+.svg-icon-sm { width: 15px; height: 15px; vertical-align: middle; fill: none; stroke-linecap: round; stroke-linejoin: round; color: inherit;}
+.svg-icon-lg { width: 22px; height: 22px; vertical-align: middle; fill: none; stroke-linecap: round; stroke-linejoin: round;}
 
 .spacebar { width: 260px; background-color: var(--bg-spacebar); color: var(--text-main); display: flex; flex-direction: column; transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease; flex-shrink: 0; border-right: 1px solid var(--border-color); will-change: width;}
 .spacebar.collapsed { width: 0; padding: 0; overflow: hidden; border: none; }
@@ -30,12 +36,12 @@ body { margin: 0; font-family: var(--app-font); display: flex; height: 100vh; ba
 
 .space-group { padding: 10px 0; overflow-y: auto;}
 .space-group-title { font-size: 11px; text-transform: uppercase; padding: 0 20px 10px; letter-spacing: 1px; color: var(--text-muted); font-weight: 700; display:flex; justify-content: space-between; align-items: center;}
-.space-item { padding: 4px 12px; margin: 1px 8px; border-radius: 6px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: background 0.2s, color 0.2s; font-size: var(--spacebar-font-size, 13px); white-space: nowrap; font-weight: 500; color: var(--spacebar-text-color, var(--text-muted)); }
+.space-item { position: relative; padding: 4px 12px; margin: 1px 8px; border-radius: 6px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: background 0.2s, color 0.2s; font-size: var(--spacebar-font-size, 13px); white-space: nowrap; font-weight: 500; color: var(--spacebar-text-color, var(--text-muted)); }
 .space-item:hover { background-color: rgba(0, 0, 0, 0.05); color: var(--text-main); }
 .space-item.active { background-color: rgba(47, 128, 237, 0.1); font-weight: 700; color: var(--primary-color); }
 .space-actions { display: none; gap: 5px; }
 .space-item:hover .space-actions { display: flex; } 
-.btn-icon { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 4px; transition: all 0.2s ease; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center;}
+.btn-icon { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 4px; transition: all 0.2s ease; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; opacity: 0.6;}
 .btn-icon:hover { color: var(--text-main); background: var(--border-color);}
 .btn-icon { box-sizing: border-box; } /* แก้ไข: เพิ่ม box-sizing เพื่อป้องกันปุ่มล้นออกจาก popup */
 
@@ -563,7 +569,17 @@ body { margin: 0; font-family: var(--app-font); display: flex; height: 100vh; ba
 }
 
 /* � Bright red trash can */
-.delete-btn-red { color: #dc2626 !important; }
+.delete-btn-red, 
+.btn-icon[style*="color: #dc2626"], 
+.btn-icon[style*="color:red"], 
+.delete-res-btn, .delete-task-btn, .flow-opt-delete, .btn-remove-temp-task { 
+    color: var(--text-muted) !important;
+    opacity: 0.25 !important;
+    fill: none !important;
+    transition: all 0.2s ease;
+}
+.btn-icon:hover .delete-btn-red, .btn-icon:hover[style*="color: #dc2626"], .btn-icon:hover.delete-res-btn, 
+.btn-icon:hover.delete-task-btn, .btn-icon:hover.flow-opt-delete, .btn-icon:hover.btn-remove-temp-task { color: #ef4444 !important; opacity: 1 !important; }
 
 .section-label { font-size: 14px; color: var(--text-muted); margin-top: 15px; margin-bottom: 8px; font-weight: 700; display: flex; justify-content: space-between; align-items: center; letter-spacing: 0.5px;}
 /* 🔴 New To-Do List design (single input style like Notion) */
@@ -974,7 +990,6 @@ details[open] > .details-summary .summary-chevron {
 
 /* --- Archived Space (Read-Only Mode) --- */
 .workspace.is-archived .card-header .btn,
-.workspace.is-archived .card-header .btn-icon:not(#btn-collapse-tabs-inline),
 .workspace.is-archived .task-input-bar,
     .workspace.is-archived .note-toolbar, /* กฎนี้ยังคงเดิม */
 .workspace.is-archived .tag-bar .btn-add-tag,
@@ -987,6 +1002,19 @@ details[open] > .details-summary .summary-chevron {
 .workspace.is-archived #btn-move-to-resource,
     .workspace.is-archived .launcher-add-btn,
     .workspace.is-archived #btn-res-actions-menu { /* แก้ไข: ทำให้ปุ่มเมนู 3 จุดแสดงผลได้แม้ในโหมด Archived */
+    display: none !important;
+}
+
+/* 🟢 คืนค่าปุ่มซ่อน (Collapse) ให้แสดงผลเสมอแม้พื้นที่ทำงานจะถูกเก็บถาวร */
+#btn-collapse-tabs-inline, #btn-collapse-res-inline, #btn-collapse-tasks-inline {
+    display: inline-flex !important;
+    opacity: 0.6 !important;
+    visibility: visible !important;
+}
+
+/* 🔴 ป้องกันไม่ให้ปุ่มซ่อนใน Tab กลายเป็น Checkbox */
+#btn-collapse-tabs-inline input[type="checkbox"], 
+#btn-collapse-tabs-inline .checkmark-circle {
     display: none !important;
 }
 
@@ -1356,7 +1384,8 @@ details[open] > .details-summary .summary-chevron {
     margin-bottom: 10px; 
     min-height: 15px; /* ช่วยให้ลากวางลงโฟลเดอร์ว่างได้ */
     padding-bottom: 5px;
-    margin-left: 40px; /* เยื้องขวาเพิ่มขึ้นให้พ้นไอคอนชัดเจน */
+    padding-left: 40px; /* 🟢 เปลี่ยนจาก margin เป็น padding เพื่อขยายขอบเขตการตัด (overflow) ให้ครอบคลุมไอคอนโซ่ */
+    margin-left: 0;
     transition: all 0.2s ease;
 }
 
@@ -1491,19 +1520,20 @@ details[open] > .details-summary .summary-chevron {
     margin-bottom: 8px;
     transition: all 0.2s ease;
 }
-/* ขอบแดงหน้างานที่ติดเงื่อนไข */
+/* 🟠 ขอบเหลืองเข้มหน้างานที่ติดเงื่อนไข (Locked Steps) */
 .smart-flow-item.sf-locked {
-    border-left: 4px solid #ef4444 !important;
+    border-left: 4px solid #d97706 !important;
+    opacity: 0.6; /* จางลงเพื่อให้รู้สึกว่ายังกดใช้งานไม่ได้ */
 }
 .smart-flow-item.sf-locked .smart-flow-title,
 .smart-flow-item.sf-locked .smart-flow-desc,
 .smart-flow-item.sf-locked .smart-flow-number {
-    color: #ef4444 !important;
+    color: #d97706 !important;
 }
 .dark-mode .smart-flow-item.sf-locked .smart-flow-title,
 .dark-mode .smart-flow-item.sf-locked .smart-flow-desc,
 .dark-mode .smart-flow-item.sf-locked .smart-flow-number {
-    color: #f87171 !important;
+    color: #fbbf24 !important;
 }
 
 .smart-flow-item:hover { border-color: var(--primary-color); }
@@ -1511,6 +1541,7 @@ details[open] > .details-summary .summary-chevron {
     opacity: 0.8; 
     background: #f0fdf4 !important; /* พื้นหลังสีเขียวอ่อน */
     border-color: #bbf7d0 !important;
+    box-shadow: 0 0 10px rgba(34, 197, 94, 0.2); /* 🟢 เรืองแสงสีเขียวจางๆ */
 }
 
 .smart-flow-item.completed .smart-flow-title,
@@ -1530,6 +1561,7 @@ details[open] > .details-summary .summary-chevron {
 .dark-mode .smart-flow-item.completed {
     background: rgba(22, 163, 74, 0.1) !important;
     border-color: rgba(34, 197, 94, 0.3) !important;
+    box-shadow: 0 0 12px rgba(34, 197, 94, 0.2); /* 🟢 เรืองแสงสีเขียวจางๆ (Dark mode) */
 }
 
 .dark-mode .smart-flow-item.completed .smart-flow-title,
@@ -1580,14 +1612,14 @@ details[open] > .details-summary .summary-chevron {
 
 .sf-shake {
     animation: sf-shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
-    border-color: #ef4444 !important;
+    border-color: #d97706 !important;
 }
 
 /* --- Smart Flow Countdown --- */
 .sf-countdown-timer {
     font-size: 10px;
     font-weight: 700;
-    color: #ef4444;
+    color: #d97706; /* เปลี่ยนสีตัวนับเวลาให้เป็นเหลืองเข้มเข้ากับธีม */
     margin-bottom: 2px;
 }
 
@@ -1874,23 +1906,24 @@ details[open] > .details-summary .summary-chevron {
     min-width: 0;
 }
 
-/* 📂 Folder Space Counter: นับจำนวน Space ในแต่ละโฟลเดอร์อัตโนมัติ */
-.folder-group { counter-reset: space-count; }
-.folder-group .space-item { counter-increment: space-count; }
-.folder-header-main::after {
-    content: "(" counter(space-count) ")";
-    font-size: 10px;
-    margin-left: 5px;
-    opacity: 0.6;
-    font-weight: 400;
-    flex-shrink: 0;
+/* 📂 Folder Layout */
+.folder-group {
+    display: flex;
+    flex-direction: column;
 }
+/* ลบ Counter แบบ CSS ออกเพราะเราใช้ JS แทนแล้วใน sidebar.js */
+.folder-header-main::after { content: none !important; }
 
-/* ซ่อนตัวเลขเมื่อเอาเมาส์ชี้ หรือเมื่อโฟลเดอร์ถูกล็อค (โชว์ปุ่ม Action) เพื่อไม่ให้รกและทับกัน */
-.folder-header:hover .folder-header-main::after,
-.folder-group:has(.active-lock) .folder-header-main::after {
-    display: none;
+/* 🎯 2-Column Settings Layout */
+.settings-grid-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    margin-top: 15px;
 }
+.settings-grid-container .customize-section { margin-bottom: 0; }
+/* บังคับ Dependencies ให้เต็มความกว้างแถวเดียว */
+.settings-grid-container .dependency-section { grid-column: 1 / -1; }
 
 /* 📄 Expand full name only for active space */
 .space-item.active .space-name-text {
@@ -1919,21 +1952,54 @@ details[open] > .details-summary .summary-chevron {
 
 /* 📌 Pinned Space Logic */
 .space-item.is-pinned {
-    border-left: 3px solid var(--primary-color) !important;
-    padding-left: 9px !important;
+    border-left: 3px solid #b91c1c !important; /* 🔴 เปลี่ยนสีขอบเป็นแดงเข้มให้เข้ากับหมุด */
+    padding-left: 22px !important; /* 🟢 เพิ่มระยะเขยิบขวาเพื่อให้หมุดวางซ้ายสุดได้พอดี */
+    background-color: rgba(47, 128, 237, 0.04); /* เพิ่มสีพื้นหลังจางๆ ให้ดูเด่นขึ้น */
+}
+
+/* 📌 Pinned Badge UI - ย้ายมาปักด้านซ้ายสุด กึ่งกลางแนวตั้ง */
+.pinned-badge {
+    position: absolute;
+    top: 50%;
+    left: 4px;
+    background: #b91c1c; /* 🔴 สีแดงเข้ม (Dark Red) */
+    color: white;
+    border-radius: 50%;
+    width: 14px;
+    height: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    transform: translateY(-50%) rotate(-45deg); /* 🟢 จัดให้อยู่กึ่งกลางแนวตั้งพอดี */
+}
+
+.pinned-badge svg {
+    width: 8px !important;
+    height: 8px !important;
+    stroke-width: 3px !important; /* บังคับให้เส้นหมุดดูหนาชัดเจน */
 }
 
 /* 📌 บังคับให้แสดงเนื้อหาโฟลเดอร์หากมีรายการสำคัญ (Pinned, Active, หรือกำลังทำงาน) แม้จะพับโฟลเดอร์อยู่ก็ตาม */
 .folder-group:has(.is-pinned, .active, .is-working) .folder-content.is-collapsed {
     height: auto !important;
+    max-height: none !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
     overflow: visible !important;
-    margin-bottom: 10px !important;
     margin-left: 40px !important; /* 🟢 บังคับให้รักษาการเยื้องซ้ายไว้ แม้โฟลเดอร์จะพับอยู่ */
 }
 
 /* ซ่อนรายการที่ไม่สำคัญเมื่อโฟลเดอร์ถูกพับ (จะเหลือ Pinned, Active, และ Working spaces) */
 .folder-group.folder-collapsed .space-item:not(.is-pinned):not(.active):not(.is-working) {
-    display: none !important;
+    display: flex !important; /* 🟢 ต้องเป็น flex เพื่อให้ CSS Counter นับจำนวนได้ */
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
 }
 
 .dark-mode .folder-group.folder-expanded {
@@ -2072,16 +2138,6 @@ details[open] > .details-summary .summary-chevron {
     border-left-color: #d97706 !important;
 }
 
-/* 🚀 Smart Flow Linked Step Highlighting */
-.smart-flow-item.sf-linked-step {
-    border-left: 4px solid var(--primary-color) !important;
-    background: linear-gradient(90deg, rgba(47, 128, 237, 0.05) 0%, var(--bg-card) 100%) !important;
-}
-
-.dark-mode .smart-flow-item.sf-linked-step {
-    background: linear-gradient(90deg, rgba(47, 128, 237, 0.1) 0%, var(--bg-card) 100%) !important;
-}
-
 .sf-habit-tag {
     color: #16a34a !important;
     font-weight: 700;
@@ -2103,6 +2159,23 @@ details[open] > .details-summary .summary-chevron {
     vertical-align: middle;
 }
 .dark-mode .sf-habit-indicator-badge { background: rgba(22, 163, 74, 0.15); color: #4ade80; border-color: rgba(34, 197, 94, 0.3); }
+
+/* 🏷️ Smart Flow Focus Badge */
+.sf-focus-indicator-badge {
+    background: #e0f2fe;
+    color: #0284c7;
+    border: 1px solid #93c5fd;
+    padding: 1px 8px;
+    border-radius: 10px;
+    font-size: 9px;
+    font-weight: 800;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    text-transform: uppercase;
+    vertical-align: middle;
+}
+.dark-mode .sf-focus-indicator-badge { background: rgba(2, 132, 199, 0.15); color: #60a5fa; border-color: rgba(59, 130, 246, 0.3); }
 
 /* 🚀 Transition Popup Highlight */
 .sf-trans-target-space { color: var(--primary-color); font-weight: 800; background: rgba(47, 128, 237, 0.1); padding: 0 6px; border-radius: 4px; border: 1px solid rgba(47, 128, 237, 0.2); }
@@ -2206,4 +2279,223 @@ details[open] > .details-summary .summary-chevron {
 .btn-gtask-toggle-circle:hover .gtask-active-indicator {
     opacity: 1;
     transform: scale(1.1);
+}
+
+/* 🔴 สไตล์สำหรับแถวงานที่ "ไม่เสร็จ/ล้มเหลว" (เลือก X) */
+.smart-flow-item.completed.failed {
+    background: #fef2f2 !important; /* พื้นหลังสีแดงจางๆ */
+    border-color: #fecaca !important;
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.2) !important; /* 🔴 เปลี่ยนเป็นเรืองแสงสีแดง */
+}
+
+.smart-flow-item.completed.failed .smart-flow-title,
+.smart-flow-item.completed.failed .smart-flow-number,
+.smart-flow-item.completed.failed .smart-flow-desc,
+.smart-flow-item.completed.failed .smart-flow-action-btn,
+.smart-flow-item.completed.failed .drag-handle svg,
+.smart-flow-item.completed.failed .flow-menu-trigger {
+    color: #b91c1c !important; /* เปลี่ยนข้อความและไอคอนเป็นสีแดงเข้ม */
+}
+
+/* 🔴 สไตล์ Dark Mode สำหรับงานที่ล้มเหลว (เลือก X) */
+.dark-mode .smart-flow-item.completed.failed {
+    background: rgba(239, 68, 68, 0.1) !important;
+    border-color: rgba(239, 68, 68, 0.3) !important;
+    box-shadow: 0 0 12px rgba(239, 68, 68, 0.2) !important;
+}
+
+.dark-mode .smart-flow-item.completed.failed .smart-flow-title,
+.dark-mode .smart-flow-item.completed.failed .smart-flow-number,
+.dark-mode .smart-flow-item.completed.failed .smart-flow-desc,
+.dark-mode .smart-flow-item.completed.failed .smart-flow-action-btn,
+.dark-mode .smart-flow-item.completed.failed .drag-handle svg,
+.dark-mode .smart-flow-item.completed.failed .flow-menu-trigger {
+    color: #f87171 !important; /* เปลี่ยนเป็นสีแดงอ่อนในโหมดมืดเพื่อให้มองเห็นง่าย */
+}
+
+/* 🔴 สไตล์สำหรับปุ่ม Fail (X) เมื่อถูกกด */
+.smart-flow-action-btn.sf-btn-fail {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+    border-color: #ef4444;
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+/* 🎯 Mini Popup สำหรับจบงาน (Minimalist Style) */
+.sf-post-confirm-popup {
+    width: 150px !important; /* เล็กจิ๋วลงกว่าเดิม */
+    background: #1a1a1a !important; 
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 12px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.4) !important; /* เงาเข้มหนาขึ้นเพื่อให้ดูลอย */
+    overflow: hidden; 
+    pointer-events: auto;
+    z-index: 30001;
+}
+
+.sf-result-action-btn {
+    width: 32px !important; /* 🟢 ลดขนาดปุ่ม */
+    height: 32px !important;
+    border-radius: 8px !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: rgba(255, 255, 255, 0.05) !important;
+}
+
+.sf-result-action-btn svg {
+    width: 12px !important; /* 🟢 ลดขนาดไอคอนภายใน */
+    height: 12px !important;
+}
+.sf-res-success { color: #10b981 !important; }
+.sf-res-success:hover { background: #10b981 !important; color: white !important; transform: translateY(-2px); }
+.sf-res-fail { color: #ef4444 !important; }
+.sf-res-fail:hover { background: #ef4444 !important; color: white !important; transform: translateY(-2px); }
+
+/* 🟢 Post-Transition Confirm Popup Specific Styles */
+.sf-post-confirm-overlay {
+    display: none; 
+    justify-content: unset !important;
+    align-items: unset !important;
+}
+.sf-post-confirm-popup.is-dragging {
+    opacity: 0.9;
+    cursor: grabbing;
+}
+
+#sf-btn-result-close:hover {
+    color: #ef4444 !important;
+    transform: rotate(90deg);
+    transition: all 0.2s ease;
+}
+
+/* 🎯 Minimalist Settings Icons */
+.modal-content h3 svg, .settings-group label svg, .modal-content .section-label svg, .modal-content h3 i {
+    opacity: 0.4 !important;
+    margin-right: 8px !important;
+    stroke-width: 1.2 !important;
+}
+
+/* 🎯 App Settings Window Expansion & Grid */
+#smart-flow-settings-modal .modal-content, #settings-modal .modal-content { 
+    width: 580px !important; 
+}
+
+#settings-modal .modal-content .settings-group-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+/* 🎯 Smart Flow Settings Modal Width */
+#smart-flow-settings-modal .modal-content { width: 550px !important; }
+
+/* 🚀 Smart Flow Focus Tag Highlight */
+.sf-focus-tag {
+    color: var(--primary-color) !important;
+    font-weight: 700;
+}
+
+/* 🔗 Smart Flow Link Icon - Forced Red & Thick */
+.sf-link-icon {
+    stroke: #ef4444 !important; /* 🟢 เพิ่มตรงนี้ด้วยเพื่อความชัวร์ */
+    stroke-width: 4px !important;
+}
+/* เจาะจงไปที่ path เพื่อสู้กับกฎ global !important */
+.sf-link-icon path {
+    stroke: #ef4444 !important;
+    stroke-width: 4px !important;
+}
+
+/* 🟢 Fix Checkbox Alignment - Forced Centering */
+.checkmark-circle {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0 !important;
+    line-height: 0 !important;
+    overflow: visible !important;
+    box-sizing: border-box !important;
+}
+
+.checkmark-circle svg {
+    width: 11px !important;
+    height: 11px !important;
+    display: block !important; /* 🟢 แสดงไอคอนเครื่องหมายถูกกลับมา */
+    margin: 0 !important;
+    stroke-width: 3px !important;
+    flex-shrink: 0 !important;
+    transform-origin: center center !important; /* 🟢 ป้องกันติ๊กถูกเบี้ยวตอนขยายหรือย่อ */
+}
+
+/* 🔴 Manage Launcher - บังคับสีปุ่มลบด้วย ID เพื่อชนะกฎส่วนกลาง */
+#btn-delete-launcher, .menu-item-delete-launcher {
+    background-color: #fee2e2 !important; /* พื้นหลังแดงอ่อน */
+    color: #dc2626 !important; /* ข้อความแดงเข้ม */
+    border: 1px solid #fecaca !important;
+    font-weight: 700 !important;
+    opacity: 1 !important; /* บังคับความชัดเจน ป้องกันกฎ opacity 0.25 ของระบบ */
+    transition: all 0.2s ease;
+}
+
+#btn-delete-launcher:hover, .menu-item-delete-launcher:hover {
+    background-color: #dc2626 !important; /* พื้นหลังแดงเข้มเมื่อ Hover */
+    color: #ffffff !important; /* ข้อความขาวเมื่อ Hover */
+    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.2);
+}
+
+/* บังคับสีไอคอนภายในปุ่มลบด้วย */
+#btn-delete-launcher svg {
+    color: #dc2626 !important;
+    opacity: 1 !important;
+}
+#btn-delete-launcher:hover svg {
+    color: #ffffff !important;
+}
+
+/* 🔒 Space Lock Icon Styling */
+.btn-lock-space {
+    margin-left: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    transition: all 0.2s ease;
+}
+.btn-lock-space.is-locked { color: #ef4444 !important; opacity: 1 !important; }
+.btn-lock-space:not(.is-locked) { color: #10b981 !important; opacity: 0.4; }
+.btn-lock-space:hover { opacity: 1 !important; transform: scale(1.2); }
+
+@keyframes sf-link-slide-in {
+    from {
+        opacity: 0;
+        transform: translateY(-50%) translateX(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(-50%) translateX(0);
+    }
+}
+
+/* 🔗 Sidebar Smart Flow Link Icon - External Position */
+.sidebar-sf-link-icon {
+    position: absolute !important;
+    left: -18px !important; /* เลื่อนออกมาวางหน้ากล่อง Space */
+    top: 50% !important;
+    pointer-events: auto !important; /* 🟢 เปิดให้รับ Event เพื่อให้แสดง Tooltip ได้ */
+    z-index: 5;
+    animation: sf-link-slide-in 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+/* 🟢 ปรับความหนาของโซ่ใน Sidebar ให้พอดีกับขนาดไอคอนจิ๋ว ไม่ให้ดูตัน */
+.sidebar-sf-link-icon path {
+    stroke-width: 2.5px !important;
+}
+
+/* 🟢 เปลี่ยนเป็นสีเขียวเมื่อ Step สำเร็จแล้ว */
+.sidebar-sf-link-icon.is-completed,
+.sidebar-sf-link-icon.is-completed path {
+    stroke: #10b981 !important;
 }

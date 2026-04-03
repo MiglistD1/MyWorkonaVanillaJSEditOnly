@@ -1,6 +1,6 @@
 import { svgTrashRed, svgPencil } from '../core/icons.js';
 import { getSpaces, saveData, getThaiUnit, getUnitCharFromThai } from '../core/storage.js';
-import { saveFlow } from './smartFlow.js';
+import { saveFlow, flowState, getFlowItems } from './smartFlow.js';
 import { fetchGoogleAPI, getGoogleStatus } from './googleTasks.js';
 
 let rewardData = {
@@ -105,12 +105,10 @@ async function syncLootWithGoogleTasks() {
 
         const googleTasks = data.items;
         const googleMap = {}; // { taskId: taskObject }
-        const titleMap = {};  // { title: taskId }
         
         const googleBigRewardsMap = {}; // 🟢 แยก Map เฉพาะสำหรับ Big Rewards
         googleTasks.forEach(t => { 
             googleMap[t.id] = t; 
-            titleMap[t.title] = t.id; 
             if (t.title.toLowerCase().startsWith('big reward :')) googleBigRewardsMap[t.id] = t;
         });
 
@@ -245,44 +243,6 @@ async function syncLootWithGoogleTasks() {
             if (item.googleTaskId) delete googleBigRewardsMap[item.googleTaskId];
         }
 
-        // --- E. ตรวจสอบงานแปลกปลอมใน Google ที่อาจจะพิมพ์เอง ---
-        // (ถ้าชื่อตรงรูปแบบแต่ระบบไม่รู้จัก ให้สร้างกระเป๋าเงินรองรับ)
-        for (const taskId in googleBigRewardsMap) {
-            const gt = googleBigRewardsMap[taskId];
-            if (gt.status === 'completed') continue;
-
-            // 1. ตรวจสอบ Big Reward ใหม่จาก Google
-            if (gt.title.toLowerCase().startsWith('big reward :')) {
-                const newName = gt.title.replace(/^Big reward\s*:\s*/i, '').trim();
-                if (newName && !rewardData.lootList.some(l => l.googleTaskId === gt.id)) {
-                    rewardData.lootList.unshift({
-                        id: Date.now() + Math.random(),
-                        name: newName,
-                        date: new Date().toLocaleDateString(),
-                        isSpecial: false,
-                        googleTaskId: gt.id
-                    });
-                    hasChanged = true;
-                }
-                continue; // ข้ามไปเพราะจัดการเสร็จแล้ว
-            }
-
-            // 2. ตรวจสอบหมวดเงิน/เวลาปกติ (Logic เดิมที่มีอยู่)
-            const anyMatch = gt.title.match(/^([\d.]+)([btx]) (?:สำหรับ|for) #(.+)$/i); // 🟢 รองรับรูปแบบที่มี #
-            if (anyMatch) { // Match groups: [full_match, amount, thai_unit, category]
-                const [_, val, unitChar, catName] = anyMatch;
-                const detectedType = getUnitCharFromThai(unitChar) === 'b' ? 'money' : (getUnitCharFromThai(unitChar) === 't' ? 'time' : 'item'); // Convert Thai unit back to char
-                const cats = detectedType === 'money' ? rewardData.moneyCategories : (detectedType === 'time' ? rewardData.timeCategories : rewardData.itemCategories);
-                
-                if (cats.includes(catName) && !Object.values(rewardData.walletTaskIds[detectedType]).includes(gt.id)) {
-                    rewardData.walletTaskIds[detectedType][catName] = gt.id;
-                    rewardData.wallets[detectedType][catName] = parseFloat(val);
-                    if (!rewardData.lastSyncAmounts[detectedType]) rewardData.lastSyncAmounts[detectedType] = {};
-                    rewardData.lastSyncAmounts[detectedType][catName] = parseFloat(val);
-                    hasChanged = true;
-                }
-            }
-        }
 
         if (hasChanged) await chrome.storage.local.set({ 'questRewardData': rewardData }); // บันทึกข้อมูลที่เปลี่ยนไป
         rewardData.lastSyncTimestamp = Date.now(); // 🟢 อัปเดตเวลาซิงค์
@@ -398,8 +358,12 @@ export function initRewardSystem() {
     loadRewardData();
 
     // Listen for Google Tasks sync completion to refresh reward modal
-    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
         if (message.type === 'GOOGLE_TASKS_SYNC_COMPLETE') {
+            // 🟢 เมื่อการซิงค์หลักเสร็จ ให้โหลดข้อมูลรางวัลใหม่และสั่งซิงค์ Loot ทันทีเพื่อดึงยอดล่าสุดจาก Google
+            await loadRewardData();
+            await syncLootWithGoogleTasks();
+            
             const modal = document.getElementById('reward-modal');
             if (modal && modal.style.display === 'flex') {
                 renderRewardContent();
@@ -411,14 +375,49 @@ export function initRewardSystem() {
     window.getRewardSystemData = () => rewardData;
 
     /**
-     * 🔍 Universal Scanner: Parses task text for reward tags
+     * 📢 แสดงหน้าต่างแจ้งเตือนรางวัลแบบ Toast มุมขวาล่าง
+     */
+    function showRewardToast(text, icon = '✨') {
+        let container = document.getElementById('sf-reward-toast-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'sf-reward-toast-container';
+            container.style.cssText = `
+                position: fixed; bottom: 20px; right: 20px;
+                display: flex; flex-direction: column; gap: 10px;
+                z-index: 100000; pointer-events: none;
+            `;
+            document.body.appendChild(container);
+        }
+
+        const toast = document.createElement('div');
+        toast.style.cssText = `
+            background: var(--bg-card); border: 1px solid var(--border-color);
+            border-left: 4px solid #f59e0b; padding: 12px 20px;
+            border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+            color: var(--text-main); font-size: 13px; font-weight: 700;
+            display: flex; align-items: center; gap: 12px;
+            pointer-events: auto; animation: toastSlideIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        `;
+
+        toast.innerHTML = `<span style="font-size: 18px;">${icon}</span> <span>${text}</span>`;
+        container.appendChild(toast);
+
+        setTimeout(() => {
+            toast.style.animation = 'toastFadeOut 0.4s forwards';
+            setTimeout(() => toast.remove(), 400);
+        }, 4000);
+    }
+
+    /**
+     * � Universal Scanner: Parses task text for reward tags
      * @param {string} taskText - The task description to scan
      * @param {boolean} isTab2Mission - Whether this comes from an Epic Mission
      * @param {Object} coords - {x, y} coordinates for animation
      * @param {string} source - 'task', 'habit', or 'flow'
      * @param {number} spaceId - ID of the space where task was completed
      */
-    window.processRewardScanner = (taskText, isTab2Mission = false, coords = null, source = 'task', spaceId = null) => {
+    window.processRewardScanner = (taskText, isTab2Mission = false, coords = null, source = 'task', spaceId = null, meta = {}) => {
         if (!taskText) return; // ถ้าไม่มีข้อความงาน ให้หยุดทำงาน
         
         let found = false;
@@ -431,7 +430,12 @@ export function initRewardSystem() {
 
         // 🟢 บันทึกเวลาที่ทำสำเร็จลงใน Log
         if (!rewardData.completionLogs[source]) rewardData.completionLogs[source] = [];
-        rewardData.completionLogs[source].push({ t: now, s: spaceId });
+        rewardData.completionLogs[source].push({ 
+            t: now, 
+            s: spaceId, 
+            id: meta.id || null, 
+            tags: Array.isArray(meta.tags) ? [...meta.tags] : [] 
+        });
 
         const currentCount = (source === 'habit') ? rewardData.habitCount : (source === 'flow' ? rewardData.flowCount : rewardData.globalTaskCompletionCount);
 
@@ -445,6 +449,7 @@ export function initRewardSystem() {
                 if (!rewardData.wallets.money) rewardData.wallets.money = {};
                 rewardData.wallets.money[matchedCat] = (rewardData.wallets.money[matchedCat] || 0) + amount;
                 if (coords) triggerLootDropAnimation(`💰 +${amount}บาท`, coords.x, coords.y, isTab2Mission);
+                else showRewardToast(`ได้รับ ${amount} บาท (${matchedCat})`, '💰');
                 found = true;
             }
         }
@@ -459,6 +464,7 @@ export function initRewardSystem() {
                 if (!rewardData.wallets.time) rewardData.wallets.time = {};
                 rewardData.wallets.time[matchedCat] = (rewardData.wallets.time[matchedCat] || 0) + amount;
                 if (coords) triggerLootDropAnimation(`⏳ +${amount}นาที`, coords.x, coords.y, isTab2Mission);
+                else showRewardToast(`ได้รับ ${amount} นาที (${matchedCat})`, '⏳');
                 found = true;
             }
         }
@@ -473,6 +479,7 @@ export function initRewardSystem() {
                 if (!rewardData.wallets.item) rewardData.wallets.item = {};
                 rewardData.wallets.item[matchedCat] = (rewardData.wallets.item[matchedCat] || 0) + amount;
                 if (coords) triggerLootDropAnimation(`🎁 +${amount} ${matchedCat}`, coords.x, coords.y, isTab2Mission);
+                else showRewardToast(`ได้รับ ${matchedCat} x${amount}`, '🎁');
                 found = true;
             }
         }
@@ -488,6 +495,7 @@ export function initRewardSystem() {
                 isSpecial: isTab2Mission
             });
             if (coords) triggerLootDropAnimation(`🎁 ${itemName}`, coords.x, coords.y, isTab2Mission);
+            else showRewardToast(`ได้รับไอเทมใหม่: ${itemName}`, '🏆');
             found = true;
         }
 
@@ -496,7 +504,14 @@ export function initRewardSystem() {
             const isSpaceMatch = (rule.spaceId === null || parseInt(rule.spaceId) === parseInt(spaceId));
             if (rule.source !== source || !isSpaceMatch) return;
 
+            // 🟢 Detailed Flow Filter Check: ตรวจสอบความละเอียดของ Step
+            if (source === 'flow') {
+                if (rule.flowFilterType === 'tag' && (!meta.tags || !meta.tags.map(t => t.toUpperCase()).includes(rule.flowFilterValue?.toUpperCase()))) return;
+                if (rule.flowFilterType === 'id' && meta.id !== rule.flowFilterValue) return;
+            }
+
             let isTriggered = false;
+            let countToTarget = 0;
 
             if (rule.withinDays > 0) {
                 // 🟢 กรณีมีเงื่อนไข "ภายใน X วัน"
@@ -504,14 +519,32 @@ export function initRewardSystem() {
                 const relevantLogs = rewardData.completionLogs[source].filter(log => {
                     const isTimeMatch = (now - log.t) <= windowMs;
                     const isSpaceLogMatch = (rule.spaceId === null || parseInt(log.s) === parseInt(rule.spaceId));
-                    return isTimeMatch && isSpaceLogMatch;
+                    
+                    let isMetaMatch = true;
+                    if (source === 'flow') {
+                        if (rule.flowFilterType === 'tag') isMetaMatch = log.tags?.map(t => t.toUpperCase()).includes(rule.flowFilterValue?.toUpperCase());
+                        else if (rule.flowFilterType === 'id') isMetaMatch = log.id === rule.flowFilterValue;
+                    }
+                    
+                    return isTimeMatch && isSpaceLogMatch && isMetaMatch;
                 });
                 // ถ้าจำนวนในหน้าต่างเวลาหารเป้าหมายลงตัวพอดี (เพิ่งครบเซ็ตใหม่)
-                if (relevantLogs.length > 0 && relevantLogs.length % rule.target === 0) isTriggered = true;
+                countToTarget = relevantLogs.length;
             } else {
                 // 🟢 กรณีสะสมไปเรื่อยๆ (แบบเดิม)
-                if (currentCount > 0 && currentCount % rule.target === 0) isTriggered = true;
+                const relevantLogs = rewardData.completionLogs[source].filter(log => {
+                    const isSpaceLogMatch = (rule.spaceId === null || parseInt(log.s) === parseInt(rule.spaceId));
+                    let isMetaMatch = true;
+                    if (source === 'flow') {
+                        if (rule.flowFilterType === 'tag') isMetaMatch = log.tags?.map(t => t.toUpperCase()).includes(rule.flowFilterValue?.toUpperCase());
+                        else if (rule.flowFilterType === 'id') isMetaMatch = log.id === rule.flowFilterValue;
+                    }
+                    return isSpaceLogMatch && isMetaMatch;
+                });
+                countToTarget = relevantLogs.length;
             }
+
+            if (countToTarget > 0 && countToTarget % rule.target === 0) isTriggered = true;
 
             if (isTriggered) {
                 let rewardDesc = "";
@@ -532,12 +565,15 @@ export function initRewardSystem() {
                 });
                 
                 if (coords) triggerLootDropAnimation(`🔥 COMBO! ${rewardDesc}`, coords.x, coords.y - 20, true);
+                else showRewardToast(`⚡ COMBO: ${rule.rewardName}! ${rewardDesc}`, '🔥');
                 found = true;
             }
         });
 
         if (found || true) {
             saveRewardData();
+            if (found && !coords) playChaChingSound(); // เล่นเสียงเฉพาะตอนซิงค์เบื้องหลังและได้รับรางวัลจริง
+            
             // 🟢 2. Real-time update: หากหน้าต่างรางวัลเปิดอยู่ ให้สั่ง Render ใหม่ทันที
             const modal = document.getElementById('reward-modal');
             if (modal && modal.style.display === 'flex') {
@@ -579,6 +615,10 @@ export function initRewardSystem() {
     document.addEventListener('click', (e) => {
         if (e.target.closest('#btn-master-open-rewards') || e.target.closest('#btn-open-rewards-topbar')) {
             openRewardModal();
+        }
+        if (e.target.closest('#btn-master-open-combo')) {
+            e.stopPropagation();
+            showSavedCombosQuickPopup(e.target.closest('#btn-master-open-combo'));
         }
         if (e.target.id === 'btn-close-reward-modal') {
             document.getElementById('reward-modal').style.display = 'none';
@@ -1079,7 +1119,10 @@ function showAddMissionCategoryQuickPopup(anchorEl) {
     const rect = anchorEl.getBoundingClientRect();
     const popupHeight = popup.offsetHeight;
     let top = rect.bottom + 8;
-    if (top + popupHeight > window.innerHeight) top = rect.top - popupHeight - 8;
+    
+    // 🟢 Prevent top overflow and clamp within viewport
+    if (top + popupHeight > window.innerHeight - 10) top = rect.top - popupHeight - 8;
+    top = Math.max(10, Math.min(top, window.innerHeight - popupHeight - 10));
     
     popup.style.top = `${top}px`;
     popup.style.left = `${Math.max(10, rect.left - 50)}px`;
@@ -1136,10 +1179,12 @@ function showCreateMissionPopup(anchorEl) {
     // Positioning logic (Simplified)
     const rect = anchorEl.getBoundingClientRect();
     const popupWidth = 300;
-    const popupHeight = 280; // Estimated
+    const popupHeight = popup.offsetHeight || 280; 
 
     let top = rect.bottom + 8;
-    if (top + popupHeight > window.innerHeight) top = rect.top - popupHeight - 8;
+    if (top + popupHeight > window.innerHeight - 10) top = rect.top - popupHeight - 8;
+    top = Math.max(10, Math.min(top, window.innerHeight - popupHeight - 10));
+
     let left = rect.left - 150;
     if (left + popupWidth > window.innerWidth) left = window.innerWidth - popupWidth - 10;
 
@@ -1161,6 +1206,73 @@ function showCreateMissionPopup(anchorEl) {
         const close = (e) => { if (!popup.contains(e.target)) { popup.remove(); document.removeEventListener('click', close); } };
         document.addEventListener('click', close);
     }, 0);
+}
+
+/**
+ * ⚡ Quick View Popup for Active Combo Rules
+ */
+function showSavedCombosQuickPopup(anchorEl) {
+    const existing = document.getElementById('reward-combo-quick-view');
+    if (existing) { existing.remove(); return; }
+
+    const popup = document.createElement('div');
+    popup.id = 'reward-combo-quick-view';
+    popup.className = 'sf-sub-popup';
+    popup.style.width = '280px';
+    popup.style.visibility = 'hidden';
+
+    const sources = {
+        task: { label: 'Tasks', icon: '📋' },
+        habit: { label: 'Habits', icon: '✨' },
+        flow: { label: 'Smart Flow', icon: '🚀' }
+    };
+
+    let contentHtml = `
+        <div style="font-weight:800; font-size:12px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+            <span>⚡ Active Combos</span>
+            <button class="btn-icon" id="btn-manage-combos-link" title="Manage Rules" style="padding:2px;">
+                <svg class="svg-icon-sm"><use href="#icon-settings"></use></svg>
+            </button>
+        </div>
+    `;
+
+    if (rewardData.comboRules.length === 0) {
+        contentHtml += '<div style="text-align:center; opacity:0.5; padding:20px; font-size:11px;">No active combo rules.</div>';
+    } else {
+        Object.keys(sources).forEach(srcKey => {
+            const rules = rewardData.comboRules.filter(r => r.source === srcKey);
+            if (rules.length > 0) {
+                contentHtml += `<div style="font-size:10px; font-weight:800; color:var(--primary-color); text-transform:uppercase; margin:10px 0 6px 0; display:flex; align-items:center; gap:6px;">${sources[srcKey].icon} ${sources[srcKey].label}</div>`;
+                contentHtml += rules.map(rule => `
+                    <div class="loot-item" style="padding:8px 12px; margin-bottom:4px; border-radius:8px; background:var(--bg-body); border:none; display:block !important;">
+                        <div style="font-size:11px; font-weight:800; color:var(--text-main);">${rule.rewardName}</div>
+                        <div style="font-size:10px; color:var(--text-muted); margin-top:2px;">
+                            Every ${rule.target} → ${rule.value}${getThaiUnit(rule.type === 'money' ? 'b' : (rule.type === 'time' ? 't' : 'i'))} [${rule.category}]
+                        </div>
+                    </div>
+                `).join('');
+            }
+        });
+    }
+
+    popup.innerHTML = contentHtml;
+    document.body.appendChild(popup);
+
+    const rect = anchorEl.getBoundingClientRect();
+    const popupHeight = popup.offsetHeight;
+    let top = rect.bottom + 8;
+    if (top + popupHeight > window.innerHeight - 10) top = rect.top - popupHeight - 8;
+    top = Math.max(10, Math.min(top, window.innerHeight - popupHeight - 10));
+    
+    popup.style.top = `${top}px`;
+    popup.style.left = `${Math.max(10, Math.min(window.innerWidth - 290, rect.left - 120))}px`;
+    popup.style.visibility = 'visible';
+
+    popup.querySelector('#btn-manage-combos-link').onclick = (e) => {
+        e.stopPropagation();
+        popup.remove();
+        showComboRulesPopup(anchorEl);
+    };
 }
 
 /**
@@ -1187,8 +1299,8 @@ function showComboRulesPopup(anchorEl) {
 
     popup.innerHTML = `
         <div style="font-weight:800; font-size:12px; margin-bottom:12px;">⚡ Combo Rules</div>
-        
-        <div class="mission-form" style="padding:12px; margin-bottom:15px; background:var(--bg-body);">
+
+        <div id="combo-form-area" class="mission-form" style="padding:12px; margin-bottom:15px; background:var(--bg-body);">
             <div style="font-size:11px; font-weight:700; margin-bottom:12px;">Create New Rule</div>
 
             <!-- 1. Rule Name at Top -->
@@ -1211,6 +1323,17 @@ function showComboRulesPopup(anchorEl) {
                     <option value="habit">Habits</option>
                     <option value="flow">Flow Steps</option>
                 </select>
+            </div>
+
+            <!-- 🟢 Flow Detailed Filter -->
+            <div id="combo-flow-filter-wrapper" style="display:none; margin-bottom:12px;">
+                <label style="font-size:10px; opacity:0.7;">Flow Condition:</label>
+                <select id="combo-flow-filter-type" class="settings-input" style="padding:4px; font-size:11px; margin-bottom:8px;">
+                    <option value="all">Any Flow Step</option>
+                    <option value="tag">Steps with specific Tag</option>
+                    <option value="id">A Specific Step</option>
+                </select>
+                <div id="combo-flow-filter-value-container"></div>
             </div>
 
             <!-- 3. Space Filter (Above Apply to:) -->
@@ -1238,28 +1361,41 @@ function showComboRulesPopup(anchorEl) {
                 <div id="combo-category-pills" style="display:flex; flex-wrap:wrap; gap:5px; margin-top:5px; padding:8px; border:1px solid var(--border-color); border-radius:6px; background:var(--bg-card); min-height:30px;"></div>
             </div>
 
-            <button class="btn btn-primary" id="btn-add-combo-rule" style="width:100%; justify-content:center; padding:6px; font-size:11px;">Create Rule</button>
+            <div style="display:flex; gap:8px;">
+                <button class="btn btn-primary" id="btn-add-combo-rule" style="flex:1; justify-content:center; padding:6px; font-size:11px;">Create Rule</button>
+                <button class="btn btn-outline" id="btn-cancel-combo-edit" style="display:none; justify-content:center; padding:6px; font-size:11px; color:#ef4444;">Cancel</button>
+            </div>
         </div>
 
-        <div style="max-height:150px; overflow-y:auto; display:flex; flex-direction:column; gap:6px;">
-            ${rewardData.comboRules.map(rule => `
-                <div class="loot-item" style="padding:8px; margin:0; border-radius:8px;">
-                    <div style="flex:1;">
-                        <div style="font-size:11px; font-weight:800;">${rule.rewardName}</div>
-                        <div style="font-size:10px; color:var(--text-muted);">
-                            Every ${rule.target} ${rule.source}s ${rule.withinDays ? `in ${rule.withinDays}d` : ''} ${rule.spaceId ? '(Space)' : '(Global)'} 
-                            → ${rule.value}${getThaiUnit(rule.type === 'money' ? 'b' : (rule.type === 'time' ? 't' : 'i'))} [${rule.category || 'Default'}]
-                        </div>
+        <div id="combo-rules-list-container" style="max-height:150px; overflow-y:auto; display:flex; flex-direction:column; gap:6px;"></div>
+
+        <div id="combo-stats-footer" style="margin-top:15px; padding-top:10px; border-top:1px solid var(--border-color); font-size:10px; color:var(--text-muted);"></div>
+    `;
+
+    // 🟢 Encapsulate rendering logic to refresh without re-creating the popup
+    const renderRulesList = () => {
+        const listContainer = popup.querySelector('#combo-rules-list-container');
+        const footer = popup.querySelector('#combo-stats-footer');
+        
+        listContainer.innerHTML = rewardData.comboRules.map(rule => `
+            <div class="loot-item" style="padding:8px; margin:0; border-radius:8px;">
+                <div style="flex:1;">
+                    <div style="font-size:11px; font-weight:800;">${rule.rewardName}</div>
+                    <div style="font-size:10px; color:var(--text-muted);">
+                        Every ${rule.target} ${rule.source}s ${rule.withinDays ? `in ${rule.withinDays}d` : ''} ${rule.spaceId ? '(Space)' : '(Global)'} 
+                        ${rule.source === 'flow' && rule.flowFilterType !== 'all' ? `<br><span style="color:var(--primary-color); font-weight:700;">Filter: ${rule.flowFilterType === 'tag' ? '#' + rule.flowFilterValue : 'Specific Step'}</span>` : ''}
+                        → ${rule.value}${getThaiUnit(rule.type === 'money' ? 'b' : (rule.type === 'time' ? 't' : 'i'))} [${rule.category || 'Default'}]
                     </div>
+                </div>
+                <div style="display:flex; gap:4px;">
+                    <button class="btn-icon edit-combo-btn" data-id="${rule.id}" style="color:var(--primary-color); transform:scale(0.8);">${svgPencil}</button>
                     <button class="btn-icon del-combo-btn" data-id="${rule.id}" style="color:red; transform:scale(0.8);">${svgTrashRed}</button>
                 </div>
-            `).join('')}
-        </div>
-
-        <div style="margin-top:15px; padding-top:10px; border-top:1px solid var(--border-color); font-size:10px; color:var(--text-muted);">
-            📊 Current Stats: Tasks: ${rewardData.globalTaskCompletionCount} | Habits: ${rewardData.habitCount || 0} | Flow: ${rewardData.flowCount || 0}
-        </div>
-    `;
+            </div>
+        `).join('');
+        
+        footer.innerHTML = `📊 Current Stats: Tasks: ${rewardData.globalTaskCompletionCount} | Habits: ${rewardData.habitCount || 0} | Flow: ${rewardData.flowCount || 0}`;
+    };
 
     document.body.appendChild(popup);
 
@@ -1269,7 +1405,11 @@ function showComboRulesPopup(anchorEl) {
         const popupHeight = popup.offsetHeight;
         const vh = window.innerHeight;
         let top = rect.bottom + 8;
+        
         if (top + popupHeight > vh - 10) top = rect.top - popupHeight - 8;
+        // 🟢 Clamp top to prevent overflow
+        top = Math.max(10, Math.min(top, vh - popupHeight - 10));
+
         popup.style.top = `${top}px`;
         popup.style.left = `${Math.max(10, Math.min(window.innerWidth - 330, rect.left - 200))}px`;
         popup.style.visibility = 'visible';
@@ -1277,9 +1417,31 @@ function showComboRulesPopup(anchorEl) {
 
     // Category Selection Logic
     const sourceSelect = popup.querySelector('#combo-source');
+    const flowFilterWrapper = popup.querySelector('#combo-flow-filter-wrapper');
+    const flowFilterTypeSelect = popup.querySelector('#combo-flow-filter-type');
+    const flowFilterValueContainer = popup.querySelector('#combo-flow-filter-value-container');
     const spaceWrapper = popup.querySelector('#combo-space-wrapper');
     const rewardTypeSelect = popup.querySelector('#combo-reward-type');
     const pillsContainer = popup.querySelector('#combo-category-pills');
+
+    const renderFlowValueInput = (type) => {
+        flowFilterValueContainer.innerHTML = '';
+        if (type === 'all') return;
+
+        const select = document.createElement('select');
+        select.className = 'settings-input';
+        select.style.cssText = 'padding:4px; font-size:11px;';
+        select.id = 'combo-flow-filter-value';
+
+        if (type === 'tag') {
+            const tags = flowState.managedTags || [];
+            select.innerHTML = tags.map(t => `<option value="${t}">${t}</option>`).join('') || '<option value="">No tags found</option>';
+        } else if (type === 'id') {
+            const items = getFlowItems();
+            select.innerHTML = items.map(item => `<option value="${item.id}">${item.title}</option>`).join('') || '<option value="">No steps found</option>';
+        }
+        flowFilterValueContainer.appendChild(select);
+    };
 
     const renderCategoryPills = (type) => {
         const cats = getCategoryOptions(type);
@@ -1297,49 +1459,118 @@ function showComboRulesPopup(anchorEl) {
     };
 
     const updateFields = () => {
-        spaceWrapper.style.display = (sourceSelect.value === 'flow') ? 'none' : 'block';
+        const isFlow = sourceSelect.value === 'flow';
+        flowFilterWrapper.style.display = isFlow ? 'block' : 'none';
+        if (isFlow) renderFlowValueInput(flowFilterTypeSelect.value);
+        
         renderCategoryPills(rewardTypeSelect.value);
     };
 
     sourceSelect.onchange = updateFields;
+    flowFilterTypeSelect.onchange = (e) => renderFlowValueInput(e.target.value);
+
     rewardTypeSelect.onchange = updateFields;
     updateFields();
+    renderRulesList();
 
-    const refresh = () => { popup.remove(); showComboRulesPopup(anchorEl); };
+    // 🟢 Improved Refresh: Reset form and update list instead of re-opening popup
+    const softRefresh = () => {
+        popup.querySelector('#combo-name').value = '';
+        popup.querySelector('#combo-target').value = '';
+        popup.querySelector('#combo-within-days').value = '';
+        addBtn.innerText = "Create Rule";
+        delete addBtn.dataset.editId;
+        cancelEditBtn.style.display = 'none';
+        renderRulesList();
+        updatePos();
+    };
 
-    popup.querySelector('#btn-add-combo-rule').onclick = () => {
+    const addBtn = popup.querySelector('#btn-add-combo-rule');
+    const cancelEditBtn = popup.querySelector('#btn-cancel-combo-edit');
+
+    addBtn.onclick = () => {
         const name = popup.querySelector('#combo-name').value.trim() || "Combo Reward";
         const target = parseInt(popup.querySelector('#combo-target').value);
         const withinDays = parseInt(popup.querySelector('#combo-within-days').value) || null;
         const source = sourceSelect.value;
+        const isFlow = source === 'flow';
+        const flowFilterType = isFlow ? flowFilterTypeSelect.value : 'all';
+        const flowFilterValue = isFlow ? popup.querySelector('#combo-flow-filter-value')?.value : null;
         const spaceIdVal = popup.querySelector('#combo-space-id').value;
         const spaceId = spaceIdVal === 'all' ? null : parseInt(spaceIdVal);
         const val = parseFloat(popup.querySelector('#combo-val').value) || 0;
         const type = rewardTypeSelect.value;
         const category = selectedCategory || (getCategoryOptions(type)[0] || "Default");
+        const editId = addBtn.dataset.editId;
 
         if (target > 0) {
-            rewardData.comboRules.push({ 
-                id: Date.now(), 
-                source, 
-                spaceId, 
-                target, 
-                withinDays,
-                type, 
-                category,
-                value: val, 
-                rewardName: name 
-            });
-            saveRewardData().then(refresh);
+            if (editId) {
+                // 🟢 กรณีแก้ไข: หาตำแหน่งเดิมและอัปเดตข้อมูล
+                const idx = rewardData.comboRules.findIndex(r => r.id === parseFloat(editId));
+                if (idx > -1) {
+                    rewardData.comboRules[idx] = { 
+                        ...rewardData.comboRules[idx], 
+                        source, spaceId, target, withinDays, type, category, value: val, rewardName: name,
+                        flowFilterType, flowFilterValue
+                    };
+                }
+            } else {
+                // 🟢 กรณีสร้างใหม่
+                rewardData.comboRules.push({ 
+                    id: Date.now(), 
+                    source, 
+                    spaceId, 
+                    target, 
+                    withinDays,
+                    type, 
+                    category,
+                    flowFilterType,
+                    flowFilterValue,
+                    value: val, 
+                    rewardName: name 
+                });
+            }
+            saveRewardData().then(softRefresh);
         }
     };
 
+    cancelEditBtn.onclick = softRefresh;
+
     popup.onclick = (e) => {
         const delBtn = e.target.closest('.del-combo-btn');
-        if (delBtn) {
+        const editBtn = e.target.closest('.edit-combo-btn');
+        
+        if (editBtn) {
+            // 🟢 เมื่อกดแก้ไข: ดึงข้อมูลกฎมาใส่ในฟอร์ม
+            const id = parseFloat(editBtn.dataset.id);
+            const rule = rewardData.comboRules.find(r => r.id === id);
+            if (rule) {
+                popup.querySelector('#combo-name').value = rule.rewardName;
+                popup.querySelector('#combo-target').value = rule.target;
+                popup.querySelector('#combo-within-days').value = rule.withinDays || "";
+                popup.querySelector('#combo-source').value = rule.source;
+                popup.querySelector('#combo-space-id').value = rule.spaceId === null ? 'all' : rule.spaceId;
+                popup.querySelector('#combo-val').value = rule.value;
+                popup.querySelector('#combo-reward-type').value = rule.type;
+                selectedCategory = rule.category;
+                
+                if (rule.source === 'flow') {
+                    flowFilterTypeSelect.value = rule.flowFilterType || 'all';
+                    renderFlowValueInput(flowFilterTypeSelect.value);
+                    const valEl = popup.querySelector('#combo-flow-filter-value');
+                    if (valEl) valEl.value = rule.flowFilterValue || "";
+                }
+                
+                addBtn.innerText = "Update Rule";
+                addBtn.dataset.editId = id;
+                cancelEditBtn.style.display = 'inline-flex';
+                
+                updateFields(); // รีเฟรช Category Pills ตามประเภทรางวัลที่เลือก
+            }
+        } else if (delBtn) {
             const id = parseFloat(delBtn.dataset.id);
             rewardData.comboRules = rewardData.comboRules.filter(r => r.id !== id);
-            saveRewardData().then(refresh);
+            saveRewardData().then(renderRulesList);
         }
     };
 
@@ -1421,7 +1652,10 @@ function showCategoriesPopup(anchorEl) {
     let top = rect.bottom + 8;
     let left = rect.left - 150;
 
-    if (top + popupHeight > vh) top = rect.top - popupHeight - 8;
+    if (top + popupHeight > vh - 10) top = rect.top - popupHeight - 8;
+    // 🟢 Prevent top overflow
+    top = Math.max(10, Math.min(top, vh - popupHeight - 10));
+
     if (left + popupWidth > window.innerWidth) left = window.innerWidth - popupWidth - 20;
     if (left < 10) left = 10;
 

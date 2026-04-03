@@ -119,22 +119,22 @@ export function openHabitModal(space) {
         document.getElementById('toggle-habit-actions').addEventListener('click', () => {
             const settings = getAppSettings();
             settings.showHabitActions = !settings.showHabitActions;
-            saveData();
-            renderHabitList(space); // 🟢 แก้ไข: ใช้ตัวแปร space จาก Closure เพื่อความแม่นยำ
+            saveData(true);
+            renderHabitList(getCurrentSpace()); 
             updateHabitToggleUI();
         });
 
         document.getElementById('toggle-hide-completed-habits').addEventListener('change', (e) => {
             getAppSettings().hideCompletedHabits = e.target.checked;
-            saveData();
-            renderHabitList(space);
+            saveData(true);
+            renderHabitList(getCurrentSpace());
         });
 
-        document.getElementById('btn-add-habit').addEventListener('click', () => handleAddHabit(space));
+        document.getElementById('btn-add-habit').addEventListener('click', () => handleAddHabit(getCurrentSpace()));
         
         // 🟢 Save Group Listener
         document.getElementById('btn-save-habit-group').onclick = () => {
-            showSaveHabitGroupModal(space); // 🟢 เรียก Modal ใหม่แทน prompt
+            showSaveHabitGroupModal(getCurrentSpace()); // 🟢 เรียก Modal ใหม่แทน prompt
         };
 
         document.getElementById('btn-manage-habit-templates').onclick = () => {
@@ -143,9 +143,13 @@ export function openHabitModal(space) {
 
         const newHabitInput = document.getElementById('new-habit-input');
         if (newHabitInput) {
-            newHabitInput.addEventListener('keypress', (e) => { if(e.key === 'Enter') handleAddHabit(space); });
+            newHabitInput.addEventListener('keypress', (e) => { if(e.key === 'Enter') handleAddHabit(getCurrentSpace()); });
             // 🟢 NEW: Add input event for autocomplete and highlighting
-            newHabitInput.addEventListener('input', (e) => { handleTagAutocomplete(e, () => space?.tags || []); applySyntaxHighlighting(newHabitInput); });
+            newHabitInput.addEventListener('input', (e) => { 
+                const currentS = getCurrentSpace();
+                handleTagAutocomplete(e, () => currentS?.tags || []); 
+                applySyntaxHighlighting(newHabitInput); 
+            });
         }
 
         // --- 🖐️ Drag Logic for Habit Window ---
@@ -476,6 +480,14 @@ export function renderHabitList(space) {
         const lastDateObj = new Date(lastDoneStr);
         const diffDays = Math.round((todayObj - lastDateObj) / (1000 * 60 * 60 * 24));
         
+        // 🔴 คำนวณวันที่จะต้องทำรอบถัดไป สำหรับ Habit ที่มี Cycle > 1
+        let nextDueHtml = '';
+        if (habit.resetInterval > 1) {
+            const nextDate = new Date(lastDateObj);
+            nextDate.setDate(lastDateObj.getDate() + habit.resetInterval);
+            nextDueHtml = `<span style="font-size: 10px; color: #ef4444; font-weight: 700; margin-left: 4px;" title="Next scheduled date">Next: ${nextDate.getDate()} ${monthsEn[nextDate.getMonth()]}</span>`;
+        }
+
         const d = lastDateObj.getDate();
         const m = monthsEn[lastDateObj.getMonth()];
         const y = lastDateObj.getFullYear().toString().slice(-2);
@@ -487,8 +499,8 @@ export function renderHabitList(space) {
         el.style.display = 'flex'; 
         el.style.alignItems = 'center';
         el.style.marginBottom = '10px';
-        el.style.background = habit.completed ? '#f0fdf4' : '#fff';
-        el.style.border = habit.completed ? '1px solid #bbf7d0' : '1px solid #eee';
+            el.style.background = habit.completed ? (habit.isFailed ? '#fef2f2' : '#f0fdf4') : '#fff';
+            el.style.border = habit.completed ? (habit.isFailed ? '1px solid #fecaca' : '1px solid #bbf7d0') : '1px solid #eee';
         el.style.padding = '10px 12px';
         el.style.borderRadius = '8px';
         el.style.transition = 'all 0.2s';
@@ -501,9 +513,9 @@ export function renderHabitList(space) {
                 </div>
             </label>
             
-            <div style="flex:1; min-width:0;">
+            <div style="flex:1; min-width:0;" title="${habit.text}">
                 <div style="display:flex; align-items:center; gap:6px;">
-                    <div class="habit-text-content" contenteditable="true" style="font-size:15px; font-weight:500; color:${habit.completed ? '#15803d' : '#333'}; cursor:text; outline:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; border-radius:4px; padding:0 2px; flex:1;" title="Click to edit name">
+                    <div class="habit-text-content" contenteditable="true" style="font-size:15px; font-weight:500; color:${habit.completed ? (habit.isFailed ? '#b91c1c' : '#15803d') : '#333'}; cursor:text; outline:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; border-radius:4px; padding:0 2px; flex:1;" title="${habit.text}">
                         ${habit.text}
                     </div>
                     ${hasTemplate ? `
@@ -525,14 +537,18 @@ export function renderHabitList(space) {
                             Cycle: <span style="font-weight:700; color:var(--primary-color);">${habit.resetInterval}</span>d
                         </div>
                     ` : ''}
+                    ${nextDueHtml}
                 </div>
             </div>
 
-            <div style="display: ${showActions ? 'flex' : 'none'}; gap: 4px; align-items: center;">
-                <button class="btn-icon btn-link-todo-temp" style="color: ${hasTemplate ? 'var(--primary-color)' : 'inherit'}; padding: 2px;" title="Link To-Do Template">
+            <div style="display: flex; gap: 4px; align-items: center;">
+                <button class="btn-icon btn-link-todo-temp" style="display: ${(showActions || hasTemplate) ? 'inline-flex' : 'none'}; color: ${hasTemplate ? 'var(--primary-color)' : 'inherit'}; padding: 2px;" title="Link To-Do Template">
                     <svg class="svg-icon-sm"><use href="#icon-layers"></use></svg>
                 </button>
-                <button class="btn-icon delete-habit" style="color:#ef4444; padding: 2px;" title="Delete Habit">${svgTrashRed}</button>
+                <button class="btn-icon delete-habit" style="display: ${showActions ? 'inline-flex' : 'none'}; color:#ef4444; padding: 2px;" title="Delete Habit">${svgTrashRed}</button>
+                <button class="btn-icon fail-habit" style="display: ${showActions ? 'flex' : 'none'}; width: 22px; height: 22px; background: #fee2e2; color: #ef4444; border-radius: 50%; align-items: center; justify-content: center; border: 1px solid #fecaca; transition: all 0.2s; margin-left: 2px;" title="Mark as Failed (No Rewards)">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
             </div>
         `;
 
@@ -593,7 +609,7 @@ export function renderHabitList(space) {
             const newName = nameTextEl.innerText.trim();
             if (newName && newName !== habit.text) {
                 habit.text = newName;
-                saveData();
+                saveData(true);
                 
                 // ✨ เอฟเฟกต์กระพริบสีเหลืองยืนยันการบันทึก
                 nameTextEl.classList.add('flash-confirm');
@@ -639,13 +655,14 @@ export function renderHabitList(space) {
                     triggerConfetti(rect.left + rect.width / 2, rect.top + rect.height / 2);
                 }
             } else {
+                    delete habit.isFailed; // เคลียร์สถานะล้มเหลวถ้าเอาติ๊กออก
                 if (habit.streak > 0) habit.streak--;
             }
             
             habit.lastUpdate = new Date().toDateString();
 
             setTimeout(() => {
-                saveData();
+                saveData(true);
                 renderHabitList(space);
                 renderTasks(space);
             }, isChecked ? 800 : 0); // เพิ่มเป็น 800ms ให้เท่ากับระบบ Task
@@ -689,11 +706,22 @@ export function renderHabitList(space) {
         if (delBtn) delBtn.addEventListener('click', () => { // 🟢 ปรับปรุง: เพิ่ม Guard ป้องกัน Error ถ้าปุ่มถูกซ่อน
             if(confirm('Delete this habit?')) {
                 space.habits.splice(index, 1);
-                saveData();
+                saveData(true);
                 renderHabitList(space);
                 renderTasks(space);
             }
         });
+
+            const failBtn = el.querySelector('.fail-habit');
+            if (failBtn) failBtn.addEventListener('click', () => {
+                habit.completed = true;
+                habit.isFailed = true;
+                habit.lastCompletedDate = new Date().toDateString();
+                habit.lastUpdate = new Date().toDateString();
+                saveData(true);
+                renderHabitList(space);
+                renderTasks(space);
+            });
 
         container.appendChild(el);
         
@@ -709,7 +737,7 @@ export function renderHabitList(space) {
         onEnd: function (evt) {
             const movedItem = space.habits.splice(evt.oldIndex, 1)[0];
             space.habits.splice(evt.newIndex, 0, movedItem);
-            saveData();
+            saveData(true);
             renderHabitList(space);
             renderTasks(space);
         }
@@ -755,7 +783,7 @@ function showHabitTemplatePicker(anchorEl, habit, space) {
     popup.querySelectorAll('.habit-link-item-row').forEach(row => {
         row.onclick = () => {
             habit.linkedTemplateIdx = parseInt(row.dataset.index);
-            saveData(); renderHabitList(space); popup.remove();
+            saveData(true); renderHabitList(space); popup.remove();
         };
         row.onmouseenter = () => row.style.background = 'var(--hover-bg)';
         row.onmouseleave = () => row.style.background = habit.linkedTemplateIdx === parseInt(row.dataset.index) ? 'rgba(47,128,237,0.1)' : 'transparent';
@@ -765,7 +793,7 @@ function showHabitTemplatePicker(anchorEl, habit, space) {
     if (unlinkBtn) {
         unlinkBtn.onclick = () => {
             delete habit.linkedTemplateIdx;
-            saveData(); renderHabitList(space); popup.remove();
+            saveData(true); renderHabitList(space); popup.remove();
         };
     }
 
@@ -795,7 +823,7 @@ function generateTasksFromHabitTemplate(habit, space) {
         });
     });
 
-    saveData();
+    saveData(true);
     renderTasks(space); // อัปเดต UI รายการงานหลัก
     
     // 🎊 Enhanced Feedback Animation
@@ -853,7 +881,7 @@ function showCycleEditPopup(anchorEl, habit, space) {
         const newVal = parseInt(input.value) || 1;
         if (newVal !== habit.resetInterval) {
             habit.resetInterval = newVal;
-            saveData();
+            saveData(true);
             
             // 🟡 เพิ่มเอฟเฟกต์กระพริบสีเหลืองที่ Badge เดิม
             anchorEl.querySelector('span').innerText = newVal;
@@ -894,32 +922,38 @@ function handleAddHabit(space) {
             lastUpdate: new Date().toDateString() 
         });
         input.value = '';
-        saveData();
+        saveData(true);
         renderHabitList(space);
         renderTasks(space);
     }
 }
 
 /**
- * 🎵 ฟังก์ชันสร้างเสียง Ta-da! (Simple Beep)
+ * 🎵 ฟังก์ชันสร้างเสียงฉลองพรีเมียมแบบ Arpeggio (C Major 7)
  */
 function playSuccessSound() {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const playNote = (freq, start, duration) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, start);
-        gain.gain.setValueAtTime(0.1, start);
-        gain.gain.exponentialRampToValueAtTime(0.01, start + duration);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(start);
-        osc.stop(start + duration);
-    };
-    // เล่น 2 ตัวโน้ตต่อเนื่อง (C5 -> G5)
-    playNote(523.25, ctx.currentTime, 0.15);
-    playNote(783.99, ctx.currentTime + 0.12, 0.4);
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const playNote = (freq, start, duration, vol = 0.05) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, start);
+            gain.gain.setValueAtTime(0, start);
+            gain.gain.linearRampToValueAtTime(vol, start + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(start);
+            osc.stop(start + duration);
+        };
+        const now = ctx.currentTime;
+        playNote(523.25, now, 2.0, 0.08);        // C5
+        playNote(659.25, now + 0.1, 2.0, 0.06);  // E5
+        playNote(783.99, now + 0.2, 2.0, 0.04);  // G5
+        playNote(987.77, now + 0.3, 2.5, 0.03);  // B5
+        playNote(1046.50, now + 0.4, 3.0, 0.02); // C6
+    } catch (e) {}
 }
 
 /**

@@ -38,7 +38,11 @@ export async function renderDefaultDashboard() {
             <button class="btn-icon btn-dashboard-note-toggle" title="Dashboard Quick Note" style="margin-right: 10px; ${settings.dashboardQuickNote?.isOpen ? 'color: var(--primary-color); border: 1px solid var(--primary-color); background: rgba(47, 128, 237, 0.1);' : ''}">
                 <svg class="svg-icon-sm"><use href="#icon-pencil"></use></svg>
             </button>
-            <button id="btn-master-open-rewards" class="btn-icon" title="Quest Loot & Rewards" style="color: #f59e0b; width: 32px; height: 32px; margin-right: 10px;"><svg class="svg-icon-lg"><use href="#icon-sparkles"></use></svg></button>
+            <div class="reward-system-btn-group" style="display: flex; align-items: center; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.2); border-radius: 20px; padding: 2px 4px; margin-right: 10px;">
+                <button id="btn-master-open-rewards" class="btn-icon" title="Quest Loot & Rewards" style="color: #f59e0b; width: 32px; height: 32px; opacity: 1; margin: 0;"><svg class="svg-icon-lg"><use href="#icon-sparkles"></use></svg></button>
+                <div style="width: 1px; height: 16px; background: rgba(245, 158, 11, 0.2); margin: 0 2px;"></div>
+                <button id="btn-master-open-combo" class="btn-icon" title="Combo Rules" style="color: #f59e0b; width: 32px; height: 32px; opacity: 1; margin: 0;"><svg class="svg-icon-lg" style="width: 18px; height: 18px;"><use href="#icon-dice"></use></svg></button>
+            </div>
             ${isMinimized('todo') ? `<div class="minimized-bubble" data-id="todo" title="Restore Todo List"><svg class="svg-icon-sm"><use href="#icon-check-square"></use></svg></div>` : ''}
             ${isMinimized('flow') ? `<div class="minimized-bubble" data-id="flow" title="Restore Smart Flow"><svg class="svg-icon-sm"><use href="#icon-sparkles"></use></svg></div>` : ''}
         </div>

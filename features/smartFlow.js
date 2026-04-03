@@ -1,20 +1,39 @@
-import { getSpaces, saveData, getAppSettings } from '../core/storage.js';
+import { getSpaces, saveData, getAppSettings, getCurrentSpace } from '../core/storage.js';
 import Sortable from '../sortable.esm.js';
 import { renderSidebar } from '../components/sidebar.js';
 import { svgArchive, svgUnarchive, svgTrashRed } from '../core/icons.js';
 import { handleTagAutocomplete, applySyntaxHighlighting } from '../core/ui-helpers.js';
 
-const svgMenu = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.7;"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>`;
+const svgMenu = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.6;"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>`;
+
+function playStepStartSound() {
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(600, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.05, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.15);
+    } catch (e) {}
+}
 
 /**
  * State Manager for Smart Flow
  */
 let flowItems = [];
+export const getFlowItems = () => flowItems;
 let editingFlowItemId = null;
 let refreshInterval = null;
 let isCreatingNewStep = false; // 🟢 ตัวเช็คว่ากำลังสร้าง Step ใหม่ (เพื่อใช้ลบออกหากกดยกเลิก)
 let isFlowDataLoaded = false; // 🟢 ตัวเช็คสถานะการโหลด
 let editingFlowItemTags = []; // ตัวแปรชั่วคราวสำหรับเก็บ Tag ที่เลือกใน Modal
+let confirmingFlowItemId = null; // 🟢 สำหรับจำว่างานไหนกำลังอยู่ในโหมดเลือกผลลัพธ์
 
 /**
  * State for Smart Flow UI
@@ -35,7 +54,15 @@ export const flowState = {
     areTagsVisible: true,   // ซ่อน/แสดงแถบป้ายกำกับ
     managedTags: [],        // 🟢 รายการป้ายกำกับทั้งหมดที่ระบบจำไว้
     focusPopupState: {      // 🟢 สถานะของ Focus Popup ที่ลอยอยู่
-        isOpen: false,
+        isOpen: false, // 🟢 สถานะของ Focus Popup ที่ลอยอยู่
+        isMinimized: false,
+        x: 100,
+        y: 100,
+        w: 250,
+        h: 150,
+        collapsed: false
+    },
+    postConfirmPopupState: { // 🟢 สถานะของ Post-Transition Confirm Popup
         isMinimized: false,
         x: 100,
         y: 100,
@@ -242,6 +269,7 @@ export async function initSmartFlow() {
     const appSettings = getAppSettings();
     flowState.focusPopupState = appSettings.focusPopupState || flowState.focusPopupState;
 
+    flowState.postConfirmPopupState = appSettings.postConfirmPopupState || { x: 0, y: 0, isLocked: false }; // NEW: Load postConfirmPopupState
     // 🟢 โหลดสถานะตัวจับเวลาที่ค้างไว้
     if (res.smartFlowFocusTimer) {
         flowState.focusMode = res.smartFlowFocusTimer.focusMode;
@@ -424,39 +452,55 @@ function renderSmartFlowTagBar() {
     const container = document.getElementById('sf-tag-bar-container');
     if (!container) return;
 
-    // รวบรวม Tag ทั้งหมดที่มีอยู่ใน flowItems
-    const allTags = new Set();
-    flowItems.forEach(item => {
-        if (item.tags) item.tags.forEach(t => allTags.add(t.toUpperCase()));
-    });
-    // 🟢 รวมป้ายกำกับที่ระบบจำไว้ (Managed Tags) เพื่อให้แสดงผลตลอดเวลา
-    flowState.managedTags.forEach(t => allTags.add(t.toUpperCase()));
+    // 🟢 ดึงการตั้งค่าแยกตาม Space (Dashboard ใช้ appSettings)
+    const space = getCurrentSpace();
+    const settings = getAppSettings();
+    const targetStore = space || settings;
 
-    const sortedTags = Array.from(allTags).sort();
+    const isSingle = targetStore.sfIsSingleSelectMode ?? flowState.isSingleSelectMode;
+    const filterMode = targetStore.sfCurrentFilterMode ?? flowState.currentFilterMode;
+    const isLocked = !!targetStore.sfIsTagModeLocked;
+
+    // 🟢 1. ตรวจสอบให้แน่ใจว่า Managed Tags มีป้ายจากงานทั้งหมด (รักษาลำดับเดิม)
+    flowItems.forEach(item => {
+        (item.tags || []).forEach(tag => {
+            if (!flowState.managedTags.some(t => t.toUpperCase() === tag.toUpperCase())) {
+                flowState.managedTags.push(tag);
+            }
+        });
+    });
+    const tagsToDisplay = flowState.managedTags; // 🟢 ใช้ลำดับตาม managedTags แทนการเรียง A-Z เสมอ
 
     container.innerHTML = `
         <button class="btn-icon" id="sf-tag-visibility-toggle" title="${flowState.areTagsVisible ? 'Hide Tags' : 'Show Tags'}" style="padding: 2px;">
             <svg class="svg-icon-sm" style="transform: ${flowState.areTagsVisible ? 'rotate(0deg)' : 'rotate(-90deg)'}; transition: transform 0.2s;"><use href="#icon-chevron-down"></use></svg>
         </button>
         <div id="sf-tags-wrapper" style="display: ${flowState.areTagsVisible ? 'flex' : 'none'}; align-items: center; gap: 8px; flex-wrap: wrap;">
-            <button class="btn-tag-mode" id="sf-btn-tag-select-mode" style="padding: 2px 8px; font-size: 10px; border-radius: 4px; font-weight: 700; background: ${flowState.isSingleSelectMode ? '#f3e8ff' : '#dcfce7'}; color: ${flowState.isSingleSelectMode ? '#6b21a8' : '#166534'}; border: 1px solid ${flowState.isSingleSelectMode ? '#6b21a8' : '#166534'}; cursor: pointer;">
-                ${flowState.isSingleSelectMode ? 'Single' : 'Multi'}
-            </button>
-            <button class="btn-tag-mode" id="sf-btn-tag-filter-mode" style="padding: 2px 8px; font-size: 10px; border-radius: 4px; font-weight: 700; background: ${flowState.currentFilterMode === 'OR' ? '#e3f2fd' : '#ffebee'}; color: ${flowState.currentFilterMode === 'OR' ? '#0b6e99' : '#991b1b'}; border: 1px solid ${flowState.currentFilterMode === 'OR' ? '#0b6e99' : '#991b1b'}; cursor: pointer;">
-                ${flowState.currentFilterMode}
-            </button>
+            <div style="display: flex; align-items: center; gap: 4px; background: var(--bg-body); padding: 2px 6px; border-radius: 8px; border: 1px solid var(--border-color);">
+                <button class="btn-icon" id="sf-btn-tag-lock" title="${isLocked ? 'Unlock Settings' : 'Lock Settings'}" style="padding: 2px; color: ${isLocked ? '#ef4444' : '#10b981'}; opacity: ${isLocked ? '1' : '0.4'};">
+                    <svg class="svg-icon-sm"><use href="#icon-${isLocked ? 'lock-minimal' : 'unlock-minimal'}"></use></svg>
+                </button>
+                <button class="btn-tag-mode" id="sf-btn-tag-select-mode" style="padding: 2px 8px; font-size: 10px; border-radius: 4px; font-weight: 700; background: ${isSingle ? '#f3e8ff' : '#dcfce7'}; color: ${isSingle ? '#6b21a8' : '#166534'}; border: 1px solid ${isSingle ? '#6b21a8' : '#166534'}; cursor: ${isLocked ? 'not-allowed' : 'pointer'}; opacity: ${isLocked ? '0.7' : '1'};">
+                    ${isSingle ? 'Single' : 'Multi'}
+                </button>
+                <button class="btn-tag-mode" id="sf-btn-tag-filter-mode" style="padding: 2px 8px; font-size: 10px; border-radius: 4px; font-weight: 700; background: ${filterMode === 'OR' ? '#e3f2fd' : '#ffebee'}; color: ${filterMode === 'OR' ? '#0b6e99' : '#991b1b'}; border: 1px solid ${filterMode === 'OR' ? '#0b6e99' : '#991b1b'}; cursor: ${isLocked ? 'not-allowed' : 'pointer'}; opacity: ${isLocked ? '0.7' : '1'};">
+                    ${filterMode}
+                </button>
+            </div>
             <div style="width: 1px; height: 14px; background: var(--border-color); margin: 0 4px;"></div>
             <div style="display:flex; align-items:center; gap:4px;">
                 <div class="tag-pill ${flowState.currentFilterTags.length === 0 ? 'active' : ''}" data-tag="ALL">All</div>
                 <button class="btn-icon" id="sf-btn-add-tag-global" title="Add New Tag" style="padding: 2px; border: 1px dashed var(--border-color); border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; color: var(--text-muted);">+</button>
             </div>
             <div class="tag-pill ${flowState.currentFilterTags.includes('UNTAGGED') ? 'active' : ''}" data-tag="UNTAGGED">🚫 No Tag</div>
-            ${sortedTags.map(tag => `
-                <div class="tag-pill ${flowState.currentFilterTags.includes(tag) ? 'active' : ''}" data-tag="${tag}">
-                    <span>${tag}</span>
-                    <button class="btn-icon sf-tag-menu-btn" style="margin-left:5px; opacity:0.5; display:flex;">${svgMenu}</button>
-                </div>
-            `).join('')}
+            <div id="sf-draggable-tags" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                ${tagsToDisplay.map(tag => `
+                    <div class="tag-pill ${flowState.currentFilterTags.includes(tag) ? 'active' : ''}" data-tag="${tag}" style="cursor: grab;">
+                        <span>${tag}</span>
+                        <button class="btn-icon sf-tag-menu-btn" style="margin-left:5px; opacity:0.5; display:flex;">${svgMenu}</button>
+                    </div>
+                `).join('')}
+            </div>
         </div>
     `;
     
@@ -478,15 +522,34 @@ function renderSmartFlowTagBar() {
         renderSmartFlowTagBar();
     };
 
+    container.querySelector('#sf-btn-tag-lock').onclick = (e) => {
+        e.stopPropagation();
+        const target = getCurrentSpace() || getAppSettings();
+        target.sfIsTagModeLocked = !target.sfIsTagModeLocked;
+        saveData();
+        renderSmartFlowTagBar();
+    };
+
     container.querySelector('#sf-btn-tag-select-mode').onclick = () => {
-        flowState.isSingleSelectMode = !flowState.isSingleSelectMode;
-        if (flowState.isSingleSelectMode && flowState.currentFilterTags.length > 1) flowState.currentFilterTags = [flowState.currentFilterTags[0]];
+        const target = getCurrentSpace() || getAppSettings();
+        if (target.sfIsTagModeLocked) return; // 🔒 ตรวจสอบการล็อค
+
+        const newVal = !(target.sfIsSingleSelectMode ?? flowState.isSingleSelectMode);
+        target.sfIsSingleSelectMode = newVal;
+        
+        if (newVal && flowState.currentFilterTags.length > 1) flowState.currentFilterTags = [flowState.currentFilterTags[0]];
+        saveData();
         renderSmartFlowTagBar();
         renderFlowList();
     };
 
     container.querySelector('#sf-btn-tag-filter-mode').onclick = () => {
-        flowState.currentFilterMode = flowState.currentFilterMode === 'OR' ? 'AND' : 'OR';
+        const target = getCurrentSpace() || getAppSettings();
+        if (target.sfIsTagModeLocked) return; // 🔒 ตรวจสอบการล็อค
+
+        const current = target.sfCurrentFilterMode ?? flowState.currentFilterMode;
+        target.sfCurrentFilterMode = (current === 'OR' ? 'AND' : 'OR');
+        saveData();
         renderSmartFlowTagBar();
         renderFlowList();
     };
@@ -518,6 +581,20 @@ function renderSmartFlowTagBar() {
             };
         }
     });
+
+    // 🟢 2. เปิดใช้งานการลากวาง (Sortable) สำหรับป้ายกำกับ
+    const draggableContainer = container.querySelector('#sf-draggable-tags');
+    if (draggableContainer) {
+        Sortable.create(draggableContainer, {
+            animation: 150,
+            ghostClass: 'sortable-ghost',
+            onEnd: () => {
+                const newOrder = Array.from(draggableContainer.querySelectorAll('.tag-pill')).map(el => el.dataset.tag);
+                flowState.managedTags = newOrder;
+                saveFlow(); // บันทึกลำดับใหม่ลง Storage
+            }
+        });
+    }
 }
 
 function renderFlowList() {
@@ -531,6 +608,10 @@ function renderFlowList() {
     // ID to Index mapping for dependency display
     const idToNumMap = {};
     flowItems.forEach((item, idx) => idToNumMap[item.id] = idx + 1);
+
+    // 🟢 ดึงค่า Filter Mode จาก Space ปัจจุบัน
+    const targetStore = getCurrentSpace() || getAppSettings();
+    const filterMode = targetStore.sfCurrentFilterMode ?? flowState.currentFilterMode;
 
     // เตรียมข้อมูลและกรองรายการตาม State
     const itemsToRender = flowItems.map((item, index) => {
@@ -563,7 +644,7 @@ function renderFlowList() {
                 return itemTags.includes(tag.toUpperCase());
             };
 
-            if (flowState.currentFilterMode === 'AND') {
+            if (filterMode === 'AND') {
                 if (!flowState.currentFilterTags.every(checkMatch)) return false;
             } else {
                 if (!flowState.currentFilterTags.some(checkMatch)) return false;
@@ -576,6 +657,7 @@ function renderFlowList() {
     listEl.innerHTML = itemsToRender.map(({ item, index, depsMet, schedMet, repeatMet, canExecute, isLocked, isExpanded }) => {
         const rowNum = index + 1;
         const completedClass = item.isCompleted ? 'completed' : '';
+        const failedClass = (item.isCompleted && item.isFailed) ? 'failed' : ''; // 🟢 เพิ่มตัวแปรเช็คสถานะล้มเหลว
         const linkedClass = item.linkedSpaceId ? 'sf-linked-step' : ''; // 🟢 เพิ่ม class สำหรับ step ที่มีลิงก์
         const lockedClass = isLocked ? 'sf-locked' : '';
         const countdownText = !schedMet && !item.isCompleted ? getScheduleCountdown(item) : "";
@@ -584,11 +666,51 @@ function renderFlowList() {
         if (!depsMet) disabledReason = "Complete previous steps first";
         else if (!schedMet) disabledReason = "Not yet time for this step";
 
-        // 🟢 Requirement 2: ป้าย Habit Tracker สวยๆ
-        const habitBadge = (item.habitConfig && item.habitConfig.enabled) ? `<span class="sf-habit-indicator-badge"><svg class="svg-icon-sm" style="width:10px;height:10px;"><use href="#icon-sparkles"></use></svg>Habit Tracker</span>` : '';
+        const isConfirming = confirmingFlowItemId === item.id;
+        let actionBtnHtml = '';
+        if (item.isCompleted) {
+            // 🟢 แสดงไอคอนตามผลลัพธ์ (✔ หรือ ✖)
+            const isFailed = item.isFailed;
+            const icon = isFailed ? cancelIcon() : checkIcon();
+            const extraStyle = isFailed ? 'background:rgba(239, 68, 68, 0.1); color:#ef4444; border-color:#ef4444;' : '';
+            actionBtnHtml = `<button class="smart-flow-action-btn" data-id="${item.id}" style="${extraStyle}">${icon}</button>`;
+        } else if (isConfirming) {
+            actionBtnHtml = `
+                <div class="sf-confirm-group" style="display:flex; gap:4px;">
+                    <button class="smart-flow-action-btn sf-btn-success" data-id="${item.id}" title="Success (Claim Rewards)" style="background:#10b981; color:white; border-color:#10b981;">${checkIcon()}</button>
+                    <button class="smart-flow-action-btn sf-btn-fail" data-id="${item.id}" title="Failed (No Rewards)" style="background:rgba(239, 68, 68, 0.1); color:#ef4444; border-color:#ef4444;">${cancelIcon()}</button>
+                </div>
+            `;
+        } else {
+            actionBtnHtml = `
+                <button class="smart-flow-action-btn" 
+                    ${!canExecute ? `data-locked="true" title="${disabledReason}" style="opacity:0.3; cursor:not-allowed; filter:grayscale(1);"` : ''}
+                    data-id="${item.id}">
+                    ${playIcon()}
+                </button>
+            `;
+        }
 
-        // 🟢 ทำให้ข้อความ +Habit Tracker มีสีเขียวผ่าน HTML
-        const displayDesc = (item.description || "").replace(/\+Habit Tracker/g, '<span class="sf-habit-tag">+Habit Tracker</span>');
+        // 🟢 Requirement 2: ป้าย Habit Tracker สวยๆ
+        const habitBadge = (item.habitConfig && item.habitConfig.enabled) ? `<span class="sf-habit-indicator-badge">H</span>` : '';
+
+        // 🟢 เพิ่มป้าย Focus Mode สวยๆ
+        const focusBadge = (item.focusConfig && item.focusConfig.enabled) ? `<span class="sf-focus-indicator-badge">F${item.focusConfig.minutes || 25}</span>` : '';
+
+        // 🟢 ล้างข้อความส่วนเกินออกจาก Description เนื่องจากมี Badge แสดงผลแล้ว
+        let displayDesc = (item.description || "")
+            .replace(/ • \+Habit Tracker/g, '')
+            .replace(/\+Habit Tracker/g, '')
+            .replace(/ • \+Focus Mode/g, '')
+            .replace(/\+Focus Mode/g, '')
+            .replace(/ • \d+m Focus/gi, '')
+            .replace(/ • Repeat every 1 days/g, '')
+            .trim();
+
+        // 🟢 เพิ่มไอคอนโซ่สีเขียวหน้าข้อความ Space เพื่อความชัดเจน (ใช้ stroke-width หนาตามคำขอ)
+        if (item.linkedSpaceId && displayDesc.startsWith('Space:')) {
+            displayDesc = displayDesc.replace('Space:', `${linkIcon()}Space:`);
+        }
 
         // Map dependency IDs to visual row numbers
         const depLabels = item.dependencies
@@ -597,29 +719,26 @@ function renderFlowList() {
             .join(', ');
 
         return `
-            <li class="smart-flow-item ${completedClass} ${lockedClass} ${linkedClass}" data-id="${item.id}" data-index="${index}" style="position:relative;">
+            <li class="smart-flow-item ${completedClass} ${failedClass} ${lockedClass} ${linkedClass}" data-id="${item.id}" data-index="${index}" style="position:relative;">
                 <div class="drag-handle">${dragHandleIcon()}</div>
                 <div class="smart-flow-number">${rowNum}</div>
                 
-                <button class="smart-flow-action-btn" 
-                    ${!canExecute && !item.isCompleted ? `data-locked="true" title="${disabledReason}" style="opacity:0.3; cursor:not-allowed; filter:grayscale(1);"` : ''}
-                    data-id="${item.id}">
-                    ${item.isCompleted ? checkIcon() : playIcon()}
-                </button>
+                ${actionBtnHtml}
 
                 <div class="smart-flow-content">
                     <div style="display:flex; align-items:center; gap:8px;">
                         <div class="smart-flow-title" contenteditable="true" data-id="${item.id}">${item.title}</div>
+                        ${focusBadge}
                         ${habitBadge}
                         ${(item.tags && item.tags.length > 0) ? `
                             <div class="sf-item-tags-badge" title="${item.tags.join(', ')}"><svg class="svg-icon-sm" style="width:10px; height:10px;"><use href="#icon-tag"></use></svg><span>${item.tags.length}</span></div>
                         ` : ''}
                     </div>
-                    <div class="sf-timer-container">
+                    <div class="sf-timer-container" style="padding-left: 6px;">
                         ${repeatCountdownText ? `<div class="sf-countdown-timer">${repeatCountdownText}</div>` : ''}
                         ${countdownText ? `<div class="sf-countdown-timer">${countdownText}</div>` : ''}
                     </div>
-                    <div class="smart-flow-desc">
+                    <div class="smart-flow-desc" style="padding-left: 6px;">
                         ${displayDesc} 
                         ${depLabels ? `<span class="flow-dep-tag">Requires ${depLabels}</span>` : ''}
                     </div>
@@ -632,6 +751,7 @@ function renderFlowList() {
                         <button class="btn-icon flow-opt-deps" data-id="${item.id}" title="Dependencies"><svg class="svg-icon-sm"><use href="#icon-link"></use></svg></button>
                         <button class="btn-icon flow-opt-settings" data-id="${item.id}" title="Settings"><svg class="svg-icon-sm"><use href="#icon-settings"></use></svg></button>
                         <button class="btn-icon flow-opt-archive" data-id="${item.id}" title="Archive">${svgArchive}</button>
+                        <button class="btn-icon flow-opt-duplicate" data-id="${item.id}" title="Duplicate Step"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg></button>
                         <button class="btn-icon flow-opt-delete" data-id="${item.id}" title="Delete" style="color: #dc2626;"><svg class="svg-icon-sm"><use href="#icon-trash"></use></svg></button>
                     </div>
                     <button class="btn-icon flow-menu-trigger" title="Actions" style="${flowState.showActions ? 'display:none;' : ''}; font-weight: 900; font-size: 18px;">⋮</button>
@@ -705,7 +825,6 @@ function updateFlowTimers() {
     // 🟢 จัดการตัวจับเวลา Focus
     if (flowState.isFocusRunning && !flowState.isPaused && flowState.focusTimeLeft > 0) {
         flowState.focusTimeLeft--;
-        needsFullRender = true; // ต้องวาดใหม่เพื่ออัปเดตเวลาบนปุ่มและ Overlay
         
         // อัปเดตตัวเลขเวลาที่ปุ่มหัว Card โดยตรงเพื่อความสมูท
         const btnText = document.getElementById('sf-widget-focus-text');
@@ -727,6 +846,7 @@ function updateFlowTimers() {
             // 🟢 นำ Overlay กลับมาบังรายการเมื่อหมดเวลา (Lock อีกครั้ง)
             const wrapper = document.getElementById('sf-focus-overlay-wrapper');
             if (wrapper) wrapper.innerHTML = renderFocusOverlayHtml();
+            needsFullRender = true;
 
             alert("⏰ Focus session ended! Smart Flow is now locked.");
             saveFlow(); // บันทึกสถานะจบ
@@ -772,10 +892,6 @@ function updateFlowTimers() {
             }
         }
     });
-
-    if (needsFullRender) {
-        renderFlowList();
-    }
 }
 
 /**
@@ -990,57 +1106,43 @@ function attachFlowEvents(listEl) {
     // 1. Completion Toggle
     listEl.querySelectorAll('.smart-flow-action-btn').forEach(btn => {
         btn.onclick = async (e) => {
+            e.stopPropagation();
             const id = btn.dataset.id;
             const item = flowItems.find(fi => fi.id === id);
             if (!item) return;
 
-            // ตรวจสอบว่าถูกล็อคอยู่หรือไม่ (เงื่อนไขไม่ครบ)
+            // 1. กรณีงานเสร็จแล้ว -> กดเพื่อ Reset สถานะ
+            if (item.isCompleted) {
+                item.isCompleted = false;
+                delete item.isFailed; // ล้างสถานะล้มเหลวทิ้งเมื่อรีเซ็ต
+                saveFlow().then(renderFlowList);
+                return;
+            }
+
+            // 2. ตรวจสอบว่าถูกล็อคอยู่หรือไม่
             if (btn.hasAttribute('data-locked') && !item.isCompleted) {
                 const row = btn.closest('.smart-flow-item');
                 row.classList.add('sf-shake');
-                // ลบคลาสออกเมื่ออนิเมชั่นจบเพื่อให้กดใหม่ได้
                 setTimeout(() => row.classList.remove('sf-shake'), 400);
                 return;
             }
 
-            item.isCompleted = !item.isCompleted;
-            
-            if (item.isCompleted) {
-                // Reorder: Move to bottom
-                const idx = flowItems.indexOf(item);
-                
-                // 🌟 Quest Loot Scanner: Scan both Title and Description
-                if (window.processRewardScanner) {
-                    const combinedText = `${item.title} ${item.description || ''}`;
-                    window.processRewardScanner(combinedText, false, { x: e.clientX, y: e.clientY }, 'flow');
-                }
-                flowItems.splice(idx, 1);
-                flowItems.push(item);
-
-                item.repeatConfig.lastCompletedDate = new Date().toDateString(); // บันทึกวันที่ทำเสร็จ
-                
-                // 🟢 Simulation Trigger: หากมี Linked Space ให้เรียกระบบ Transition
+            // 3. จัดการสถานะยืนยันผลลัพธ์
+            if (btn.classList.contains('sf-btn-success')) {
+                confirmingFlowItemId = null;
+                await processFlowCompletion(item, true, e);
+            } else if (btn.classList.contains('sf-btn-fail')) {
+                confirmingFlowItemId = null;
+                await processFlowCompletion(item, false, e);
+            } else {
+                // กดปุ่ม Play ครั้งแรก -> แสดงปุ่ม ✔ / ✖
+                confirmingFlowItemId = id;
+                playStepStartSound();
+                renderFlowList();
                 if (item.linkedSpaceId) {
                     await simulateWorkflow(item);
-                    return; // หยุดการเซฟ/เรนเดอร์ปกติ เพื่อให้ simulateWorkflow จัดการเองหลัง Popup
-                }
-
-                // --- Success Celebration Check ---
-                // ตรวจสอบว่าใน "มุมมองปัจจุบัน" มีงานที่ยังไม่เสร็จเหลืออยู่ไหม
-                const incompleteVisible = flowItems.filter(fi => {
-                    const isLocked = !(checkDependencies(fi) && isScheduleMet(fi)) && !fi.isCompleted;
-                    if (flowState.hideLocked && isLocked) return false;
-                    return !fi.isCompleted;
-                });
-
-                if (incompleteVisible.length === 0) {
-                    const rect = btn.getBoundingClientRect();
-                    triggerFlowConfetti(rect.left + rect.width / 2, rect.top + rect.height / 2);
-                    playSuccessSound();
                 }
             }
-
-            saveFlow().then(renderFlowList);
         };
     });
 
@@ -1058,6 +1160,12 @@ function attachFlowEvents(listEl) {
     // 🟢 ปรับปรุง: ตรวจสอบและปิดเมนูเมื่อคลิกข้างนอก (ใช้แค่ Listener เดียวที่ระดับ Global)
     if (!window._sfClickBound) {
         document.addEventListener('click', (e) => {
+            // 🟢 ปิดโหมดเลือกผลลัพธ์เมื่อคลิกที่อื่น
+            if (!e.target.closest('.sf-confirm-group') && confirmingFlowItemId !== null) {
+                confirmingFlowItemId = null;
+                renderFlowList();
+            }
+
             if (!e.target.closest('.smart-flow-actions-container') && flowState.activeMenuId !== null) {
                 flowState.activeMenuId = null;
                 renderFlowList();
@@ -1091,7 +1199,7 @@ function attachFlowEvents(listEl) {
     });
 
     // 3. Dropdown Menu Actions
-    listEl.addEventListener('click', (e) => {
+    listEl.onclick = (e) => {
         const target = e.target;
         
         // ใช้ closest เพื่อให้กดโดนไอคอนแล้วปุ่มยังทำงานได้แม่นยำ
@@ -1101,10 +1209,11 @@ function attachFlowEvents(listEl) {
         const archiveBtn = target.closest('.flow-opt-archive');
         const resetBtn = target.closest('.flow-opt-reset');
         const noteBtn = target.closest('.flow-opt-note');
+        const duplicateBtn = target.closest('.flow-opt-duplicate'); // NEW: Duplicate button
 
-        if (!depsBtn && !settingsBtn && !deleteBtn && !archiveBtn && !resetBtn && !noteBtn) return;
+        if (!depsBtn && !settingsBtn && !deleteBtn && !archiveBtn && !resetBtn && !noteBtn && !duplicateBtn) return;
         
-        const id = (depsBtn || settingsBtn || deleteBtn || archiveBtn || resetBtn || noteBtn).dataset.id;
+        const id = (depsBtn || settingsBtn || deleteBtn || archiveBtn || resetBtn || noteBtn || duplicateBtn).dataset.id;
         const item = flowItems.find(fi => fi.id === id);
         if (!item) return;
 
@@ -1131,8 +1240,11 @@ function attachFlowEvents(listEl) {
         } else if (settingsBtn) {
             isCreatingNewStep = false; // 🟢 มาร์คว่าเป็นการแก้ไขงานเดิม
             openSmartFlowSettingsModal(item.id);
+        } else if (duplicateBtn) { // NEW: Handle duplicate action
+            duplicateFlowItem(id);
+            flowState.activeMenuId = null; // Close menu after duplicating
         }
-    });
+    };
 }
 
 /**
@@ -1207,10 +1319,9 @@ async function simulateWorkflow(item) {
 
     // 🟢 แสดงหน้าต่างยืนยันก่อนสลับ
     const confirmed = await showWorkflowTransitionPopup(item, targetSpace);
-    if (!confirmed) {
-        // ถ้ากดยกเลิก ให้เปลี่ยนสถานะกลับเป็นไม่เสร็จ (เผื่อกดผิด)
-        item.isCompleted = false;
-        saveFlow().then(renderFlowList);
+    if (confirmed === false) {
+        // 🟢 กรณีเลือก Stay Here: ให้ขึ้น Popup ติ๊กจบงานทันที
+        showPostTransitionConfirmPopup(item);
         return;
     }
 
@@ -1227,13 +1338,15 @@ async function simulateWorkflow(item) {
     const sidebarItem = document.querySelector(`#spacebar .space-item[data-id="${item.linkedSpaceId}"]`);
     if (sidebarItem) sidebarItem.click();
 
-    // 3. เริ่ม Focus Mode
+    // 3. เริ่ม Focus Mode (เฉพาะใน Space ที่ระบุเท่านั้น ไม่เปิดใน Command Center)
     if (item.focusConfig && item.focusConfig.enabled) {
-        flowState.focusMode = true;
-        flowState.isFocusRunning = true;
-        flowState.focusTimeLeft = (item.focusConfig.minutes || 25) * 60;
-        flowState.isPaused = false;
-        flowState.focusPopupState.isOpen = true;
+        // 🟢 เปิดโหมด Focus (ON) และตั้งเวลาเตรียมไว้ แต่ยังไม่เริ่มนับถอยหลัง (รอให้ผู้ใช้กดเริ่มเอง)
+        if (targetSpace) {
+            if (!targetSpace.focusTimer) targetSpace.focusTimer = { mode: 'off', timeLeft: 0 };
+            targetSpace.focusTimer.mode = 'setup';
+            targetSpace.focusTimer.duration = item.focusConfig.minutes || 25;
+        }
+
         saveData();
         saveFlow();
     }
@@ -1244,6 +1357,11 @@ async function simulateWorkflow(item) {
             import('./habitSheet.js').then(m => m.openHabitModal(targetSpace));
         }, 350);
     }
+
+    // 5. แสดงหน้าต่างยืนยันผลลัพธ์ (✔/✖) หลังจากย้าย Space แล้ว
+    setTimeout(() => {
+        showPostTransitionConfirmPopup(item);
+    }, 800);
 }
 
 function initSortable() {
@@ -1260,16 +1378,195 @@ function initSortable() {
 }
 
 /** Icons */
+function linkIcon() {
+    return `<svg class="sf-link-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px; margin-top: -2px;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>`;
+}
+
 function dragHandleIcon() {
     return `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="opacity:0.4;"><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>`;
 }
 
 function playIcon() {
-    return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
+    return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
 }
 
 function checkIcon() {
-    return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+    return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+}
+
+function cancelIcon() {
+    return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
+}
+
+/**
+ * ⚙️ ประมวลผลการจบขั้นตอนของ Smart Flow
+ * @param {Object} item - ขั้นตอนที่กำลังทำ
+ * @param {boolean} shouldClaimRewards - จะรับรางวัลหรือไม่
+ * @param {Event} e - event object สำหรับพิกัดแอนิเมชั่น
+ */
+async function processFlowCompletion(item, shouldClaimRewards, e) {
+    confirmingFlowItemId = null; // 🟢 เคลียร์สถานะการเลือกทันที
+    item.isCompleted = true;
+    item.isFailed = !shouldClaimRewards; // 🟢 บันทึกสถานะว่าล้มเหลวหรือไม่ (X = Failed)
+
+    if (!item.repeatConfig) item.repeatConfig = {};
+    item.repeatConfig.lastCompletedDate = new Date().toDateString(); 
+
+    // 🌟 Quest Loot Scanner: สแกนหาเงิน/เวลา เฉพาะเมื่อเลือกสำเร็จ (✔) เท่านั้น
+    if (shouldClaimRewards && window.processRewardScanner) {
+        const combinedText = `${item.title} ${item.description || ''}`;
+        const coords = e ? { x: e.clientX, y: e.clientY } : { x: window.innerWidth/2, y: window.innerHeight/2 };
+        window.processRewardScanner(combinedText, false, coords, 'flow', item.linkedSpaceId, { id: item.id, tags: item.tags });
+    }
+
+    // --- Success Celebration Check ---
+    const incompleteVisible = flowItems.filter(fi => {
+        const isLocked = !(checkDependencies(fi) && isScheduleMet(fi)) && !fi.isCompleted;
+        if (flowState.hideLocked && isLocked) return false;
+        return !fi.isCompleted;
+    });
+
+    if (incompleteVisible.length === 0 && !item.isFailed) {
+        const cx = e ? e.clientX : window.innerWidth/2;
+        const cy = e ? e.clientY : window.innerHeight/2;
+        triggerFlowConfetti(cx, cy);
+        playSuccessSound();
+    }
+
+    saveFlow().then(renderFlowList);
+}
+
+/**
+ * 🏁 หน้าต่างยืนยันผลลัพธ์หลังจากเข้าสู่ Space เป้าหมายแล้ว
+ */
+async function showPostTransitionConfirmPopup(item) {
+    const modalId = 'sf-post-result-modal';
+    let modal = document.getElementById(modalId);
+    
+    if (!modal) {
+        const html = `
+            <div class="modal-overlay sf-post-confirm-overlay" id="${modalId}" style="z-index: 30000; background: none; backdrop-filter: none; display:none;">
+                <div class="modal-content sf-post-confirm-popup" style="padding: 0; position: fixed;">
+                    <div id="sf-post-result-header" style="background: var(--bg-spacebar); padding: 6px 10px; cursor: grab; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border-color);">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="opacity:0.4;"><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
+                        <span style="font-size: 11px; font-weight: 800; color: var(--text-muted); flex: 1;">DONE?</span>
+                        <button id="sf-btn-result-close" style="background: none; border: none; cursor: pointer; color: var(--text-muted); opacity:0.5; padding: 0;">✕</button>
+                    </div>
+                    <div style="padding: 12px 10px; display: flex; flex-direction: column; gap: 8px; align-items: center;">
+                        <div style="font-size: 11px; font-weight: 700; text-align: center; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #fff;">${item.title}</div>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="sf-result-action-btn sf-res-fail" id="sf-btn-res-fail" title="Fail">${cancelIcon()}</button>
+                            <button class="sf-result-action-btn sf-res-success" id="sf-btn-res-success" title="Success">${checkIcon()}</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', html);
+        modal = document.getElementById(modalId);
+    }
+    
+    const popupContent = modal.querySelector('.sf-post-confirm-popup');
+
+    // Set initial position (centered if not saved, or from saved state)
+    const savedX = flowState.postConfirmPopupState.x;
+    const savedY = flowState.postConfirmPopupState.y;
+
+    if (savedX === 0 && savedY === 0) { // 🟢 เปลี่ยนจากกึ่งกลาง เป็นมุมขวาล่าง
+        // Temporarily show to measure dimensions
+        modal.style.display = 'block';
+        popupContent.style.display = 'block';
+        popupContent.style.visibility = 'hidden'; // Hide it from user view
+
+        const margin = 25; // ระยะห่างจากขอบจอ
+        const posX = window.innerWidth - popupContent.offsetWidth - margin;
+        const posY = margin; // 🟢 ย้ายไปอยู่ด้านบน
+        
+        popupContent.style.left = `${posX}px`;
+        popupContent.style.top = `${posY}px`;
+        flowState.postConfirmPopupState.x = posX;
+        flowState.postConfirmPopupState.y = posY;
+        popupContent.style.visibility = 'visible'; // Make it visible after positioning
+    } else {
+        popupContent.style.left = `${savedX}px`;
+        popupContent.style.top = `${savedY}px`;
+    }
+
+    playPopSound(); // 🔊 เล่นเสียง Pop เบาๆ เมื่อ Popup ปรากฏ
+    modal.style.display = 'block'; // Ensure overlay is visible
+    popupContent.style.display = 'block'; // Ensure popup is visible
+
+    setupPostConfirmPopupDrag(popupContent);
+
+    return new Promise((resolve) => {
+        // ✖ ปุ่มล้มเหลว
+        document.getElementById('sf-btn-res-fail').onclick = async (e) => {
+            await processFlowCompletion(item, false, e);
+            closeResultPopup();
+            resolve(false);
+        };
+
+        // ✔ ปุ่มสำเร็จ
+        document.getElementById('sf-btn-res-success').onclick = async (e) => {
+            await processFlowCompletion(item, true, e);
+            closeResultPopup();
+            resolve(true);
+        };
+
+        document.getElementById('sf-btn-result-close').onclick = closeResultPopup;
+
+        function closeResultPopup() {
+            modal.style.display = 'none';
+            popupContent.style.display = 'none';
+            resolve(null);
+        }
+    });
+}
+
+/**
+ * 🖐️ Drag Logic for Post-Transition Confirmation Popup
+ */
+function setupPostConfirmPopupDrag(el) {
+    const header = el.querySelector('#sf-post-result-header');
+    if (!header) return;
+
+    let isDragging = false;
+    let offset = { x: 0, y: 0 };
+
+    header.onmousedown = (e) => {
+        if (e.target.closest('button')) return; // Don't drag if clicking buttons
+        if (flowState.postConfirmPopupState.isLocked) return; // Optional lock
+        isDragging = true;
+        el.classList.add('is-dragging'); // Add class for visual feedback
+        const rect = el.getBoundingClientRect();
+        offset.x = e.clientX - rect.left;
+        offset.y = e.clientY - rect.top;
+        document.body.style.userSelect = 'none'; // Prevent text selection during drag
+        el.style.transition = 'none'; // Disable transition for smooth dragging
+    };
+
+    const handleMove = (e) => {
+        if (!isDragging) return;
+        const newX = e.clientX - offset.x;
+        const newY = e.clientY - offset.y;
+        el.style.left = `${newX}px`;
+        el.style.top = `${newY}px`;
+        flowState.postConfirmPopupState.x = newX;
+        flowState.postConfirmPopupState.y = newY;
+    };
+
+    const handleUp = () => {
+        if (isDragging) {
+            isDragging = false;
+            el.classList.remove('is-dragging');
+            document.body.style.userSelect = '';
+            el.style.transition = 'all 0.2s ease'; // Re-enable transition
+            saveFlow(); // Save final position
+        }
+    };
+
+    document.addEventListener('mousemove', handleMove);
+    document.addEventListener('mouseup', handleUp);
 }
 
 // --- Smart Flow Settings Modal ---
@@ -1277,120 +1574,95 @@ function initSmartFlowSettingsModal() {
     if (document.getElementById('smart-flow-settings-modal')) return; // Already initialized
 
     const modalHTML = `
-        <div class="modal-overlay" id="smart-flow-settings-modal" style="z-index: 12000;">
-            <div class="modal-content" style="width: 400px;">
+        <div class="modal-overlay" id="smart-flow-settings-modal" style="z-index: 12000;"> 
+            <div class="modal-content" style="width: 480px; padding: 25px;">
                 <h3 style="margin-top:0; font-size:18px; display:flex; align-items:center; gap:8px;">⚙️ Workflow Step Settings</h3>
-                
-                <div class="settings-group">
-                    <label>Title:</label>
-                    <input type="text" id="sf-setting-title" class="settings-input">
-                </div>
-                <div class="settings-group">
-                    <label>Description:</label>
-                    <div id="sf-setting-description" class="settings-input" contenteditable="true" style="min-height: 34px; height: auto;" placeholder="Auto-generated if Linked Space is set"></div>
-                </div>
-                <div class="settings-group">
-                    <label>Linked Space:</label>
-                    <select id="sf-setting-linked-space" class="settings-input"></select>
+
+                <div style="margin-bottom: 20px;">
+                    <div class="settings-group">
+                        <label>Title</label>
+                        <input type="text" id="sf-setting-title" class="settings-input" placeholder="Step title...">
+                    </div>
+                    <div class="settings-group">
+                        <label>Linked Space</label>
+                        <select id="sf-setting-linked-space" class="settings-input"></select>
+                    </div>
+                    <div class="settings-group">
+                        <label>Description</label>
+                        <div id="sf-setting-description" class="settings-input" contenteditable="true" style="min-height: 34px; height: auto;" placeholder="Notes or auto-generated info..."></div>
+                    </div>
                 </div>
 
-                <!-- Habit Tracker Section -->
-                <div class="customize-section" style="background:var(--bg-card); padding:0; border:none; margin-bottom:20px;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                        <label style="font-weight:700; font-size:14px; margin:0; display:flex; align-items:center; gap:8px;">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;opacity:0.7;"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>
+                <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 25px;">
+                    <label class="section-label" style="margin:0; font-size: 11px;">AUTOMATION FEATURES</label>
+                    
+                    <!-- Habit Toggle Row -->
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding: 8px 12px; background: var(--bg-body); border-radius: 8px; border: 1px solid var(--border-color);">
+                        <label style="font-weight:700; font-size:13px; margin:0; display:flex; align-items:center; gap:8px;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;opacity:0.6;"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>
                             Auto-open Habit Tracker
                         </label>
-                        <label class="switch">
-                            <input type="checkbox" id="sf-setting-habit-enabled">
-                            <span class="slider"></span>
-                        </label>
+                        <label class="switch"><input type="checkbox" id="sf-setting-habit-enabled"><span class="slider"></span></label>
                     </div>
-                </div>
 
-                <div class="settings-group">
-                    <label>Select Tags:</label>
-                    <div id="sf-setting-tag-selection-list" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:5px; padding: 8px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-body); min-height: 34px;"></div>
-                    <div style="display:flex; gap:5px; margin-top:8px;">
-                        <input type="text" id="sf-setting-add-tag-input" class="settings-input" placeholder="New tag name..." style="flex:1; padding:4px 8px; font-size:12px;">
-                        <button class="btn btn-outline" id="sf-setting-add-tag-btn" style="padding:2px 10px; font-size:12px;">Add</button>
-                    </div>
-                </div>
-                
-                <!-- Focus Mode Section -->
-                <div class="customize-section" style="background:var(--bg-card); padding:0; border:none; margin-bottom:20px;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                        <label style="font-weight:700; font-size:14px; margin:0; display:flex; align-items:center; gap:8px;">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;opacity:0.7;"><circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="1"></circle></svg>
-                            Focus Mode
-                        </label>
-                        <label class="switch">
-                            <input type="checkbox" id="sf-setting-focus-enabled">
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                    <div id="sf-focus-config-wrapper" style="display:none; align-items:center; gap:10px; margin-left:5px;">
-                        <span style="font-size:12px; color:var(--text-muted);">Duration:</span>
-                        <input type="number" id="sf-setting-focus-minutes" class="settings-input" style="width:70px; padding:4px 8px;" min="1" value="25">
-                        <span style="font-size:12px; color:var(--text-muted);">minutes</span>
-                    </div>
-                </div>
-
-                <!-- Schedule Section -->
-                <div class="customize-section" style="background:var(--bg-card); padding:0; border:none;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                        <label style="font-weight:700; font-size:14px; margin:0; display:flex; align-items:center; gap:8px;">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;opacity:0.7;"><circle cx="12" cy="12" r="9"></circle><polyline points="12 7 12 12 15 15"></polyline></svg>
-                            Schedule
-                        </label>
-                        <label class="switch">
-                            <input type="checkbox" id="sf-setting-schedule-enabled">
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                    <div id="sf-schedule-config-wrapper" style="display:none;">
-                        <div id="sf-days-container" style="display:flex; gap:4px; margin-bottom:12px;">
-                            ${['S','M','T','W','T','F','S'].map((d, i) => `
-                                <div class="sf-day-pill" data-day="${i}">${d}</div>
-                            `).join('')}
+                    <!-- Focus Toggle Row -->
+                    <div style="padding: 8px 12px; background: var(--bg-body); border-radius: 8px; border: 1px solid var(--border-color);">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <label style="font-weight:700; font-size:13px; margin:0; display:flex; align-items:center; gap:8px;">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;opacity:0.6;"><circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="1"></circle></svg>
+                                Auto Focus Mode
+                            </label>
+                            <label class="switch"><input type="checkbox" id="sf-setting-focus-enabled"><span class="slider"></span></label>
                         </div>
-                        <div style="display:flex; align-items:center; gap:8px;">
-                            <span style="font-size:12px; color:var(--text-muted);">At:</span>
-                            <input type="number" id="sf-setting-hour" class="settings-input" style="width:60px; text-align:center; padding:4px;" placeholder="HH" min="0" max="23">
-                            <span style="font-weight:bold;">:</span>
-                            <input type="number" id="sf-setting-min" class="settings-input" style="width:60px; text-align:center; padding:4px;" placeholder="MM" min="0" max="59">
+                        <div id="sf-focus-config-wrapper" style="display:none; align-items:center; gap:10px; margin-top:10px; padding-top:10px; border-top: 1px dashed var(--border-color);">
+                            <span style="font-size:12px; color:var(--text-muted);">Duration:</span>
+                            <input type="number" id="sf-setting-focus-minutes" class="settings-input" style="width:60px; padding:4px;" min="1" value="25">
+                            <span style="font-size:12px; color:var(--text-muted);">mins</span>
                         </div>
                     </div>
                 </div>
 
-                <!-- Repeat Interval Section -->
-                <div class="customize-section" style="background:var(--bg-card); padding:0; border:none; margin-top:20px;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                        <label style="font-weight:700; font-size:14px; margin:0; display:flex; align-items:center; gap:8px;">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;opacity:0.7;"><path d="M17 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2z"></path><path d="M12 18h.01"></path></svg>
-                            Repeat Interval
-                        </label>
-                        <label class="switch">
-                            <input type="checkbox" id="sf-setting-repeat-enabled">
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                    <div id="sf-repeat-config-wrapper" style="display:none; align-items:center; gap:10px; margin-left:5px;">
-                        <span style="font-size:12px; color:var(--text-muted);">Every:</span>
-                        <input type="number" id="sf-setting-repeat-interval" class="settings-input" style="width:70px; padding:4px 8px;" min="1" value="1">
-                        <span style="font-size:12px; color:var(--text-muted);">days</span>
+                <div style="margin-bottom: 25px;">
+                    <label class="section-label" style="margin-bottom:10px; font-size: 11px;">TIMING & REPEAT</label>
+                    <div style="display: flex; gap: 10px; margin-bottom: 12px;">
+                        <div style="flex:1; padding: 10px; background: var(--bg-body); border-radius: 8px; border: 1px solid var(--border-color);">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
+                                <span style="font-size:12px; font-weight:700;">Schedule</span>
+                                <label class="switch"><input type="checkbox" id="sf-setting-schedule-enabled"><span class="slider"></span></label>
+                            </div>
+                            <div id="sf-schedule-config-wrapper" style="display:none;">
+                                <div id="sf-days-container" style="display:flex; gap:3px; margin-bottom:10px;">
+                                    ${['S','M','T','W','T','F','S'].map((d, i) => `<div class="sf-day-pill" data-day="${i}" style="width:24px; height:24px; font-size:9px;">${d}</div>`).join('')}
+                                </div>
+                                <div style="display:flex; align-items:center; gap:5px;">
+                                    <input type="number" id="sf-setting-hour" class="settings-input" style="width:45px; padding:2px; text-align:center;" placeholder="HH">
+                                    <span>:</span>
+                                    <input type="number" id="sf-setting-min" class="settings-input" style="width:45px; padding:2px; text-align:center;" placeholder="MM">
+                                </div>
+                            </div>
+                        </div>
+                        <div style="flex:1; padding: 10px; background: var(--bg-body); border-radius: 8px; border: 1px solid var(--border-color);">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
+                                <span style="font-size:12px; font-weight:700;">Repeat</span>
+                                <label class="switch"><input type="checkbox" id="sf-setting-repeat-enabled"><span class="slider"></span></label>
+                            </div>
+                            <div id="sf-repeat-config-wrapper" style="display:none; align-items:center; gap:5px;">
+                                <span style="font-size:11px; color:var(--text-muted);">Every</span>
+                                <input type="number" id="sf-setting-repeat-interval" class="settings-input" style="width:45px; padding:2px; text-align:center;" min="1" value="1">
+                                <span style="font-size:11px; color:var(--text-muted);">days</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Dependencies Section -->
-                <div class="customize-section" style="background:var(--bg-card); padding:0; border:none; margin-top:20px;">
-                    <label style="font-weight:700; font-size:14px; margin-bottom:10px; display:flex; align-items:center; gap:8px;">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;opacity:0.7;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
-                        Dependencies
-                    </label>
-                    <div id="sf-setting-deps-container" style="max-height: 120px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; border: 1px solid var(--border-color); border-radius: 6px; padding: 8px; background: var(--bg-body);">
-                        <!-- รายการ Checkbox จะถูกใส่ที่นี่ -->
+                <div style="margin-bottom: 25px;">
+                    <label class="section-label" style="margin-bottom:8px; font-size: 11px;">TAGS & DEPENDENCIES</label>
+                    <div id="sf-setting-tag-selection-list" style="display:flex; flex-wrap:wrap; gap:5px; margin-bottom:8px; padding: 10px; background: var(--bg-body); border-radius: 8px; border: 1px solid var(--border-color); min-height: 30px;"></div>
+                    <div style="display:flex; gap:5px; margin-bottom:15px;">
+                        <input type="text" id="sf-setting-add-tag-input" class="settings-input" placeholder="New tag..." style="flex:1; font-size:12px; padding: 4px 8px;">
+                        <button class="btn btn-outline" id="sf-setting-add-tag-btn" style="padding:0 12px; font-size:12px;">Add</button>
                     </div>
+                    <div id="sf-setting-deps-container" style="max-height: 100px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; border: 1px solid var(--border-color); border-radius: 8px; padding: 8px; background: var(--bg-body);"></div>
                 </div>
 
                 <div class="modal-actions" style="margin-top: 20px; display:flex; justify-content:flex-end; gap:8px;">
@@ -1859,25 +2131,31 @@ function triggerFlowConfetti(originX, originY) {
 }
 
 /**
- * 🎵 สร้างเสียงฉลองสั้นๆ (C5 -> G5)
+ * 🎵 สร้างเสียงฉลองพรีเมียมแบบ Arpeggio (C Major 7) ที่มีความกังวานยาวกว่าเดิม
  */
 function playSuccessSound() {
     try {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const playNote = (freq, start, duration) => {
+        const playNote = (freq, start, duration, vol = 0.05) => {
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
             osc.type = 'sine';
             osc.frequency.setValueAtTime(freq, start);
-            gain.gain.setValueAtTime(0.1, start);
-            gain.gain.exponentialRampToValueAtTime(0.01, start + duration);
+            gain.gain.setValueAtTime(0, start);
+            gain.gain.linearRampToValueAtTime(vol, start + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
             osc.connect(gain);
             gain.connect(ctx.destination);
             osc.start(start);
             osc.stop(start + duration);
         };
-        playNote(523.25, ctx.currentTime, 0.15); // C5
-        playNote(783.99, ctx.currentTime + 0.12, 0.4); // G5
+        const now = ctx.currentTime;
+        // ✨ สร้างเสียงคอร์ดไล่ระดับที่มีความกังวาน (C Major 7)
+        playNote(523.25, now, 2.0, 0.08);        // C5
+        playNote(659.25, now + 0.1, 2.0, 0.06);  // E5
+        playNote(783.99, now + 0.2, 2.0, 0.04);  // G5
+        playNote(987.77, now + 0.3, 2.5, 0.03);  // B5 (โน้ตเสียงที่ทำให้ดูหรูหรา)
+        playNote(1046.50, now + 0.4, 3.0, 0.02); // C6 (ปลายเสียง Shimmer)
     } catch (e) { console.error("Audio celebration failed", e); }
 }
 
@@ -1934,7 +2212,10 @@ function showSfAddTagPopup(anchorEl) {
     // 🟢 Smart Positioning: ป้องกันล้นขอบล่างและขอบขวา
     const popupHeight = popup.offsetHeight;
     let top = rect.bottom + 8;
-    if (top + popupHeight > window.innerHeight) top = rect.top - popupHeight - 8;
+    
+    if (top + popupHeight > window.innerHeight - 10) top = rect.top - popupHeight - 8;
+    // 🟢 Prevent top overflow
+    top = Math.max(10, Math.min(top, window.innerHeight - popupHeight - 10));
     
     let left = rect.left;
     if (left + 180 > window.innerWidth) left = window.innerWidth - 190;
@@ -2077,6 +2358,56 @@ function updateSfTagName(oldName, newName) {
     flowState.currentFilterTags = flowState.currentFilterTags.map(t => t.toUpperCase() === oldName.toUpperCase() ? newName.toUpperCase() : t);
 
     saveFlow().then(() => renderSmartFlow(document.getElementById('smart-flow-container')));
+}
+
+/**
+ * 📄 คัดลอก Workflow Step
+ * @param {string} originalId - ID ของ Step ต้นฉบับที่ต้องการคัดลอก
+ */
+function duplicateFlowItem(originalId) {
+    const originalItemIndex = flowItems.findIndex(fi => fi.id === originalId);
+    if (originalItemIndex === -1) return;
+
+    const originalItem = flowItems[originalItemIndex];
+    // สร้างสำเนาแบบ Deep Copy เพื่อให้ข้อมูลแยกจากต้นฉบับอย่างสมบูรณ์
+    const duplicatedItem = JSON.parse(JSON.stringify(originalItem));
+
+    // กำหนด ID ใหม่ที่ไม่ซ้ำกัน
+    duplicatedItem.id = 'flow-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+    duplicatedItem.isCompleted = false; // รีเซ็ตสถานะเป็นยังไม่เสร็จ
+    delete duplicatedItem.isFailed;      // ล้างสถานะล้มเหลว
+    if (duplicatedItem.repeatConfig) duplicatedItem.repeatConfig.lastCompletedDate = null; // รีเซ็ตวันที่ทำล่าสุด
+
+    flowItems.splice(originalItemIndex + 1, 0, duplicatedItem); // แทรก Step ที่คัดลอกไว้ต่อจาก Step ต้นฉบับ
+    saveFlow().then(renderFlowList);
+}
+
+/**
+ * 🍬 สร้างเสียง 'Pop' เบาๆ เพื่อเป็นสัญญาณว่า Mini Popup ปรากฏแล้ว
+ */
+function playPopSound() {
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        
+        osc.type = 'sine';
+        // เริ่มต้นด้วยความถี่ต่ำแล้วพุ่งขึ้นสูงอย่างรวดเร็วเพื่อให้เกิดเสียง Pop
+        osc.frequency.setValueAtTime(400, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + 0.05);
+        
+        gain.gain.setValueAtTime(0, ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.08, ctx.currentTime + 0.01); // ตั้งค่าระดับเสียงที่ 0.08 เพื่อให้ดูนุ่มนวล
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+        
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        
+        osc.start();
+        osc.stop(ctx.currentTime + 0.1);
+    } catch (e) {
+        console.error("Pop sound playback failed", e);
+    }
 }
 
 function deleteSfTag(tagName) {

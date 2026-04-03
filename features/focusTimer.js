@@ -149,6 +149,7 @@ export function initFocusTimer() {
             statusText.innerHTML = `${svgFocusIcon} Focus Mode: ON`;
             statusText.style.color = '#10b981';
             setupArea.style.display = 'flex';
+            timeInput.value = state.duration || 25; // 🟢 แสดงเวลาที่ถูกตั้งค่ามาจาก Workflow
             lockOverlay.style.display = 'flex';
             overlayTitle.innerHTML = "🔒 Ready to Focus";
             overlayDesc.innerHTML = "Please set duration and confirm above<br>to unlock this space.";
@@ -193,7 +194,11 @@ export function initFocusTimer() {
                 if (space.focusTimer.timeLeft <= 0) {
                     space.focusTimer.mode = 'off';
                     space.focusTimer.timeLeft = 0;
-                    if (currentSpace && space.id === currentSpace.id) alert("🎉 Focus session ended! Great job.");
+                    if (currentSpace && space.id === currentSpace.id) {
+                        alert("🎉 Focus session ended! Great job.");
+                        renderUIForCurrentSpace(); // Render full UI only when state changes
+                        renderSidebar();
+                    }
                 }
                 saveData();
                 if (currentSpace && space.id === currentSpace.id) needsUpdate = true;
@@ -205,8 +210,10 @@ export function initFocusTimer() {
             window.refreshSidebarIcon();
         }
 
-        if (needsUpdate) renderUIForCurrentSpace();
-        if (needsUpdate) renderSidebar(); // Re-sort sidebar if current space changed state
+        // 🟢 Optimized: อัปเดตเฉพาะตัวเลขเวลา ไม่ต้อง Render ใหม่ทั้งแถบ
+        if (needsUpdate && currentSpace.focusTimer.mode === 'running') {
+            updateCountdownText(currentSpace.focusTimer.timeLeft);
+        }
     }, 1000);
 
     toggleBtn.addEventListener('click', () => {

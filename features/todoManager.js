@@ -60,12 +60,62 @@ function applyTaskSectionsOrder() {
     }
 }
 
+/** 🎵 Sound Helpers สำหรับความรู้สึก Premium */
+function playTaskAddedSound() {
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const playNote = (freq, start, duration, vol) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, start);
+            gain.gain.setValueAtTime(0, start);
+            gain.gain.linearRampToValueAtTime(vol, start + 0.01);
+            gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(start);
+            osc.stop(start + duration);
+        };
+        playNote(880, ctx.currentTime, 0.1, 0.05); // A5
+        playNote(1320, ctx.currentTime + 0.05, 0.15, 0.03); // E6
+    } catch (e) {}
+}
+
+function playTrashSound() {
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(150, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(40, ctx.currentTime + 0.2);
+        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.2);
+    } catch (e) {}
+}
+
 export function initTodoManager(callbacks) {
     fetchGoogleAPI = callbacks.fetchGoogleAPI;
     getGoogleAuthToken = callbacks.getGoogleAuthToken;
     getCurrentGoogleListId = callbacks.getCurrentGoogleListId;
     isGoogleSyncEnabled = callbacks.isGoogleSyncEnabled;
     onRenderCallback = callbacks.onRender;
+
+    // 🟢 Inject CSS สำหรับ Task Entry Animation
+    const style = document.createElement('style');
+    style.innerHTML = `
+        @keyframes taskEntry {
+            from { opacity: 0; transform: translateY(-8px) scale(0.98); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .task-item { animation: taskEntry 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
+    `;
+    document.head.appendChild(style);
 
     // Listen for background sync completion
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -233,11 +283,14 @@ export function initTodoManager(callbacks) {
     const btnSideGTasks = document.getElementById('btn-sf-tasks-side-view');
     const tasksCard = document.getElementById('tasks-card');
 
-    const updateGTaskViewUI = () => {
-        const settings = getAppSettings();
-        const isActive = !!settings.isGoogleTaskView;
+    // 🟢 ปรับปรุงให้ดึงค่าจาก Space แยกกัน และทำให้เรียกใช้ได้จากภายนอก
+    window.updateGTaskViewUI = () => {
+        const space = getCurrentSpace();
+        if (!space) return;
+
+        const isActive = !!space.isGoogleTaskView;
         if (tasksCard) tasksCard.classList.toggle('gtask-view-active', isActive);
-        if (btnSideGTasks) btnSideGTasks.classList.toggle('active-side-view', !!settings.isGoogleTaskSideView);
+        if (btnSideGTasks) btnSideGTasks.classList.toggle('active-side-view', !!space.isGoogleTaskSideView);
 
         // Update Toggle Button Content
         if (btnToggleGView) {
@@ -248,43 +301,54 @@ export function initTodoManager(callbacks) {
 
     if (btnToggleGView) {
         btnToggleGView.onclick = () => {
-            const settings = getAppSettings();
-            settings.isGoogleTaskView = !settings.isGoogleTaskView;
+            const space = getCurrentSpace();
+            if (!space) return;
+            space.isGoogleTaskView = !space.isGoogleTaskView;
             saveData();
-            updateGTaskViewUI();
+            window.updateGTaskViewUI();
         };
     }
 
-    // 🟢 แก้ไข: ใช้ Event Delegation และ stopImmediatePropagation เพื่อป้องกันตัวการ "แอบสั่งงาน" อื่นๆ
+    // 🟢 ตัวการใหญ่ 2 (Ultimate Delegation): จัดการทั้งปุ่ม Toggle และ Open ในที่เดียว
+    // แก้ไขปัญหาคำสั่งหลุดหายเมื่อ UI วาดใหม่ และใช้ Capture Phase (true) เพื่อดักหน้าคำสั่งอื่น
     document.addEventListener('click', (e) => {
-        const openBtn = e.target.closest('#btn-sf-open-tasks');
-        if (!openBtn) return;
+        const target = e.target;
 
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation(); // 🔴 หยุดการทำงานของ Listener อื่นๆ ที่อาจจะมาแอบดักจับ Class ของปุ่มนี้
+        // 1. จัดการปุ่ม Toggle (ไอคอนสี่เหลี่ยมแบ่งจอ) - บังคับให้เปลี่ยนสถานะ Class เสมอแม้ UI จะวาดใหม่
+        const sideToggleBtn = target.closest('#btn-sf-tasks-side-view');
+        if (sideToggleBtn) {
+            e.preventDefault(); e.stopPropagation();
+            const space = getCurrentSpace();
+            const targetStore = space || getAppSettings();
 
-        // 🟢 ดึงสถานะจากปุ่ม Toggle ตัวจริงในหน้าจอ (Real-time Lookup)
-        const realSideBtn = document.getElementById('btn-sf-tasks-side-view');
-        const isSideViewActive = realSideBtn && realSideBtn.classList.contains('active-side-view');
+            if (space?.isLocked) return;
 
-        if (isSideViewActive && window.splitViewManager) {
-            window.splitViewManager.open("https://tasks.google.com/", 'google-tasks-card');
-        } else {
-            openGoogleTasks(false);
+            targetStore.isGoogleTaskSideView = !targetStore.isGoogleTaskSideView;
+            saveData();
+            sideToggleBtn.classList.toggle('active-side-view', targetStore.isGoogleTaskSideView);
+            return;
+        }
+
+        // 2. จัดการปุ่ม Open Google Tasks
+        const openBtn = target.closest('#btn-sf-open-tasks');
+        if (openBtn) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation(); // 🔴 บังคับหยุดคำสั่งแอบแฝงอื่นๆ ทันที
+
+            const realSideBtn = document.getElementById('btn-sf-tasks-side-view');
+            const isSideViewActive = realSideBtn && realSideBtn.classList.contains('active-side-view');
+
+            if (isSideViewActive && window.splitViewManager) {
+                // 🚀 สั่งเปิดผ่าน Custom Split View Manager ของเราแทน Split View ของ Google
+                window.splitViewManager.open("https://tasks.google.com/", 'google-tasks-card');
+            } else {
+                openGoogleTasks(false);
+            }
         }
     }, true); // ใช้ capture phase เพื่อให้ดักได้เร็วที่สุด
 
-    if (btnSideGTasks) {
-        btnSideGTasks.onclick = () => {
-            const settings = getAppSettings();
-            settings.isGoogleTaskSideView = !settings.isGoogleTaskSideView;
-            saveData();
-            updateGTaskViewUI();
-        };
-    }
-
-    updateGTaskViewUI(); // เรียกใช้ครั้งแรกเพื่อรักษาสถานะเดิม
+    window.updateGTaskViewUI(); // เรียกใช้ครั้งแรกเพื่อรักษาสถานะเดิม
 
     // Edit Modal Events
     document.getElementById('btn-close-task-edit').addEventListener('click', () => { document.getElementById('task-edit-modal').style.display = 'none'; }); //
@@ -474,6 +538,7 @@ export function initTodoManager(callbacks) {
             const idx = parseInt(e.target.closest('.delete-task-btn').getAttribute('data-index')); 
             space.tasks[idx].isDeleted = true;
             space.tasks[idx].deletedAt = Date.now();
+            playTrashSound();
             const days = getAppSettings().autoDeleteDays || 30;
             space.tasks[idx].expiryAt = space.tasks[idx].deletedAt + (days * 24 * 60 * 60 * 1000);
             space.tasks[idx].completed = false; // เอากลับมาเป็นงานที่ยังไม่เสร็จเผื่อกู้คืน
@@ -706,68 +771,56 @@ export function initTodoManager(callbacks) {
                 const space = getCurrentSpace();
                 if (window.processRewardScanner && space?.tasks[index]) {
                     // ดึงตำแหน่งเมาส์ล่าสุดจาก Event e
-                    window.processRewardScanner(space.tasks[index].text, false, { x: e.clientX, y: e.clientY }, 'task', space.id);
+                    window.processRewardScanner(space.tasks[index].text, false, { x: e.clientX, y: e.clientY }, 'task', space.id, { tags: space.tasks[index].tags });
                 }
             }
 
+            // 🟢 อัปเดตข้อมูลทันที (ลดปัญหา Race Condition กับพื้นหลัง)
+            const space = getCurrentSpace();
+            const task = space?.tasks[index];
+            if (!task) return;
+
+            if (isChecked) {
+                const settings = getAppSettings();
+                if (settings.focusedTask && settings.focusedTask.spaceId === space.id && settings.focusedTask.createdAt === task.createdAt) {
+                    settings.focusedTask = null;
+                }
+                task.isDeleted = true;
+                task.deletedAt = Date.now();
+                const days = settings.autoDeleteDays || 30;
+                task.expiryAt = task.deletedAt + (days * 24 * 60 * 60 * 1000);
+                task.completed = false;
+                task.isProminent = false;
+                if (task.subtasks) task.subtasks.forEach(sub => { sub.isDeleted = true; sub.deletedAt = task.deletedAt; sub.expiryAt = task.expiryAt; sub.completed = false; });
+            } else {
+                task.completed = false;
+                task.completedAt = null;
+                task.isDeleted = false;
+                if (task.subtasks) task.subtasks.forEach(sub => { sub.isDeleted = false; sub.completed = false; });
+            }
+
+            // ☁️ Sync with Google Tasks (ใช้ targetListId ที่ถูกต้อง)
+            if (task.googleTaskId && getGoogleAuthToken()) {
+                const targetListId = getTargetListId(space);
+                fetchGoogleAPI(`/lists/${targetListId}/tasks/${task.googleTaskId}`, 'PATCH', { status: isChecked ? 'completed' : 'needsAction' });
+            }
+
+            // อัปเดตสถานะงานย่อยทั้งหมด
+            if (task.subtasks && task.subtasks.length > 0) {
+                task.subtasks.forEach(sub => {
+                    if (!sub) return;
+                    sub.completed = isChecked;
+                    if (sub.googleTaskId && getGoogleAuthToken()) {
+                        const targetListId = getCurrentGoogleListId(space);
+                        fetchGoogleAPI(`/lists/${targetListId}/tasks/${sub.googleTaskId}`, 'PATCH', { status: isChecked ? 'completed' : 'needsAction' });
+                    }
+                });
+            }
+
+            saveData(true); // บันทึกทันที
+
+            // 🟢 หน่วงเวลาเฉพาะการวาด UI เพื่อความสวยงาม
             setTimeout(() => {
-                const space = getCurrentSpace(); 
-                const task = space.tasks[index];
-                if (isChecked) {
-                    // Clear focus if completed
-                    const settings = getAppSettings();
-                    if (settings.focusedTask && settings.focusedTask.spaceId === space.id && settings.focusedTask.createdAt === task.createdAt) {
-                        settings.focusedTask = null;
-                    }
-
-                    task.isDeleted = true;
-                    task.deletedAt = Date.now();
-                    const days = getAppSettings().autoDeleteDays || 30;
-                    task.expiryAt = task.deletedAt + (days * 24 * 60 * 60 * 1000);
-                    task.completed = false; // เปลี่ยนเป็น false เพื่อให้กู้คืนมาเป็นงานปกติได้
-                    task.isProminent = false;
-                    // 🟢 NEW: Mark all subtasks as deleted as well
-                    if (task.subtasks) {
-                        task.subtasks.forEach(sub => {
-                            sub.isDeleted = true;
-                            sub.deletedAt = task.deletedAt;
-                            sub.expiryAt = task.expiryAt;
-                            sub.completed = false; // Subtasks should also be restorable as uncompleted
-                        });
-                    }
-                } else {
-                    task.completed = false;
-                    task.completedAt = null;
-                    task.isDeleted = false;
-                    // 🟢 NEW: Unmark all subtasks as deleted as well
-                    if (task.subtasks) {
-                        task.subtasks.forEach(sub => {
-                            sub.isDeleted = false;
-                            sub.deletedAt = null;
-                            sub.expiryAt = null;
-                            sub.completed = false;
-                        });
-                    }
-                }
-                
-                if (task.googleTaskId && getGoogleAuthToken()) { 
-                    const targetListId = getCurrentGoogleListId(space);
-                    fetchGoogleAPI(`/lists/${targetListId}/tasks/${task.googleTaskId}`, 'PATCH', { status: isChecked ? 'completed' : 'needsAction' }); 
-                }
-
-                // อัปเดตสถานะงานย่อยทั้งหมด
-                if (task.subtasks && task.subtasks.length > 0) {
-                    task.subtasks.forEach(sub => {
-                        if (!sub) return;
-                        sub.completed = isChecked;
-                        if (sub.googleTaskId && getGoogleAuthToken()) {
-                            const targetListId = getCurrentGoogleListId(space);
-                            fetchGoogleAPI(`/lists/${targetListId}/tasks/${sub.googleTaskId}`, 'PATCH', { status: isChecked ? 'completed' : 'needsAction' });
-                        }
-                    });
-                }
-
-                saveData(); 
                 onRenderCallback(); 
             }, isChecked ? 800 : 0);
         }
@@ -1346,7 +1399,8 @@ async function addTask() {
             if (gTask && gTask.id) { newTask.googleTaskId = gTask.id; } 
         }
         space.tasks.push(newTask); 
-        input.value = ''; dateInput.value = ''; input.disabled = false; input.placeholder = "Type a task..."; input.focus();
+        playTaskAddedSound();
+        input.value = ''; input.disabled = false; input.placeholder = "Type a task..."; input.focus();
         saveData(); 
         onRenderCallback(); 
     } 
@@ -1557,6 +1611,11 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
 
     // Update Google Task UI (Space-specific list settings)
     updateGoogleTaskUI(space);
+
+    // 🟢 อัปเดตโหมด Switch Google Task เฉพาะของ Space นี้เมื่อมีการ Render
+    if (typeof window.updateGTaskViewUI === 'function') {
+        window.updateGTaskViewUI();
+    }
 
     // ตรวจสอบและรีเซ็ตสถานะ Habit ของวันใหม่ก่อนคำนวณจำนวนงานบนปุ่ม
     checkAndResetHabits(space);

@@ -6,12 +6,15 @@ import { svgPencil, svgTrashRed } from '../core/icons.js';
 const svgMenu = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.7;"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>`;
 
 let areDefaultsVisible = true; // State สำหรับการซ่อน/แสดงป้าย Default
-let isSingleSelectMode = false; // State สำหรับโหมดเลือกป้ายกำกับ (False = Multi, True = Single)
 
 export function renderTagBar(space, currentFilterTags, currentFilterMode, callbacks) {
     const { onFilterChange, onRenderMain } = callbacks;
     const tagBarContainer = document.getElementById('tag-bar-container');
     if (!tagBarContainer || !space) return;
+    const isLocked = !!space.isTagModeLocked;
+
+    // 🟢 ดึงสถานะ Single/Multi จาก Space โดยตรง
+    const isSingle = !!space.isSingleSelectMode;
 
     // 1. ล้างข้อมูล
     tagBarContainer.innerHTML = '';
@@ -41,39 +44,61 @@ export function renderTagBar(space, currentFilterTags, currentFilterMode, callba
         const defaultsWrapper = document.createElement('div');
         defaultsWrapper.style = "display:flex; flex-wrap: wrap; gap: 8px; margin-right:12px; border-right:1px solid var(--border-color); padding-right:12px; align-items:center;";
 
+        // --- 🟢 สร้างกลุ่มปุ่มโหมด (Lock, Single/Multi, OR/AND) ---
+        const modeGroup = document.createElement('div');
+        modeGroup.style = "display: flex; align-items: center; gap: 4px; background: var(--bg-body); padding: 2px 6px; border-radius: 8px; border: 1px solid var(--border-color);";
+
+        // --- 0. ปุ่ม Lock ---
+        const lockBtn = document.createElement('button');
+        lockBtn.className = 'btn-icon';
+        lockBtn.title = isLocked ? 'Unlock Tag Settings' : 'Lock Tag Settings';
+        lockBtn.style = `color: ${isLocked ? '#ef4444' : '#10b981'}; opacity: ${isLocked ? '1' : '0.4'}; padding: 2px;`;
+        lockBtn.innerHTML = `<svg class="svg-icon-sm"><use href="#icon-${isLocked ? 'lock-minimal' : 'unlock-minimal'}"></use></svg>`;
+        lockBtn.onclick = () => {
+            space.isTagModeLocked = !space.isTagModeLocked;
+            saveData();
+            renderTagBar(space, currentFilterTags, currentFilterMode, callbacks);
+        };
+        modeGroup.appendChild(lockBtn);
+
         // --- 1. ปุ่มเลือกโหมดการเลือก (Select : Single / Multi) ---
         const selectBtn = document.createElement('button');
         selectBtn.className = 'btn-tag-mode';
-        selectBtn.style = 'padding: 2px 10px; font-size: 11px; border-radius: 4px; font-weight: bold; cursor: pointer; flex-shrink: 0; transition: all 0.2s;';
+        selectBtn.style = `padding: 2px 10px; font-size: 11px; border-radius: 4px; font-weight: bold; cursor: ${isLocked ? 'not-allowed' : 'pointer'}; flex-shrink: 0; transition: all 0.2s; opacity: ${isLocked ? '0.7' : '1'};`;
         
-        selectBtn.style.background = isSingleSelectMode ? '#f3e8ff' : '#dcfce7'; // Purple for Single, Green for Multi
-        selectBtn.style.color = isSingleSelectMode ? '#6b21a8' : '#166534';
-        selectBtn.style.border = `1px solid ${isSingleSelectMode ? '#6b21a8' : '#166534'}`;
-        selectBtn.innerHTML = isSingleSelectMode ? 'Select : Single' : 'Select : Multi';
+        selectBtn.style.background = isSingle ? '#f3e8ff' : '#dcfce7'; 
+        selectBtn.style.color = isSingle ? '#6b21a8' : '#166534';
+        selectBtn.style.border = `1px solid ${isSingle ? '#6b21a8' : '#166534'}`;
+        selectBtn.innerHTML = isSingle ? 'Single' : 'Multi';
 
         selectBtn.onclick = () => {
-            isSingleSelectMode = !isSingleSelectMode;
+            if (isLocked) return;
+            space.isSingleSelectMode = !isSingle;
+            saveData();
             renderTagBar(space, currentFilterTags, currentFilterMode, callbacks);
         };
-        defaultsWrapper.appendChild(selectBtn);
+        modeGroup.appendChild(selectBtn);
 
         // --- 2. ปุ่ม Mode (OR / AND) ---
         const modeBtn = document.createElement('button');
         modeBtn.className = 'btn-tag-mode'; 
         // ตัด margin-right ออก เพราะใช้ gap ของ parent แล้ว
-        modeBtn.style = 'padding: 2px 10px; font-size: 11px; border-radius: 4px; font-weight: bold; cursor: pointer; flex-shrink: 0; transition: all 0.2s;';
+        modeBtn.style = `padding: 2px 10px; font-size: 11px; border-radius: 4px; font-weight: bold; cursor: ${isLocked ? 'not-allowed' : 'pointer'}; flex-shrink: 0; transition: all 0.2s; opacity: ${isLocked ? '0.7' : '1'};`;
         
         const isOR = currentFilterMode === 'OR';
         modeBtn.style.background = isOR ? '#e3f2fd' : '#ffebee';
         modeBtn.style.color = isOR ? '#0b6e99' : '#991b1b';
         modeBtn.style.border = `1px solid ${isOR ? '#0b6e99' : '#991b1b'}`;
-        modeBtn.innerHTML = `Mode : ${currentFilterMode}`; 
+        modeBtn.innerHTML = currentFilterMode; 
 
         modeBtn.onclick = () => {
+            if (isLocked) return;
             const nextMode = currentFilterMode === 'OR' ? 'AND' : 'OR';
             onFilterChange(currentFilterTags, nextMode);
         };
-        defaultsWrapper.appendChild(modeBtn);
+        modeGroup.appendChild(modeBtn);
+
+        defaultsWrapper.appendChild(modeGroup); // ใส่กลุ่มโหมดเข้าไปใน Wrapper หลัก
 
         // Helper สร้าง Pill แบบมาตรฐานเดียวกันหมด
         const createPill = (label, value, isActive, onClick) => {
@@ -91,7 +116,7 @@ export function renderTagBar(space, currentFilterTags, currentFilterMode, callba
         const isUntagged = currentFilterTags.includes('UNTAGGED');
         defaultsWrapper.appendChild(createPill("🚫 No Tag", "UNTAGGED", isUntagged, () => {
              let newTags;
-             if (isSingleSelectMode) {
+             if (isSingle) {
                  newTags = isUntagged ? [] : ['UNTAGGED'];
              } else {
                  newTags = [...currentFilterTags];
@@ -105,7 +130,7 @@ export function renderTagBar(space, currentFilterTags, currentFilterMode, callba
         const isAi = currentFilterTags.includes('AI');
         defaultsWrapper.appendChild(createPill("🤖 AI", "AI", isAi, () => {
              let newTags;
-             if (isSingleSelectMode) {
+             if (isSingle) {
                  newTags = isAi ? [] : ['AI'];
              } else {
                  newTags = [...currentFilterTags];
@@ -119,7 +144,7 @@ export function renderTagBar(space, currentFilterTags, currentFilterMode, callba
         const isHalfScreen = currentFilterTags.includes('HALF SCREEN');
         defaultsWrapper.appendChild(createPill("💻 Half screen", "HALF SCREEN", isHalfScreen, () => {
              let newTags;
-             if (isSingleSelectMode) {
+             if (isSingle) {
                  newTags = isHalfScreen ? [] : ['HALF SCREEN'];
              } else {
                  newTags = [...currentFilterTags];
@@ -161,7 +186,7 @@ export function renderTagBar(space, currentFilterTags, currentFilterMode, callba
                 const tagUpper = tag.toUpperCase();
                 let newTags;
                 
-                if (isSingleSelectMode) {
+                if (isSingle) {
                     // Single Mode: ถ้าเลือกอยู่แล้วให้ยกเลิก (เป็นว่าง) ถ้ายังไม่เลือกให้เลือกแค่อันเดียว
                     newTags = currentFilterTags.includes(tagUpper) && currentFilterTags.length === 1 ? [] : [tagUpper];
                 } else {

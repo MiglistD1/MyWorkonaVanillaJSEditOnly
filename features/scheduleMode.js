@@ -12,6 +12,23 @@ export function initScheduleMode() {
     `;
     document.head.appendChild(style);
 
+function playToggleSound(isOn) {
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(isOn ? 1200 : 800, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(isOn ? 1600 : 600, ctx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.05, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.1);
+    } catch (e) {}
+}
+
     // Shared Minimal Icon (Calendar) - Adjusted size to fit
     const svgScheduleIcon = `<svg class="svg-icon" style="width:16px; height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>`;
     const svgClock = `<svg class="svg-icon" style="width:20px; height:20px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>`;
@@ -358,6 +375,7 @@ export function initScheduleMode() {
         if (!space) return;
         if (!space.schedule) space.schedule = { active: false, days: [], intervals: [{start:"09:00", end:"17:00"}] };
         space.schedule.active = !space.schedule.active;
+        playToggleSound(space.schedule.active);
         if(space.schedule.active && space.schedule.days.length === 0) {
              alert("Please configure schedule before enabling");
              openSettings();
@@ -372,8 +390,20 @@ export function initScheduleMode() {
     setInterval(() => {
         const space = getCurrentSpace();
         if (space && space.schedule && space.schedule.active) {
-            renderSidebar();
-            renderScheduleUI();
+            // 🟢 Optimized: แทนที่จะ Render ใหม่ทั้งหมด ให้คำนวณและอัปเดตเฉพาะ Text
+            const calc = calculateTime(space.schedule);
+            const timerEl = document.getElementById('schedule-timer-text');
+            const lockTimerEl = document.getElementById('schedule-lock-timer');
+            
+            if (timerEl && !calc.isLocked) timerEl.innerText = calc.text;
+            if (lockTimerEl && calc.isLocked) lockTimerEl.innerText = calc.text;
+            
+            // ตรวจสอบการสลับสถานะ Lock (ถ้าเปลี่ยนจาก Lock เป็น Unlocked หรือในทางกลับกัน ค่อย Render UI ใหม่)
+            const isCurrentlyLocked = (document.getElementById('schedule-lock-overlay').style.display === 'flex');
+            if (isCurrentlyLocked !== calc.isLocked) {
+                renderScheduleUI();
+                renderSidebar();
+            }
         }
     }, 1000);
 }

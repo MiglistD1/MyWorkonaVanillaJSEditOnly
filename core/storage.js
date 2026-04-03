@@ -80,8 +80,15 @@ export const getAppSettings = () => appSettings;
 export const getGlobalLaunchers = () => globalLaunchers;
 
 export const getLauncherTags = () => launcherTags;
-export const getFilterTags = () => currentFilterTags;
-export const getFilterMode = () => currentFilterMode;
+export const getFilterTags = () => currentFilterTags; 
+
+// 🟢 ปรับปรุงให้คืนค่า Filter Mode แยกตาม Space
+export const getFilterMode = () => {
+    const space = getCurrentSpace();
+    if (space) return space.currentFilterMode || 'OR';
+    return appSettings.masterFilterMode || 'OR'; // สำหรับ Command Center
+};
+
 export const getSearchQuery = () => currentSearchQuery;
 export const getEditingItemState = () => editingItemState;
 
@@ -93,7 +100,13 @@ export function setGlobalLaunchers(launchers) { globalLaunchers = launchers; }
 export function setLauncherTags(tags) { launcherTags = tags; }
 
 export function setFilterTags(tags) { currentFilterTags = tags; }
-export function setFilterMode(mode) { currentFilterMode = mode; }
+// 🟢 ปรับปรุงให้บันทึก Filter Mode แยกตาม Space
+export function setFilterMode(mode) { 
+    const space = getCurrentSpace();
+    if (space) space.currentFilterMode = mode;
+    else appSettings.masterFilterMode = mode;
+    currentFilterMode = mode; 
+}
 export function setSearchQuery(query) { currentSearchQuery = query; }
 export function setEditingItemState(type, index) { editingItemState = { type, index }; }
 

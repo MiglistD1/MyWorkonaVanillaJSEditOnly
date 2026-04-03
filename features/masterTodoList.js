@@ -39,7 +39,7 @@ export const masterTodoListState = {
     showOnlyFlagged: false,
     isProgressVisible: true,
     showMasterTaskActions: false,
-    isSingleSelectMode: false,
+    isSingleSelectMode: true,
     addingSubtaskToIndex: null,
     addingSubtaskToSpace: null,
     selectedQuickAddSpaceId: null
@@ -199,6 +199,11 @@ export function renderMasterTodoList(container) {
 }
 
 function renderProgressSection(allSpaces, totalTasks) {
+    // 🟢 ดึงค่าจาก appSettings (เพราะ Command Center คือพื้นที่กลาง)
+    const settings = getAppSettings();
+    const isSingle = settings.masterIsSingleSelectMode ?? masterTodoListState.isSingleSelectMode;
+    const isLocked = !!settings.masterIsModeLocked;
+
     return `
         <div class="master-progress-container">
             <div class="master-progress-info">
@@ -208,11 +213,16 @@ function renderProgressSection(allSpaces, totalTasks) {
                         title="${masterTodoListState.showOnlyFlagged ? 'Show All Tasks' : 'Show Only Flagged Tasks'}">
                         <svg class="svg-icon-sm"><use href="#icon-flag"></use></svg>
                     </button>
-                    <button id="btn-master-toggle-select-mode" 
-                        style="padding: 2px 8px; font-size: 10px; border-radius: 4px; font-weight: 700; cursor: pointer; transition: all 0.2s; 
-                        background: ${masterTodoListState.isSingleSelectMode ? '#f3e8ff' : '#dcfce7'}; color: ${masterTodoListState.isSingleSelectMode ? '#6b21a8' : '#166534'}; border: 1px solid ${masterTodoListState.isSingleSelectMode ? '#6b21a8' : '#166534'};">
-                        ${masterTodoListState.isSingleSelectMode ? 'Select : Single' : 'Select : Multi'}
-                    </button>
+                    <div style="display: flex; align-items: center; gap: 4px; background: var(--bg-body); padding: 2px 6px; border-radius: 8px; border: 1px solid var(--border-color);">
+                        <button id="btn-master-mode-lock" class="btn-icon" title="${isLocked ? 'Unlock Settings' : 'Lock Settings'}" style="color: ${isLocked ? '#ef4444' : '#10b981'}; opacity: ${isLocked ? '1' : '0.4'}; padding: 2px;">
+                            <svg class="svg-icon-sm"><use href="#icon-${isLocked ? 'lock-minimal' : 'unlock-minimal'}"></use></svg>
+                        </button>
+                        <button id="btn-master-toggle-select-mode" 
+                            style="padding: 2px 8px; font-size: 10px; border-radius: 4px; font-weight: 700; cursor: ${isLocked ? 'not-allowed' : 'pointer'}; transition: all 0.2s; 
+                            background: ${isSingle ? '#f3e8ff' : '#dcfce7'}; color: ${isSingle ? '#6b21a8' : '#166534'}; border: 1px solid ${isSingle ? '#6b21a8' : '#166534'}; opacity: ${isLocked ? '0.7' : '1'};">
+                            ${isSingle ? 'Single' : 'Multi'}
+                        </button>
+                    </div>
                     <select id="google-task-list-select-master" class="master-space-select" style="display: none; height: 20px; font-size: 10px; margin-left: 4px; padding: 0 4px; border-radius: 4px;"></select>
                 </div>
                 <span id="progress-text" style="font-weight: 700; color: var(--primary-color);"> ${masterTodoListState.showOnlyFlagged ? 'Flagged' : ''} Tasks Remaining</span>
@@ -349,7 +359,21 @@ function initMasterEvents() {
     if (filterFlagBtn) filterFlagBtn.onclick = () => { masterTodoListState.showOnlyFlagged = !masterTodoListState.showOnlyFlagged; onRefresh(); };
 
     const toggleSelectBtn = document.getElementById('btn-master-toggle-select-mode');
-    if (toggleSelectBtn) toggleSelectBtn.onclick = () => { masterTodoListState.isSingleSelectMode = !masterTodoListState.isSingleSelectMode; onRefresh(); };
+    if (toggleSelectBtn) toggleSelectBtn.onclick = () => { 
+        const settings = getAppSettings();
+        if (settings.masterIsModeLocked) return; // 🔒 ตรวจสอบการล็อค
+        settings.masterIsSingleSelectMode = !(settings.masterIsSingleSelectMode ?? masterTodoListState.isSingleSelectMode);
+        saveData();
+        onRefresh(); 
+    };
+
+    const lockBtn = document.getElementById('btn-master-mode-lock');
+    if (lockBtn) lockBtn.onclick = () => {
+        const settings = getAppSettings();
+        settings.masterIsModeLocked = !settings.masterIsModeLocked;
+        saveData();
+        onRefresh();
+    };
 
     const allPill = document.getElementById('btn-master-filter-all');
     if (allPill) allPill.onclick = () => { masterTodoListState.activeSpaceFilters.clear(); onRefresh(); };
@@ -358,7 +382,10 @@ function initMasterEvents() {
         if (pill.id === 'btn-master-filter-all') return;
         pill.onclick = (e) => {
             const sid = parseInt(pill.dataset.spaceId);
-            if (masterTodoListState.isSingleSelectMode) {
+            const settings = getAppSettings();
+            const isSingle = settings.masterIsSingleSelectMode ?? masterTodoListState.isSingleSelectMode;
+
+            if (isSingle) {
                 const isVisible = !masterTodoListState.activeSpaceFilters.has(sid);
                 const allSpaces = getSpaces().filter(s => !s.isArchived);
                 
@@ -433,14 +460,20 @@ function initMasterEvents() {
                 if (isChecked && taskItem && space && space.tasks[idx]) {
                     taskItem.classList.add('completed-hold');
                     if (window.processRewardScanner) {
-                        window.processRewardScanner(space.tasks[idx].text, false, { x: e.clientX, y: e.clientY }, 'task', space.id);
+                        window.processRewardScanner(space.tasks[idx].text, false, { x: e.clientX, y: e.clientY }, 'task', space.id, { tags: space.tasks[idx].tags });
                     }
                 }
 
                 if (space && space.tasks[idx]) {
                     const task = space.tasks[idx];
+                    
+                    // ☁️ Sync with Google Tasks (ใช้ List ID ตาม Space จริง)
                     const status = getGoogleStatus();
-                    if (task.googleTaskId && status.googleAuthToken && status.isGoogleSyncEnabled) fetchGoogleAPI(`/lists/${status.currentGoogleListId}/tasks/${task.googleTaskId}`, 'PATCH', { status: isChecked ? 'completed' : 'needsAction' });
+                    if (task.googleTaskId && status.googleAuthToken && status.isGoogleSyncEnabled) {
+                        const targetListId = getTargetListId(space);
+                        fetchGoogleAPI(`/lists/${targetListId}/tasks/${task.googleTaskId}`, 'PATCH', { status: isChecked ? 'completed' : 'needsAction' });
+                    }
+
                     if (isChecked) {
                         task.isDeleted = true;
                         task.deletedAt = Date.now();
@@ -452,7 +485,7 @@ function initMasterEvents() {
                         task.completed = false;
                         task.completedAt = null;
                     }
-                    saveData(); setTimeout(onRefresh, isChecked ? 800 : 0);
+                    saveData(true); setTimeout(onRefresh, isChecked ? 800 : 0);
                 }
             }
         });

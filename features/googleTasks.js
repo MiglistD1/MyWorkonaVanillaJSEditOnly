@@ -1,5 +1,5 @@
 // features/googleTasks.js
-import { saveData, getSpaces, getCurrentSpaceId, loadData, setCurrentSpaceId, getCurrentSpace } from '../core/storage.js';
+import { saveData, getSpaces, getCurrentSpaceId, loadData, setCurrentSpaceId, getCurrentSpace, getAppSettings } from '../core/storage.js';
 import { googleTasksIcon } from '../core/icons.js';
 
 let googleAuthToken = null;
@@ -105,6 +105,11 @@ export function initGoogleTasks(callbacks) {
                 updateLoginUI();
                 fetchGoogleLists();
             });
+        }
+
+        // Deep Sync & Remove Duplicates
+        if (e.target.closest('#btn-deep-sync-duplicates')) {
+            deepSyncAndRemoveDuplicates();
         }
     });
 
@@ -263,8 +268,6 @@ export async function syncAllGoogleTasks() {
         }
     });
 
-    const localTaskIds = new Set();
-
     for (const syncListId of listIdsToSync) {
         const data = await fetchGoogleAPI(`/lists/${syncListId}/tasks?showCompleted=true&showHidden=true`);
         if (!data || !data.items) continue;
@@ -282,13 +285,17 @@ export async function syncAllGoogleTasks() {
                 const t = tasks[i];
                 if (!t) continue; // Ensure task is not null or undefined
                 if (t.googleTaskId) {
-                    localTaskIds.add(t.googleTaskId);
                     const gt = googleMap[t.googleTaskId];
 
                     if (gt) {
                         // ซิงค์สถานะการเสร็จงาน
                         const isDone = gt.status === 'completed';
                         if (t.completed !== isDone) {
+                            // 🟢 หากงานเพิ่งเสร็จสมบูรณ์จาก Google Tasks ให้เรียกเครื่องสแกนรางวัล
+                            if (isDone && !t.completed && window.processRewardScanner) {
+                                window.processRewardScanner(t.text, false, null, 'task', currentSpace.id);
+                            }
+
                             t.completed = isDone;
                             t.isDeleted = false; // If Google says it's completed/uncompleted, it's not in local trash
                             t.completedAt = isDone ? (t.completedAt || Date.now()) : null;
@@ -319,9 +326,23 @@ export async function syncAllGoogleTasks() {
                             t.text = cleanTitleFromGoogle;
                             hasChanged = true;
                         }
+
+                        // 🟢 ซิงค์วันที่ (Sync Due Date) หากมีการแก้ไขใน Google Task
+                        const gDue = gt.due ? formatDate(gt.due) : null;
+                        if (t.dueDate !== gDue) {
+                            t.dueDate = gDue;
+                            hasChanged = true;
+                        }
                     } else {
-                        // งานใน Google หายไป -> ลบในแอปด้วย
-                        tasks.splice(i, 1);
+                        // 🔴 งานใน Google หายไป -> ย้ายลงถังขยะในแอป (แทนการลบถาวร) เพื่อให้สอดคล้องกับพฤติกรรมใน Web App
+                        t.isDeleted = true;
+                        t.deletedAt = Date.now();
+                        const settings = (typeof getAppSettings === 'function') ? getAppSettings() : { autoDeleteDays: 30 };
+                        const days = settings.autoDeleteDays || 30;
+                        t.expiryAt = t.deletedAt + (days * 24 * 60 * 60 * 1000);
+                        t.googleTaskId = null; // ตัดการเชื่อมต่อ
+                        t.completed = false; // ปรับสถานะเพื่อให้กู้คืนได้ง่าย
+
                         hasChanged = true;
                         continue;
                     }
@@ -333,50 +354,10 @@ export async function syncAllGoogleTasks() {
         allSpaces.forEach(space => { 
             if (space.tasks) processLocalTasks(space.tasks, space); 
         });
-
-        // --- ขั้นตอนที่ 2: ตรวจสอบงานใหม่จาก Google ที่ยังไม่มีในแอป ---
-        for (const gId in googleMap) {
-            if (!localTaskIds.has(gId)) {
-                const gt = googleMap[gId];
-                if (gt.status === 'completed' && !gt.title) continue; // ข้ามงานที่เสร็จแล้วและไม่มีชื่อ
-
-                const match = gt.title.match(/\(S: (.+?)\)$/);
-                let targetSpace = null;
-                let cleanTitle = gt.title;
-
-                if (match) {
-                    targetSpace = allSpaces.find(s => s.name === match[1]);
-                    cleanTitle = gt.title.substring(0, gt.title.length - match[0].length).trim();
-                }
-
-                if (!targetSpace) {
-                    targetSpace = allSpaces.find(s => {
-                        const sListId = s.isSpecificListEnabled ? (s.googleTaskListId || listId) : listId;
-                        return sListId === syncListId;
-                    });
-                }
-
-                if (targetSpace) {
-                    if (!targetSpace.tasks) targetSpace.tasks = [];
-                    targetSpace.tasks.push({
-                        text: cleanTitle,
-                        completed: gt.status === 'completed',
-                        isDeleted: false, // Newly added tasks from Google are never deleted
-                        dueDate: gt.due ? formatDate(gt.due) : null,
-                        createdAt: Date.now(),
-                        googleTaskId: gt.id,
-                        isProminent: false,
-                        tags: [],
-                        subtasks: []
-                    });
-                    hasChanged = true;
-                }
-            }
-        }
     }
 
     if (hasChanged) {
-        saveData();
+        saveData(true); // 🟢 ใช้โหมดบันทึกทันที (Immediate) เพื่อป้องกันหน้าจอดึงข้อมูลเก่าไปวาดใหม่ก่อนเซฟเสร็จ
     }
     // แจ้งเตือน UI ว่าซิงค์เสร็จสิ้น
     chrome.runtime.sendMessage({ type: 'GOOGLE_TASKS_SYNC_COMPLETE' }).catch(() => {});
@@ -437,7 +418,111 @@ const formatDate = (dateString) => {
 };
 
 export const getGoogleAuthToken = () => googleAuthToken;
-export const getCurrentGoogleListId = () => currentGoogleListId;
+/** 🎯 ฟังก์ชันหา List ID ที่ถูกต้องสำหรับ Space (ใช้ทั้ง Global และ Specific) */
+export const getCurrentGoogleListId = (space) => {
+    if (space && space.isSpecificListEnabled && space.googleTaskListId) {
+        return space.googleTaskListId;
+    }
+    return currentGoogleListId;
+}
+
+/**
+ * 🛠️ Deep Sync: Scans Google Tasks for duplicates and removes them.
+ * Prioritizes tasks linked to local items.
+ */
+export async function deepSyncAndRemoveDuplicates() {
+    if (!confirm("⚠️ Deep Sync & Remove Duplicates?\n\nThis will scan all your Google Task lists linked to this app, identify duplicate tasks (based on title), and delete all but one instance of each duplicate. Tasks linked to your local app data will be prioritized. This action cannot be undone.")) return;
+
+    const status = getGoogleStatus();
+    if (!status.googleAuthToken) {
+        alert("Please connect to Google Tasks first.");
+        return;
+    }
+
+    const allSpaces = getSpaces();
+    const listIdsToSync = new Set([status.currentGoogleListId]);
+    allSpaces.forEach(s => {
+        if (s.isSpecificListEnabled && s.googleTaskListId) {
+            listIdsToSync.add(s.googleTaskListId);
+        }
+    });
+
+    let totalDeleted = 0;
+    let errors = 0;
+
+    for (const listId of listIdsToSync) {
+        try {
+            const data = await fetchGoogleAPI(`/lists/${listId}/tasks?showCompleted=false&showHidden=false`);
+            if (!data || !data.items) continue;
+
+            const tasksInList = data.items;
+            const duplicatesMap = new Map(); // Map<normalizedTitle, GoogleTask[]>
+
+            tasksInList.forEach(task => {
+                const normalizedTitle = task.title.toLowerCase().trim();
+                if (!duplicatesMap.has(normalizedTitle)) {
+                    duplicatesMap.set(normalizedTitle, []);
+                }
+                duplicatesMap.get(normalizedTitle).push(task);
+            });
+
+            for (const [title, tasks] of duplicatesMap.entries()) {
+                if (tasks.length <= 1) continue; // Not a duplicate
+
+                console.log(`Found duplicates for "${title}":`, tasks.map(t => t.id));
+
+                let tasksToKeep = [];
+                let tasksToDelete = [];
+
+                // Prioritize tasks linked to local data
+                let linkedTasks = [];
+                tasks.forEach(gTask => {
+                    let isLinkedLocally = false;
+                    allSpaces.some(space => {
+                        const checkTasks = (localTasks) => {
+                            return localTasks.some(lTask => {
+                                if (lTask.googleTaskId === gTask.id) {
+                                    isLinkedLocally = true;
+                                    return true;
+                                }
+                                if (lTask.subtasks) return checkTasks(lTask.subtasks);
+                                return false;
+                            });
+                        };
+                        return checkTasks(space.tasks || []);
+                    });
+                    if (isLinkedLocally) linkedTasks.push(gTask);
+                    else tasksToDelete.push(gTask); // Initially mark unlinked as candidates for deletion
+                });
+
+                if (linkedTasks.length > 0) tasksToKeep.push(linkedTasks[0]); // Keep the first linked task
+                else tasksToKeep.push(tasks.sort((a, b) => (a.updated ? new Date(a.updated).getTime() : 0) - (b.updated ? new Date(b.updated).getTime() : 0) || a.id.localeCompare(b.id))[0]); // Keep oldest if no local link
+                
+                tasksToDelete = tasksToDelete.concat(tasks.filter(t => !tasksToKeep.includes(t)));
+
+                for (const taskToDelete of tasksToDelete) {
+                    try {
+                        await fetchGoogleAPI(`/lists/${listId}/tasks/${taskToDelete.id}`, 'DELETE');
+                        totalDeleted++;
+                    } catch (deleteError) {
+                        console.error(`Failed to delete Google Task ${taskToDelete.id} from list ${listId}:`, deleteError);
+                        errors++;
+                    }
+                }
+            }
+        } catch (listError) {
+            console.error(`Failed to fetch tasks for list ${listId}:`, listError);
+            errors++;
+        }
+    }
+
+    if (totalDeleted > 0) {
+        alert(`Deep Sync complete. ${totalDeleted} duplicate tasks deleted from Google Tasks. ${errors} errors encountered.`);
+        await syncAllGoogleTasks(); // Trigger a full sync to update local state after deletions
+    } else {
+        alert(`Deep Sync complete. No duplicate tasks found. ${errors} errors encountered.`);
+    }
+}
 export const getIsGoogleSyncEnabled = () => isGoogleSyncEnabled; // เปลี่ยนชื่อเพื่อหลีกเลี่ยงความขัดแย้ง
 export const getGoogleStatus = () => ({ googleAuthToken, isGoogleSyncEnabled, currentGoogleListId }); // เก็บไว้เพื่อความเข้ากันได้ย้อนหลังหากโมดูลอื่นใช้
 

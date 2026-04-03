@@ -12,6 +12,32 @@ let editingSpaceId = null;
 let sidebarSortables = [];
 let sortTimeout = null;
 
+// 🔗 Cache สำหรับเก็บข้อมูลของ Space ที่ถูกเชื่อมต่อกับ Smart Flow (ชื่อ Step และลำดับ)
+let linkedSpaceInfoCache = {};
+
+// โหลดข้อมูลเบื้องต้นและดักฟังการเปลี่ยนแปลงจาก Smart Flow
+chrome.storage.local.get(['smartFlowItems'], (res) => {
+    if (res.smartFlowItems) {
+        linkedSpaceInfoCache = {};
+        res.smartFlowItems.forEach((item, index) => {
+            if (item.linkedSpaceId) {
+                linkedSpaceInfoCache[String(item.linkedSpaceId)] = { title: item.title, index: index + 1, isCompleted: !!item.isCompleted };
+            }
+        });
+    }
+});
+chrome.storage.onChanged.addListener((changes) => {
+    if (changes.smartFlowItems) {
+        linkedSpaceInfoCache = {};
+        (changes.smartFlowItems.newValue || []).forEach((item, index) => {
+            if (item.linkedSpaceId) {
+                linkedSpaceInfoCache[String(item.linkedSpaceId)] = { title: item.title, index: index + 1, isCompleted: !!item.isCompleted };
+            }
+        });
+        renderSidebar(); // 🟢 รีเฟรชทันทีเมื่อมีการเปลี่ยนการเชื่อมต่อใน Smart Flow
+    }
+});
+
 /**
  * Synchronizes the spaces array with the current DOM order in the sidebar.
  * Also updates folder property and archive status based on DOM location.
@@ -72,6 +98,26 @@ const svgMenu = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" str
 export function initSidebar(callbacks) {
     onSpaceChangeCallback = callbacks.onSpaceChange;
     window.refreshSidebarIcon = refreshSidebarIcon; 
+
+    // 🟢 Premium UI Transitions
+    const style = document.createElement('style');
+    style.innerHTML = `
+        .folder-content {
+            max-height: 2000px;
+            overflow: hidden;
+            transition: max-height 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+        }
+        .space-item { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        .space-item:hover { transform: translateX(5px); background: var(--hover-bg); }
+        
+        @keyframes glow-working {
+            0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+            70% { box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+        .is-working .status-indicator { animation: glow-working 2s infinite; border-radius: 50%; }
+    `;
+    document.head.appendChild(style);
 
     const btnAddFolder = document.getElementById('btn-add-folder');
     if (btnAddFolder) {
@@ -160,13 +206,13 @@ function getCombinedStatus(space) {
             return { 
                 active: true, type: 'focus', isLocked: false, timeText: timeText,
                 color: '#10b981', bg: '#ecfdf5', border: '#10b981', 
-                icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>`
+                icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>`
             };
         } else if (space.focusTimer.mode === 'paused') {
             return { 
                 active: true, type: 'focus-paused', isLocked: true, timeText: 'PAUSED',
                 color: '#f59e0b', bg: '#fffbeb', border: '#f59e0b',
-                icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>`
+                icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>`
             };
         }
     }
@@ -179,14 +225,14 @@ function getCombinedStatus(space) {
                 return {
                     active: true, type: 'schedule-locked', isLocked: true, timeText: scheduleTime.text,
                     color: '#991b1b', bg: '#fef2f2', border: '#ef4444',
-                    icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>`
+                    icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>`
                 };
             } else { // is not locked, so it's active
                 return {
                     active: true, type: 'schedule-active', isLocked: false,
                     timeText: scheduleTime.text,
                     color: '#15803d', bg: '#f0fdf4', border: '#22c55e',
-                    icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>`
+                    icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>`
                 };
             }
         }
@@ -294,8 +340,16 @@ export function renderSidebar() {
         // Create structure with placeholders for status
         const countdown = space.isDeleted ? getTrashCountdownText(space, getAppSettings().autoDeleteDays) : "";
         const countdownHTML = space.isDeleted ? `<span style="color:#dc2626; font-size:10px; font-weight:700; margin-left:auto; margin-right:8px;">${countdown}</span>` : "";
+        const pinnedBadge = space.isPinned ? `<div class="pinned-badge" title="Pinned">${svgPin}</div>` : "";
+
+        // 🔗 ตรวจสอบสถานะการเชื่อมต่อ Smart Flow
+        const linkedInfo = linkedSpaceInfoCache[String(space.id)];
+        const isLinked = !!linkedInfo;
+        const chainIconHTML = isLinked ? `<svg class="sf-link-icon sidebar-sf-link-icon ${linkedInfo.isCompleted ? 'is-completed' : ''}" title="Step #${linkedInfo.index}: ${linkedInfo.title}${linkedInfo.isCompleted ? ' (Completed)' : ''}" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>` : "";
 
         div.innerHTML = `
+            ${chainIconHTML}
+            ${pinnedBadge}
             <div class="space-info" style="display:flex; align-items:center; flex:1; overflow:hidden; cursor:pointer; min-height: 24px;">
                 <div class="space-icon-wrapper" style="flex-shrink:0; display:flex; align-items:center;">
                     ${iconHTML}
@@ -400,6 +454,7 @@ export function renderSidebar() {
                 </svg>
                 ${fIconHTML}
                 <span class="folder-name-text" style="overflow:hidden; text-overflow:ellipsis;">${folderName}</span>
+                <span class="folder-count-badge" style="opacity:0.5; font-weight:400; font-size:10px; margin-left:2px;">(${groups[folderName].length})</span>
             </div>
             <div class="folder-actions" style="display:none; gap:4px;">
                 <button class="btn-icon add-space-to-folder-btn" title="Add Space to this Folder" style="padding:4px; font-size:18px;">+</button>

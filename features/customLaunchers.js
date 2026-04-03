@@ -228,6 +228,13 @@ function createLauncherBtn(item) {
         btn.className = 'launcher-btn';
         btn.setAttribute('data-id', item.id); // ใช้สำหรับ Sortable
         
+        // 🟢 Premium Hover Interaction
+        btn.style.transition = 'all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)';
+        btn.onmouseenter = () => { btn.style.transform = 'scale(1.15) translateY(-3px)'; btn.style.boxShadow = '0 10px 20px rgba(0,0,0,0.15)'; };
+        btn.onmouseleave = () => { btn.style.transform = 'scale(1)'; btn.style.boxShadow = 'none'; };
+        btn.onmousedown = () => { btn.style.transform = 'scale(0.9)'; };
+        btn.onmouseup = () => { btn.style.transform = 'scale(1.15) translateY(-3px)'; };
+
         const tooltip = item.name || item.url;
         btn.title = item.tag ? `${tooltip} (${item.tag})` : tooltip;
         btn.style.backgroundColor = item.bgColor || '#ffffff';
