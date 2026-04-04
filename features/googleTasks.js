@@ -111,6 +111,11 @@ export function initGoogleTasks(callbacks) {
         if (e.target.closest('#btn-deep-sync-duplicates')) {
             deepSyncAndRemoveDuplicates();
         }
+
+        // 🟢 เพิ่มตัวดักจับคลิกสำหรับปุ่ม Reset All sync IDs
+        if (e.target.closest('#btn-reset-all-sync-ids')) {
+            resetAllSyncIds();
+        }
     });
 
     // 4. ตรวจสอบ Token เงียบๆ (Silent Auth) - to refresh token or initial load if not in storage
@@ -522,6 +527,35 @@ export async function deepSyncAndRemoveDuplicates() {
     } else {
         alert(`Deep Sync complete. No duplicate tasks found. ${errors} errors encountered.`);
     }
+}
+
+/**
+ * 🔌 Reset All Sync IDs: ล้าง googleTaskId ออกจากทุกงานในทุก Space
+ * เพื่อตัดการเชื่อมต่อและเริ่มซิงค์ใหม่สำหรับงานที่เจอปัญหา
+ */
+export async function resetAllSyncIds() {
+    if (!confirm("⚠️ Reset All Sync IDs?\n\nการดำเนินการนี้จะตัดการเชื่อมต่อระหว่างงานในแอปกับ Google Tasks ทั้งหมด (แต่จะไม่ลบงานทิ้ง) เหมาะสำหรับใช้แก้ปัญหาเวลาข้อมูลไม่ตรงกันหรือหาคู่ซิงค์ไม่เจอ\n\nต้องการดำเนินการต่อหรือไม่?")) return;
+
+    const allSpaces = getSpaces();
+    let count = 0;
+
+    const processList = (tasks) => {
+        tasks.forEach(t => {
+            if (t && t.googleTaskId) {
+                t.googleTaskId = null;
+                count++;
+            }
+            if (t && t.subtasks) processList(t.subtasks);
+        });
+    };
+
+    allSpaces.forEach(space => {
+        if (space.tasks) processList(space.tasks);
+    });
+
+    saveData(true);
+    alert(`ดำเนินการรีเซ็ตเรียบร้อย ตัดการเชื่อมต่อทั้งหมด ${count} รายการ`);
+    if (onRenderRef) onRenderRef();
 }
 export const getIsGoogleSyncEnabled = () => isGoogleSyncEnabled; // เปลี่ยนชื่อเพื่อหลีกเลี่ยงความขัดแย้ง
 export const getGoogleStatus = () => ({ googleAuthToken, isGoogleSyncEnabled, currentGoogleListId }); // เก็บไว้เพื่อความเข้ากันได้ย้อนหลังหากโมดูลอื่นใช้

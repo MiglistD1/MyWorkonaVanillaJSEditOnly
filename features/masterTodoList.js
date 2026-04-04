@@ -29,6 +29,26 @@ import { generateTaskHTML, attachSubtaskEventListeners, attachTaskInlineEditList
 import { renderSidebar } from '../components/sidebar.js';
 import { updateKeepTagButtonState } from './googleKeep.js';
 
+/** 🟢 Helper: จัดลำดับงานตามเงื่อนไขที่เลือก (เฉพาะ Main Tasks) */
+function sortSpaceTasks(space) {
+    if (!space || !space.tasks || !space.taskSortOrder || space.taskSortOrder === 'manual') return;
+
+    space.tasks.sort((a, b) => {
+        // 1. ให้งานติดธง (isProminent) อยู่บนสุดเสมอ
+        if (a.isProminent && !b.isProminent) return -1;
+        if (!a.isProminent && b.isProminent) return 1;
+
+        if (space.taskSortOrder === 'name') {
+            return (a.text || "").localeCompare(b.text || "");
+        } else if (space.taskSortOrder === 'date') {
+            const d1 = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
+            const d2 = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
+            return d1 - d2;
+        }
+        return 0;
+    });
+}
+
 const computerIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="12" y1="17" x2="12" y2="21"></line><line x1="8" y1="21" x2="16" y2="21"></line></svg>`;
 
 /**
@@ -84,6 +104,12 @@ export function renderMasterHeaderControls() {
  */
 export function renderMasterTodoList(container) {
     if (!container) return;
+
+    // 🛑 ป้องกัน UI เอ๋อในหน้า Command Center: ห้ามวาดใหม่ขณะพิมพ์
+    if (document.activeElement && document.activeElement.classList.contains('task-actual-text')) {
+        console.log("Master Render skipped: User is typing.");
+        return;
+    }
 
     const allSpaces = getSpaces().filter(s => !s.isArchived && !s.isDeleted);
     let totalTasks = 0;
@@ -250,12 +276,16 @@ function renderTaskGroups(allSpaces) {
         const tasks = space.tasks || [];
         const isSpaceProminentHidden = space.hideProminentTasks || false;
         
+        // 🟢 จัดเรียงตามคำสั่งของ Space ก่อนกรอง
+        if (space.taskSortOrder && space.taskSortOrder !== 'manual') sortSpaceTasks(space);
+
         let displayTasks = tasks.filter(t => t && !t.completed && !t.isDeleted);
         if (masterTodoListState.showOnlyFlagged) {
             displayTasks = displayTasks.filter(t => t && t.isProminent);
         }
         
         if (displayTasks.length === 0) return '';
+        const currentSort = space.taskSortOrder || 'manual';
 
         return `
             <details class="task-group-details" data-space-id="${space.id}" ${isHidden ? 'style="display:none;"' : 'open'}>
@@ -266,6 +296,11 @@ function renderTaskGroups(allSpaces) {
                             <svg class="svg-icon-sm" style="color: ${isSpaceProminentHidden ? 'inherit' : 'var(--primary-color)'};"><use href="#icon-flag"></use></svg>
                         </button>
                         <button class="btn btn-outline btn-master-goto-space" data-space-id="${space.id}" style="padding: 2px 8px; font-size: 10px; height: 20px; border-radius: 4px; font-weight: 600; margin-left: 4px;">open space</button>
+                        <select class="btn-master-space-sort" data-space-id="${space.id}" title="Sort Space Tasks" style="font-family: var(--app-font); font-size: 9px; font-weight: 700; padding: 1px 6px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-body); color: var(--text-main); cursor: pointer; outline: none; margin-left: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
+                            <option value="manual" ${currentSort === 'manual' ? 'selected' : ''}>⇅ Man</option>
+                            <option value="date" ${currentSort === 'date' ? 'selected' : ''}>📅 Date</option>
+                            <option value="name" ${currentSort === 'name' ? 'selected' : ''}>🔤 Name</option>
+                        </select>
                     </div>
                     <span class="group-chevron"></span>
                 </summary>
@@ -342,6 +377,7 @@ function initMasterEvents() {
                 if (gTask && gTask.id) newTask.googleTaskId = gTask.id;
             }
             targetSpace.tasks.push(newTask);
+            if (targetSpace.taskSortOrder && targetSpace.taskSortOrder !== 'manual') sortSpaceTasks(targetSpace);
             taskInput.value = ''; taskInput.disabled = false; taskInput.placeholder = "Quick add task...";
             saveData(); onRefresh();
         }
@@ -406,6 +442,20 @@ function initMasterEvents() {
     });
 
     if (groupContainer) {
+        // 🟢 จัดการการเปลี่ยนเงื่อนไขการเรียงใน Master View
+        groupContainer.addEventListener('change', (e) => {
+            if (e.target.classList.contains('btn-master-space-sort')) {
+                const sid = parseInt(e.target.dataset.spaceId);
+                const val = e.target.value;
+                const space = getSpaces().find(s => s.id === sid);
+                if (space) {
+                    space.taskSortOrder = val;
+                    if (val !== 'manual') sortSpaceTasks(space);
+                    saveData(true); onRefresh();
+                }
+            }
+        });
+
         // 🟢 จัดการการกดปุ่มในช่อง Add Subtask (Enter เพื่อสร้างต่อ, Escape เพื่อยกเลิก)
         groupContainer.addEventListener('keydown', (e) => {
             const input = e.target;
@@ -484,8 +534,16 @@ function initMasterEvents() {
                     } else {
                         task.completed = false;
                         task.completedAt = null;
+                        task.isDeleted = false; // 🟢 กู้คืนจากถังขยะเมื่อเอาเครื่องหมายถูกออก (Restore)
+                        task.deletedAt = null;
+                        task.expiryAt = null;
+
+                        // 🟢 ย้ายไปไว้บนสุดของ Space นั้นๆ เพื่อให้เห็นผลทันทีใน Command Center
+                        const [restoredTask] = space.tasks.splice(idx, 1);
+                        space.tasks.unshift(restoredTask);
                     }
-                    saveData(true); setTimeout(onRefresh, isChecked ? 800 : 0);
+                    saveData(true); 
+                    onRefresh(); // 🟢 เอาการหน่วงเวลาออกเพื่อให้ทำงานทันที
                 }
             }
         });
@@ -746,16 +804,29 @@ function initMasterEvents() {
             else if (target.closest('.delete-task-btn')) {
                 if (confirm("Delete this task?")) {
                     const space = getSpaces().find(s => s.id === spaceId);
-                    if (space) { space.tasks.splice(taskIndex, 1); saveData(); setCurrentSpaceId(0); onRefresh(); }
+                    if (space) { 
+                        const task = space.tasks[taskIndex];
+                        // ☁️ ส่งคำสั่งลบไปยัง Google Tasks ทันที
+                        if (task.googleTaskId && getGoogleAuthToken()) {
+                            const listId = getTargetListId(space);
+                            fetchGoogleAPI(`/lists/${listId}/tasks/${task.googleTaskId}`, 'DELETE');
+                        }
+                        space.tasks.splice(taskIndex, 1); saveData(); setCurrentSpaceId(0); onRefresh(); 
+                    }
                 } else setCurrentSpaceId(0);
             }
         });
 
         // 🟢 เปิดใช้งาน Drag & Drop สำหรับงานในหน้า Master List (ลากข้ามกลุ่ม Space ได้)
         const initListSortable = (el) => {
+            const sid = parseInt(el.closest('.task-group-details')?.dataset.spaceId || el.dataset.spaceId);
+            const space = getSpaces().find(s => s.id === sid);
+            const isManual = !space || (space.taskSortOrder || 'manual') === 'manual';
+
             Sortable.create(el, {
                 group: 'nested-tasks', // ใช้กลุ่มเดียวกันเพื่อให้สามารถลากงานข้ามกลุ่ม Space หรือข้ามไปเป็น Subtask ได้
                 animation: 150,
+                disabled: !isManual,
                 handle: '.drag-handle',
                 draggable: '.task-item',
                 ghostClass: 'sortable-ghost',

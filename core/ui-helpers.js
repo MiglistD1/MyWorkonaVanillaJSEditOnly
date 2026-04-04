@@ -235,7 +235,7 @@ export function generateTaskHTML(task, index, {
                 <label class="google-task-checkbox">
                     <input type="checkbox" class="${checkboxClass}" ${checkboxDataAttrs} checked>
                     <div class="checkmark-circle">
-                        <svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg>
+                        <svg style="display:block; opacity:1; transform:scale(1);" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg>
                     </div>
                 </label>
                 <div style="flex: 1; min-width: 0; display: flex; align-items: center;">
@@ -243,6 +243,7 @@ export function generateTaskHTML(task, index, {
                 </div>
                 <div class="item-action-group" style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-left: auto;">
                     <span style="color:#ef4444; font-size:11px; font-weight:700; margin-right:8px;">${countdown}</span>
+                    <button class="btn-icon restore-task-btn" data-index="${index}" ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="Restore Task">${svgRestore}</button>
                     <button class="btn-icon delete-task-perm-btn" data-index="${index}" ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="Delete Permanently">${svgTrashRed}</button>
                 </div>
             </div>
@@ -281,6 +282,7 @@ export function generateTaskHTML(task, index, {
         const countdown = getTrashCountdownText(task, getAppSettings().autoDeleteDays);
         collapsibleActionsContent = `
             <span style="color:#ef4444; font-size:11px; font-weight:700; margin-right:8px;">${countdown}</span>
+            <button class="btn-icon restore-task-btn" data-index="${index}" ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="Restore Task">${svgRestore}</button>
             ${isSubtask ? `
                 <button class="btn-icon delete-subtask-perm-btn" data-parent-index="${parentIndex}" data-sub-index="${index}" data-id="${task.id}" title="Delete Permanently">${svgTrashRed}</button>
             ` : `
@@ -498,8 +500,9 @@ export function attachTaskInlineEditListeners(container, getSpaceFn, callbacks =
                     if (newText === "" && extracted.length > 0) newText = extracted[0];
                 }
 
-                // 🟢 หากช่องชื่อว่างเปล่าและกด Enter ให้ลบ Task นั้นทิ้งอัตโนมัติ
-                if (newText === "" && wasEnter && typeof callbacks.onDeleteEmptyTask === 'function') {
+                // ️ ป้องกันงานหาย: ลบเฉพาะเมื่อ "ตั้งใจ" ปล่อยว่างจริงๆ (Original ก็ว่าง) 
+                // หากเดิมมีข้อความอยู่แล้วจังหวะ enter มันว่าง (เพราะเอ๋อ) ให้คืนค่าเดิมแทนการลบ
+                if (newText === "" && wasEnter && taskObj.text === "" && typeof callbacks.onDeleteEmptyTask === 'function') {
                     callbacks.onDeleteEmptyTask(space, idx, type, li);
                     return;
                 }
@@ -566,7 +569,8 @@ export function applySyntaxHighlighting(el) {
         }
     }
 
-    const text = el.innerText;
+    // 🟢 ใช้ textContent แทน innerText เพื่อลดการ Layout Reflow ทำให้ทำงานเร็วขึ้น
+    const text = el.textContent;
     const escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const highlighted = escaped
         .replace(/(@รางวัล([\d.]+)(บาท|นาที|อัน)_([^\s]+))/gi, (match, p1, p2, p3, p4) => {

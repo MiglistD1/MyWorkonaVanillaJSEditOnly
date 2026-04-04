@@ -61,8 +61,11 @@ export function renderDashboardQuickNote() {
             </div>
             <div class="note-controls" style="display:flex; gap: 4px; align-items: center;">
                 <button class="btn-icon" id="db-note-pin" title="Pin note to stay visible in all spaces" style="color: ${state.isPinned ? 'var(--primary-color)' : 'inherit'}; opacity: ${state.isPinned ? '1' : '0.5'}"><svg class="svg-icon-sm"><use href="#icon-pin"></use></svg></button>
-                <button class="btn-icon" id="db-note-keep-toggle" title="Toggle Google Keep Mode" style="opacity: ${isKeepMode ? '1' : '0.5'}"><svg class="svg-icon-sm"><use href="#icon-keep"></use></svg></button>
-                <button class="btn-icon" id="db-note-keep-edit" title="Change Keep Link" style="display: ${isKeepMode && state.keepUrl ? 'inline-flex' : 'none'};"><svg class="svg-icon-sm"><use href="#icon-edit"></use></svg></button>
+                <div class="keep-btn-group" style="display: flex; gap: 2px; background: rgba(245, 158, 11, 0.15); padding: 2px; border-radius: 6px; border: 1px solid rgba(245, 158, 11, 0.2);">
+                    <button class="btn-icon" id="db-note-keep-toggle" title="Toggle Google Keep Mode" style="opacity: ${isKeepMode ? '1' : '0.5'}"><svg class="svg-icon-sm"><use href="#icon-keep"></use></svg></button>
+                    <button class="btn-icon" id="db-note-keep-external" title="Open in New Tab" style="display: ${isKeepMode && state.keepUrl ? 'inline-flex' : 'none'}; color: #d97706;"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="11" x2="21" y2="3"></line></svg></button>
+                    <button class="btn-icon" id="db-note-keep-edit" title="Change Keep Link" style="display: ${isKeepMode && state.keepUrl ? 'inline-flex' : 'none'}; opacity: 0.7;"><svg class="svg-icon-sm"><use href="#icon-edit"></use></svg></button>
+                </div>
                 <button class="btn-icon" id="db-note-collapse" title="Collapse / Expand"><svg class="svg-icon-sm"><use href="#icon-chevron-${state.collapsed ? 'up' : 'down'}"></use></svg></button>
                 <button class="btn-icon" id="db-note-close" style="font-size: 16px; opacity: 0.6; width: 24px; height: 24px;">✕</button>
             </div>
@@ -72,6 +75,17 @@ export function renderDashboardQuickNote() {
             <div id="db-note-local-area" style="display: ${isKeepMode ? 'none' : 'flex'}; flex-direction: column; height: 100%;">
                 <div class="note-toolbar" style="padding: 6px 10px; border-bottom: 1px dashed var(--border-color); background: rgba(0,0,0,0.02);">
                     <button class="btn-icon" id="db-note-undo" title="Undo"><svg class="svg-icon-sm"><use href="#icon-undo"></use></svg></button>
+                    <span style="color:var(--border-color); margin: 0 5px; opacity: 0.5;">|</span>
+                    <button class="btn-icon" id="db-note-checkbox" title="Insert Checkbox"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg></button>
+                    <button class="btn-icon" id="db-note-reset-format" title="Reset Format"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path><line x1="17" y1="12" x2="17" y2="18"></line><line x1="13" y1="12" x2="13" y2="18"></line><line x1="9" y1="12" x2="9" y2="18"></line><line x1="5" y1="12" x2="5" y2="18"></line></svg></button>
+                    <span style="color:var(--border-color); margin: 0 5px; opacity: 0.5;">|</span>
+                    <button class="btn-icon" id="db-note-bold" title="Bold"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path><path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path></svg></button>
+                    <button class="btn-icon" id="db-note-italic" title="Italic"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="4" x2="10" y2="4"></line><line x1="14" y1="20" x2="5" y2="20"></line><line x1="15" y1="4" x2="9" y2="20"></line></svg></button>
+                    <button class="btn-icon" id="db-note-underline" title="Underline"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4v6a6 6 0 0 0 6 6h0a6 6 0 0 0 6-6V4"></path><line x1="4" y1="20" x2="20" y2="20"></line></svg></button>
+                    <button class="btn-icon" id="db-note-strikethrough" title="Strikethrough"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 5H6a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z"></path><path d="M2 12h20"></path><path d="M6 14h12"></path></svg></button>
+                    <span style="color:var(--border-color); margin: 0 5px; opacity: 0.5;">|</span>
+                    <button class="btn-icon" id="db-note-bullet-list" title="Bulleted List"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg></button>
+                    <button class="btn-icon" id="db-note-numbered-list" title="Numbered List"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="10" y1="6" x2="21" y2="6"></line><line x1="10" y1="12" x2="21" y2="12"></line><line x1="10" y1="18" x2="21" y2="18"></line><path d="M4 6h1v4"></path><path d="M4 10h2"></path><path d="M6 18H4c0-1.1.9-2 2-2s2 .9 2 2c0 1.1-.9 2-2 2z"></path></svg></button>
                     <span style="color:var(--border-color); margin: 0 5px; opacity: 0.5;">|</span>
                     <select id="db-note-font-size" style="padding: 2px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--input-bg); color: var(--text-main); font-size: 11px; outline: none; cursor: pointer;" data-cmd="fontSize">
                         <option value="3">Normal Text</option>
@@ -90,7 +104,7 @@ export function renderDashboardQuickNote() {
             
             <div id="db-note-keep-area" style="display: ${isKeepMode ? 'block' : 'none'}; height: 100%;">
                 ${state.keepUrl ? 
-                    `<iframe src="${state.keepUrl}" style="width:100%; height:100%; border:none;"></iframe>` : 
+                    `<iframe id="db-keep-iframe" src="about:blank" style="width:100%; height:100%; border:none;"></iframe>` : 
                     `<div style="padding: 40px 20px; text-align:center; display: flex; flex-direction: column; gap: 15px; height: 100%; justify-content: center; background: var(--bg-body);">
                         <div style="font-size: 32px; opacity: 0.8;">💡</div>
                         <p style="font-size:12px; color:var(--text-muted); margin: 0; line-height: 1.5;">Connect this Dashboard Quick Note to a Google Keep Note URL:</p>
@@ -101,6 +115,16 @@ export function renderDashboardQuickNote() {
             </div>
         </div>
     `;
+
+    // 🟢 ระบบป้องกันการโหลดซ้ำ (Persistence Fix)
+    if (isKeepMode && state.keepUrl) {
+        const iframe = el.querySelector('#db-keep-iframe');
+        // ถ้า iframe มีอยู่แล้ว และ URL ยังเป็นอันเดิม ไม่ต้องโหลดใหม่
+        if (iframe && iframe.dataset.loadedUrl !== state.keepUrl) {
+            iframe.src = state.keepUrl;
+            iframe.dataset.loadedUrl = state.keepUrl;
+        }
+    }
 
     // 🟢 เรียกใช้ระบบลากหลังจากใส่ innerHTML เรียบร้อยแล้ว เพื่อให้หา Header เจอ
     setupNoteDrag(el);
@@ -125,6 +149,13 @@ export function renderDashboardQuickNote() {
         saveData();
         renderDashboardQuickNote();
     };
+
+    const keepExternal = el.querySelector('#db-note-keep-external');
+    if (keepExternal) {
+        keepExternal.onclick = () => {
+            if (state.keepUrl) window.open(state.keepUrl, '_blank');
+        };
+    }
 
     const keepEdit = el.querySelector('#db-note-keep-edit');
     if (keepEdit) {
@@ -161,6 +192,26 @@ export function renderDashboardQuickNote() {
             saveData();
         };
     });
+
+    // New Formatting Buttons
+    el.querySelector('#db-note-checkbox').onclick = (e) => {
+        e.preventDefault();
+        document.execCommand('insertHTML', false, '<label class="google-task-checkbox" style="display:inline-flex; align-items:center; margin-right:8px;"><input type="checkbox"> <div class="checkmark-circle"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg></div></label>');
+    };
+    el.querySelector('#db-note-reset-format').onclick = (e) => {
+        e.preventDefault();
+        document.execCommand('removeFormat', false, null);
+    };
+    el.querySelector('#db-note-bold').onclick = (e) => { e.preventDefault(); document.execCommand('bold', false, null); };
+    el.querySelector('#db-note-italic').onclick = (e) => { e.preventDefault(); document.execCommand('italic', false, null); };
+    el.querySelector('#db-note-underline').onclick = (e) => { e.preventDefault(); document.execCommand('underline', false, null); };
+    el.querySelector('#db-note-strikethrough').onclick = (e) => { e.preventDefault(); document.execCommand('strikeThrough', false, null); };
+    el.querySelector('#db-note-bullet-list').onclick = (e) => { e.preventDefault(); document.execCommand('insertUnorderedList', false, null); };
+    el.querySelector('#db-note-numbered-list').onclick = (e) => { e.preventDefault(); document.execCommand('insertOrderedList', false, null); };
+
+    // The existing font size and color pickers already use execCommand and are functional.
+    // The editor.oninput already saves the innerHTML, so changes will persist.
+
 
     const editor = el.querySelector('#db-note-editor');
     if (editor) {

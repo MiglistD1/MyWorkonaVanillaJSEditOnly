@@ -487,6 +487,7 @@ export function initRewardSystem() {
         // 🟢 4. Big Item Scanner: รองรับรางวัลหลายรายการ (ใช้ matchAll)
         const bigItemMatches = taskText.matchAll(/@รางวัล_([^\s]+)/gi);
         for (const match of bigItemMatches) {
+            if (!isTab2Mission) continue; // 🟢 จำกัดให้ Big Reward รับมาจาก Epic Mission เท่านั้น
             const itemName = match[1].replace(/_/g, ' ');
             rewardData.lootList.unshift({
                 id: Date.now() + Math.random(),
@@ -557,13 +558,7 @@ export function initRewardSystem() {
                     rewardDesc = rule.rewardName;
                 }
 
-                rewardData.lootList.unshift({
-                    id: Date.now() + 1,
-                    name: `⚡ COMBO: ${rule.rewardName} (${rewardDesc})`,
-                date: new Date().toLocaleDateString(), // Use toLocaleDateString for consistent format
-                    isSpecial: true
-                });
-                
+                // 🟢 ย้ายจาก Big Reward ไปรวมใน Withdrawal List (Wallets) โดยการไม่เพิ่มลงใน lootList
                 if (coords) triggerLootDropAnimation(`🔥 COMBO! ${rewardDesc}`, coords.x, coords.y - 20, true);
                 else showRewardToast(`⚡ COMBO: ${rule.rewardName}! ${rewardDesc}`, '🔥');
                 found = true;
@@ -1084,8 +1079,8 @@ function renderRewardContent() {
             // 🟢 นำภารกิจออกก่อนเพื่อให้ saveRewardData ใน scanner เก็บค่าที่ถูกต้องและลดการทำงานซ้ำซ้อน
             rewardData.epicMissions.splice(idx, 1);
             
-            // 🟢 เรียก Scanner (ซึ่งข้างในจะเรียก saveRewardData() และ sync ให้เอง 1 รอบ)
-            window.processRewardScanner(`@reward:${mission.reward.replace(/\s+/g, '_')}`, true);
+            // 🟢 เรียก Scanner โดยใช้แท็ก @รางวัล_ เพื่อให้เข้าเงื่อนไข Big Reward จาก Epic Mission
+            window.processRewardScanner(`@รางวัล_${mission.reward.replace(/\s+/g, '_')}`, true);
             
             renderRewardContent();
         };

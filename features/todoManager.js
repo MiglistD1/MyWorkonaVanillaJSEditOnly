@@ -16,11 +16,31 @@ import { generateMiniTagsBtn, generateTaskHTML, attachSubtaskEventListeners, att
     }
 
 import { svgRefresh, svgSpinner } from '../core/icons.js';
-import { syncAllGoogleTasks, createGoogleTask, updateGoogleTaskUI } from './googleTasks.js';
+import { syncAllGoogleTasks, createGoogleTask, updateGoogleTaskUI, getTargetListId } from './googleTasks.js';
 import { checkAndResetHabits, renderHabitList } from './habitSheet.js';
 import { openGoogleTasks } from './googleTasksLauncher.js';
 
 // State & Callbacks
+/** 🟢 Helper: จัดลำดับงานตามเงื่อนไขที่เลือก (เฉพาะ Main Tasks) */
+function sortSpaceTasks(space) {
+    if (!space || !space.tasks || !space.taskSortOrder || space.taskSortOrder === 'manual') return;
+
+    space.tasks.sort((a, b) => {
+        // 1. ให้งานติดธง (isProminent) อยู่บนสุดเสมอ
+        if (a.isProminent && !b.isProminent) return -1;
+        if (!a.isProminent && b.isProminent) return 1;
+
+        if (space.taskSortOrder === 'name') {
+            return (a.text || "").localeCompare(b.text || "");
+        } else if (space.taskSortOrder === 'date') {
+            const d1 = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
+            const d2 = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
+            return d1 - d2;
+        }
+        return 0;
+    });
+}
+
 let fetchGoogleAPI = null;
 let getGoogleAuthToken = null;
 let getCurrentGoogleListId = null;
@@ -184,6 +204,7 @@ export function initTodoManager(callbacks) {
         // --- Google Keep Mode Logic ---
     const keepToggle = document.getElementById('quick-note-keep-toggle');
     const keepEdit = document.getElementById('quick-note-keep-edit');
+    const keepExternal = document.createElement('button'); // สร้างปุ่มเพิ่มสำหรับเปิด Tab ใหม่
     const saveKeepBtn = document.getElementById('save-keep-url-btn');
     const keepUrlInput = document.getElementById('keep-url-input');
     const keepIframe = document.getElementById('keep-iframe');
@@ -191,6 +212,25 @@ export function initTodoManager(callbacks) {
     const noteContainer = document.getElementById('quick-note-body');
     const noteToolbar = document.querySelector('.note-toolbar');
     const workspaceNote = document.getElementById('workspace-note');
+
+    // 🟢 รวมกลุ่มปุ่มและใส่พื้นหลังสีส้ม
+    let keepGroup = document.getElementById('quick-note-keep-group');
+    if (!keepGroup) {
+        keepGroup = document.createElement('div');
+        keepGroup.id = 'quick-note-keep-group';
+        keepGroup.style = 'display: flex; gap: 2px; background: rgba(245, 158, 11, 0.15); padding: 2px; border-radius: 6px; border: 1px solid rgba(245, 158, 11, 0.2); align-items: center;';
+        keepToggle.parentNode.insertBefore(keepGroup, keepToggle);
+        keepGroup.appendChild(keepToggle);
+    }
+
+    // เตรียมปุ่ม External ถ้ายังไม่มี
+    if (!document.getElementById('quick-note-keep-external')) {
+        keepExternal.id = 'quick-note-keep-external';
+        keepExternal.className = 'btn-icon';
+        keepExternal.innerHTML = `<svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="11" x2="21" y2="3"></line></svg>`;
+        keepGroup.appendChild(keepExternal);
+        if (keepEdit) keepGroup.appendChild(keepEdit);
+    }
 
     const renderKeepLogic = () => {
         const space = getCurrentSpace();
@@ -206,12 +246,14 @@ export function initTodoManager(callbacks) {
             keepIframe.style.display = 'none';
             keepToggle.style.opacity = '0.5';
             if (keepEdit) keepEdit.style.display = 'none';
+            document.getElementById('quick-note-keep-external').style.display = 'none';
             if (noteContainer) noteContainer.classList.remove('keep-mode-active');
         } else {
             workspaceNote.style.display = 'none';
             noteToolbar.style.display = 'none';
             keepToggle.style.opacity = '1';
             if (keepEdit) keepEdit.style.display = 'inline-flex';
+            document.getElementById('quick-note-keep-external').style.display = 'inline-flex';
             if (noteContainer) noteContainer.classList.add('keep-mode-active');
             
             if (!url) {
@@ -239,6 +281,14 @@ export function initTodoManager(callbacks) {
                 saveData();
                 renderKeepLogic();
             }
+        };
+    }
+
+    const btnExternal = document.getElementById('quick-note-keep-external');
+    if (btnExternal) {
+        btnExternal.onclick = () => {
+            const space = getCurrentSpace();
+            if (space && space.quickNoteKeepUrl) window.open(space.quickNoteKeepUrl, '_blank');
         };
     }
 
@@ -536,12 +586,19 @@ export function initTodoManager(callbacks) {
         // Delete Task
         if (e.target.closest('.delete-task-btn')) { 
             const idx = parseInt(e.target.closest('.delete-task-btn').getAttribute('data-index')); 
-            space.tasks[idx].isDeleted = true;
-            space.tasks[idx].deletedAt = Date.now();
+            const task = space.tasks[idx];
+            task.isDeleted = true;
+            task.deletedAt = Date.now();
             playTrashSound();
             const days = getAppSettings().autoDeleteDays || 30;
-            space.tasks[idx].expiryAt = space.tasks[idx].deletedAt + (days * 24 * 60 * 60 * 1000);
-            space.tasks[idx].completed = false; // เอากลับมาเป็นงานที่ยังไม่เสร็จเผื่อกู้คืน
+            task.expiryAt = task.deletedAt + (days * 24 * 60 * 60 * 1000);
+            task.completed = false; // เอากลับมาเป็นงานที่ยังไม่เสร็จเผื่อกู้คืน
+
+            // ☁️ Sync with Google Tasks: เมื่อลบงานในแอป ให้ทำเครื่องหมายว่าเสร็จใน Google เพื่อซ่อนงาน
+            if (task.googleTaskId && getGoogleAuthToken()) {
+                const targetListId = getTargetListId(space);
+                fetchGoogleAPI(`/lists/${targetListId}/tasks/${task.googleTaskId}`, 'PATCH', { status: 'completed' });
+            }
             saveData(); onRenderCallback();
         }
         // Restore Task
@@ -796,7 +853,13 @@ export function initTodoManager(callbacks) {
                 task.completed = false;
                 task.completedAt = null;
                 task.isDeleted = false;
+                task.deletedAt = null;
+                task.expiryAt = null;
                 if (task.subtasks) task.subtasks.forEach(sub => { sub.isDeleted = false; sub.completed = false; });
+                
+                // 🟢 ย้ายงานที่กู้คืนกลับไปไว้บนสุดเพื่อให้เห็นชัดเจน
+                const [restoredTask] = space.tasks.splice(index, 1);
+                space.tasks.unshift(restoredTask);
             }
 
             // ☁️ Sync with Google Tasks (ใช้ targetListId ที่ถูกต้อง)
@@ -819,10 +882,8 @@ export function initTodoManager(callbacks) {
 
             saveData(true); // บันทึกทันที
 
-            // 🟢 หน่วงเวลาเฉพาะการวาด UI เพื่อความสวยงาม
-            setTimeout(() => {
-                onRenderCallback(); 
-            }, isChecked ? 800 : 0);
+            // 🟢 เอาการหน่วงเวลาออกตามคำขอเพื่อให้ UI ลื่นไหลขึ้น
+            onRenderCallback(); 
         }
     };
 
@@ -1399,6 +1460,7 @@ async function addTask() {
             if (gTask && gTask.id) { newTask.googleTaskId = gTask.id; } 
         }
         space.tasks.push(newTask); 
+        if (space.taskSortOrder && space.taskSortOrder !== 'manual') sortSpaceTasks(space);
         playTaskAddedSound();
         input.value = ''; input.disabled = false; input.placeholder = "Type a task..."; input.focus();
         saveData(); 
@@ -1483,6 +1545,7 @@ async function saveEditedTask() {
 
     task.text = newName;
     task.dueDate = newDate || null;
+    if (space.taskSortOrder && space.taskSortOrder !== 'manual') sortSpaceTasks(space);
     document.getElementById('task-edit-modal').style.display = 'none';
     btnSave.innerText = "Save"; btnSave.disabled = false;
     saveData(); 
@@ -1594,6 +1657,12 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
     const trashListUI = document.getElementById('trash-task-list');
     const trashContainer = document.getElementById('trash-tasks-details');
 
+    // 🛑 ป้องกัน UI เอ๋อ: หากผู้ใช้กำลังพิมพ์งานอยู่ ห้ามวาดรายการใหม่ทับเด็ดขาด
+    if (document.activeElement && document.activeElement.classList.contains('task-actual-text')) {
+        console.log("Render skipped: User is typing to prevent blinking and data loss.");
+        return; 
+    }
+
     if (taskListUI) taskListUI.innerHTML = ''; 
     if (archiveListUI) archiveListUI.innerHTML = ''; 
     if (trashListUI) trashListUI.innerHTML = '';
@@ -1666,8 +1735,52 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
         habitBtn.onclick = () => { import('./habitSheet.js').then(m => m.toggleHabitModal(space)); };
     }
 
+    // --- Sort Dropdown Injection ---
+    if (taskHeader) {
+        let sortContainer = document.getElementById('task-sort-container');
+        if (!sortContainer) {
+            sortContainer = document.createElement('div');
+            sortContainer.id = 'task-sort-container';
+            sortContainer.style = 'margin-left: 6px; display: flex; align-items: center;';
+        }
+
+        // 🟢 ย้ายตำแหน่งมาไว้หลังปุ่ม Template (ถ้ามี) เพื่อความเป็นระเบียบ
+        const templateBtn = document.getElementById('btn-todo-templates');
+        if (templateBtn) {
+            templateBtn.after(sortContainer);
+        } else {
+            taskHeader.parentElement.appendChild(sortContainer);
+        }
+
+        const currentSort = space.taskSortOrder || 'manual';
+        sortContainer.innerHTML = `
+            <select id="task-sort-select" title="Sort Tasks" style="font-family: var(--app-font); font-size: 11px; font-weight: 700; padding: 3px 8px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-body); color: var(--text-main); cursor: pointer; outline: none; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                <option value="manual" ${currentSort === 'manual' ? 'selected' : ''}>⇅ Manual</option>
+                <option value="date" ${currentSort === 'date' ? 'selected' : ''}>📅 By Date</option>
+                <option value="name" ${currentSort === 'name' ? 'selected' : ''}>🔤 By Name</option>
+            </select>
+        `;
+        sortContainer.querySelector('#task-sort-select').onchange = (e) => {
+            const val = e.target.value;
+            space.taskSortOrder = val;
+            if (val !== 'manual') {
+                sortSpaceTasks(space);
+            }
+            saveData(true);
+            onRenderCallback();
+        };
+    }
+
     const filterTags = Array.isArray(currentFilterTags) ? currentFilterTags : [];
     const isFiltered = filterTags.length > 0 || (currentSearchQuery && currentSearchQuery !== "");
+
+    // 🟢 สร้างตัวแปรเก็บ HTML ไว้ก่อนวาดทีเดียวเพื่อประสิทธิภาพสูงสุด
+    let todoHTML = '';
+    let archiveHTML = '';
+    let trashHTML = '';
+
+    // 🟢 ตรวจสอบและจัดเรียงก่อนเริ่มลูปแสดงผล
+    if (space.taskSortOrder && space.taskSortOrder !== 'manual') sortSpaceTasks(space);
 
     space.tasks.forEach((task, index) => {
         if (!task) return;
@@ -1699,14 +1812,19 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
             isProminentHidden: isProminentHidden,
             isFiltered: isFiltered, // This is for drag-handle visibility
             showActions: space.showTaskActions, // Pass the new state
-            // isTrash: task.isDeleted, // Removed, using task.isDeleted directly
+            isTrash: task.isDeleted, 
             addingSubtaskToIndex            
         });
         
-        if (task.isDeleted) { if(trashListUI) trashListUI.innerHTML += liContent; }
-        else if (task.completed) { if(archiveListUI) archiveListUI.innerHTML += liContent; } 
-        else { if(taskListUI) taskListUI.innerHTML += liContent; }
+        if (task.isDeleted) { trashHTML += liContent; }
+        else if (task.completed) { archiveHTML += liContent; } 
+        else { todoHTML += liContent; }
     });
+
+    // 🟢 วาด HTML ลงใน Container ต่างๆ เพียงครั้งเดียว (ลดอาการชื่อหายและกระพริบ)
+    if (taskListUI) taskListUI.innerHTML = todoHTML;
+    if (archiveListUI) archiveListUI.innerHTML = archiveHTML;
+    if (trashListUI) trashListUI.innerHTML = trashHTML;
 
     // 🟢 NEW: Apply syntax highlighting to all rendered tasks after insertion
     if (taskListUI) {
@@ -1734,11 +1852,12 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
     }
 
     if (!isFiltered && taskListUI) {
+        const isManual = (space.taskSortOrder || 'manual') === 'manual';
         if (taskListUI.sortable) taskListUI.sortable.destroy();
         taskListUI.sortable = Sortable.create(taskListUI, { 
             group: 'nested-tasks', // กำหนดกลุ่มเพื่อให้ลากข้ามไปหา sub-task ได้
             animation: 150,
-            disabled: space.isArchived,
+            disabled: space.isArchived || !isManual,
             handle: '.drag-handle', // ล็อคให้ลากได้เฉพาะที่ไอคอน 6 จุด
             ghostClass: 'sortable-ghost', 
             onMove: function (evt) {
