@@ -2,18 +2,6 @@ import Sortable from '../sortable.esm.js';
 import { getCurrentSpace, saveData, getShortDate, getAppSettings, setCurrentSpaceId, getSpaces, getFilterTags, loadData } from '../core/storage.js';
 import { svgEdit, svgTrashRed, googleTasksIcon } from '../core/icons.js';
 import { generateMiniTagsBtn, generateTaskHTML, attachSubtaskEventListeners, attachTaskInlineEditListeners, handleTagAutocomplete, applySyntaxHighlighting } from '../core/ui-helpers.js';
-    const taskInput = document.getElementById('new-task-input');
-    if (taskInput) {
-        taskInput.addEventListener('input', (e) => handleTagAutocomplete(e, () => getCurrentSpace()?.tags || []));
-        taskInput.addEventListener('focus', () => {
-            if (taskInput.value.trim() === "") {
-                const currentFilters = (getFilterTags() || []).filter(t => !['ALL', 'UNTAGGED', 'AI', 'HALF SCREEN'].includes(t.toUpperCase()));
-                if (currentFilters.length > 0) {
-                    taskInput.value = '#1 ';
-                }
-            }
-        });
-    }
 
 import { svgRefresh, svgSpinner } from '../core/icons.js';
 import { syncAllGoogleTasks, createGoogleTask, updateGoogleTaskUI, getTargetListId } from './googleTasks.js';
@@ -21,6 +9,13 @@ import { checkAndResetHabits, renderHabitList } from './habitSheet.js';
 import { openGoogleTasks } from './googleTasksLauncher.js';
 
 // State & Callbacks
+/** 🟢 Helper: ตรวจสอบว่ากำลังโฟกัสที่ Element ที่พิมพ์ได้หรือไม่ */
+export function isAnyEditableElementFocused() {
+    const el = document.activeElement;
+    if (!el) return false;
+    return el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName);
+}
+
 /** 🟢 Helper: จัดลำดับงานตามเงื่อนไขที่เลือก (เฉพาะ Main Tasks) */
 function sortSpaceTasks(space) {
     if (!space || !space.tasks || !space.taskSortOrder || space.taskSortOrder === 'manual') return;
@@ -125,6 +120,20 @@ export function initTodoManager(callbacks) {
     getCurrentGoogleListId = callbacks.getCurrentGoogleListId;
     isGoogleSyncEnabled = callbacks.isGoogleSyncEnabled;
     onRenderCallback = callbacks.onRender;
+
+    // 🟢 Moved from top level to inside init
+    const taskInput = document.getElementById('new-task-input');
+    if (taskInput) {
+        taskInput.addEventListener('input', (e) => handleTagAutocomplete(e, () => getCurrentSpace()?.tags || []));
+        taskInput.addEventListener('focus', () => {
+            if (taskInput.value.trim() === "") {
+                const currentFilters = (getFilterTags() || []).filter(t => !['ALL', 'UNTAGGED', 'AI', 'HALF SCREEN'].includes(t.toUpperCase()));
+                if (currentFilters.length > 0) {
+                    taskInput.value = '#1 ';
+                }
+            }
+        });
+    }
 
     // 🟢 Inject CSS สำหรับ Task Entry Animation
     const style = document.createElement('style');
@@ -413,9 +422,98 @@ export function initTodoManager(callbacks) {
     document.querySelectorAll('.custom-color-slot').forEach((picker, index) => {
         picker.addEventListener('input', (e) => { document.execCommand('foreColor', false, e.target.value); getCurrentSpace().note = document.getElementById('workspace-note').innerHTML; getAppSettings().quickColors[index] = e.target.value; saveData(); });
     });
+    // workspaceNote ถูกประกาศไว้แล้วด้านบน
     document.getElementById('btn-undo-note').addEventListener('mousedown', (e) => { e.preventDefault(); document.execCommand('undo', false, null); getCurrentSpace().note = document.getElementById('workspace-note').innerHTML; saveData(); });
     document.querySelectorAll('.note-toolbar select').forEach(el => { el.addEventListener('change', (e) => { document.execCommand(e.target.dataset.cmd, false, e.target.value); getCurrentSpace().note = document.getElementById('workspace-note').innerHTML; saveData(); }); });
-    document.getElementById('workspace-note').addEventListener('input', (e) => { getCurrentSpace().note = e.target.innerHTML; saveData(); });
+    
+    workspaceNote.addEventListener('input', (e) => { getCurrentSpace().note = e.target.innerHTML; saveData(); });
+
+    // 🟢 Smart Checkbox Logic for Workspace Note
+    const CHECKBOX_HTML = '<label class="google-task-checkbox" contenteditable="false" style="display:inline-flex; align-items:center; margin-right:8px; vertical-align:middle;"><input type="checkbox"> <div class="checkmark-circle"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg></div></label>&nbsp;';
+
+    workspaceNote.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            const selection = window.getSelection();
+            if (!selection.rangeCount) return;
+            
+            const range = selection.getRangeAt(0);
+            let line = range.startContainer;
+            if (line.nodeType === 3) line = line.parentNode;
+            line = line.closest('div, p') || line;
+
+            // ตรวจสอบว่าบรรทัดปัจจุบันมี Checkbox หรือไม่
+            if (line && line.querySelector('.google-task-checkbox')) {
+                const text = line.textContent.trim();
+                
+                if (text === "") {
+                    // กรณีบรรทัดว่าง: ลบ Checkbox ออกแล้วเปลี่ยนเป็นบรรทัดปกติ
+                    e.preventDefault();
+                    line.querySelector('.google-task-checkbox').remove();
+                    if (line.innerHTML === "") line.innerHTML = "<br>";
+                } else {
+                    // กรณีมีข้อความ: สร้างบรรทัดใหม่พร้อม Checkbox
+                    e.preventDefault();
+                    document.execCommand('insertParagraph');
+                    document.execCommand('insertHTML', false, CHECKBOX_HTML);
+                }
+                getCurrentSpace().note = workspaceNote.innerHTML;
+                saveData();
+            }
+        }
+    });
+
+    // 🟢 บันทึกสถานะ Checked ลงใน HTML เพื่อให้ Persistence ทำงาน
+    workspaceNote.addEventListener('change', (e) => {
+        if (e.target.type === 'checkbox' && e.target.closest('.google-task-checkbox')) {
+            if (e.target.checked) {
+                e.target.setAttribute('checked', 'checked');
+            } else {
+                e.target.removeAttribute('checked');
+            }
+            getCurrentSpace().note = workspaceNote.innerHTML;
+            saveData();
+        }
+    });
+
+    // 🟢 New Formatting Buttons for Workspace Note (Google Docs Style)
+    const bindNoteCmd = (id, cmd, value = null) => {
+        const btn = document.getElementById(id);
+        if (btn) {
+            btn.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                document.execCommand(cmd, false, value);
+                getCurrentSpace().note = document.getElementById('workspace-note').innerHTML;
+                saveData();
+            });
+        }
+    };
+
+    bindNoteCmd('btn-note-bold', 'bold');
+    bindNoteCmd('btn-note-italic', 'italic');
+    bindNoteCmd('btn-note-underline', 'underline');
+    bindNoteCmd('btn-note-strikethrough', 'strikeThrough');
+    bindNoteCmd('btn-note-bullet-list', 'insertUnorderedList');
+    bindNoteCmd('btn-note-numbered-list', 'insertOrderedList');
+    bindNoteCmd('btn-note-reset-format', 'removeFormat');
+    bindNoteCmd('btn-note-left', 'justifyLeft');
+    bindNoteCmd('btn-note-center', 'justifyCenter');
+    bindNoteCmd('btn-note-right', 'justifyRight');
+    bindNoteCmd('btn-note-indent', 'indent');
+    bindNoteCmd('btn-note-outdent', 'outdent');
+    bindNoteCmd('btn-note-hr', 'insertHorizontalRule');
+    
+    // Special Case: Checkbox
+    const btnCheckbox = document.getElementById('btn-note-checkbox');
+    if (btnCheckbox) {
+        btnCheckbox.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            // ใช้ insertParagraph ก่อนเพื่อให้มั่นใจว่าเป็นบรรทัดใหม่ที่สะอาด แล้วค่อยใส่ Checkbox
+            document.execCommand('insertParagraph');
+            document.execCommand('insertHTML', false, CHECKBOX_HTML);
+            getCurrentSpace().note = document.getElementById('workspace-note').innerHTML;
+            saveData();
+        });
+    }
 
     // Clear Archive Button
     const btnClearArchive = document.getElementById('btn-clear-archive');
@@ -746,7 +844,21 @@ export function initTodoManager(callbacks) {
         if (btn) {
             const space = getCurrentSpace();
             const index = parseInt(btn.getAttribute('data-index'));
-            const task = space.tasks[index];
+            const pIdxAttr = btn.getAttribute('data-parent-index');
+            const pIdx = pIdxAttr !== null ? parseInt(pIdxAttr) : null;
+
+            let task;
+            if (pIdx !== null) {
+                task = space.tasks[pIdx]?.subtasks?.[index];
+                if (task) {
+                    task.isProminent = !task.isProminent;
+                    saveData();
+                    onRenderCallback();
+                }
+                return;
+            }
+
+            task = space.tasks[index];
 
             if (task.isProminent) {
                 task.isProminent = false;

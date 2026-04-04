@@ -1,6 +1,6 @@
 // features/habitSheet.js
 import { saveData, getAppSettings, getCurrentSpace, setFilterTags, setFilterMode, getFilterTags } from '../core/storage.js';
-import { renderTasks } from './todoManager.js';
+import { renderTasks, isAnyEditableElementFocused } from './todoManager.js';
 import { generateMiniTagsBtn, handleTagAutocomplete, applySyntaxHighlighting } from '../core/ui-helpers.js';
 import Sortable from '../sortable.esm.js';
 import { svgTrashRed } from '../core/icons.js';
@@ -424,6 +424,11 @@ function updateHabitToggleUI() {
 }
 
 export function renderHabitList(space) {
+    // 🟢 FIX: ไม่ต้อง re-render ถ้ามี Element ที่กำลังแก้ไขอยู่
+    if (isAnyEditableElementFocused()) {
+        console.log("RenderHabitList skipped: Editable element is focused.");
+        return;
+    }
     const container = document.getElementById('habit-list-container');
     const progressText = document.getElementById('habit-progress-percent');
     const progressBar = document.getElementById('habit-progress-bar');
@@ -661,7 +666,10 @@ export function renderHabitList(space) {
             
             habit.lastUpdate = new Date().toDateString();
 
+            // 🟢 FIX: หน่วงเวลาการ re-render เพื่อให้ animation เสร็จสมบูรณ์
+            // และป้องกันการกระพริบหากมีการกดรัวๆ
             setTimeout(() => {
+                if (isAnyEditableElementFocused()) return; // ตรวจสอบอีกครั้งก่อน re-render
                 saveData(true);
                 renderHabitList(space);
                 renderTasks(space);
@@ -883,6 +891,10 @@ function showCycleEditPopup(anchorEl, habit, space) {
             habit.resetInterval = newVal;
             saveData(true);
             
+            // 🟢 FIX: ไม่ต้อง re-render ถ้ามี Element ที่กำลังแก้ไขอยู่
+            if (!isAnyEditableElementFocused()) {
+                renderHabitList(space);
+            }
             // 🟡 เพิ่มเอฟเฟกต์กระพริบสีเหลืองที่ Badge เดิม
             anchorEl.querySelector('span').innerText = newVal;
             anchorEl.classList.add('flash-confirm');

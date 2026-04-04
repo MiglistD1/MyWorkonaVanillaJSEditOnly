@@ -1,30 +1,10 @@
 import { getSpaces, saveData, getAppSettings, setCurrentSpaceId, getFilterTags, loadData } from '../core/storage.js';
 import Sortable from '../sortable.esm.js';
-import { googleTasksIcon } from '../core/icons.js';
+import { googleTasksIcon, svgRefresh } from '../core/icons.js'; // 🟢 NEW: Import svgRefresh for the refresh button
 import { getGoogleStatus, fetchGoogleAPI, fetchGoogleLists, getGoogleAuthToken, getCurrentGoogleListId, getIsGoogleSyncEnabled, createGoogleTask, syncAllGoogleTasks, getTargetListId } from './googleTasks.js';
-import { openTaskEditModal, openTaskLinkModal } from './todoManager.js';
+import { openTaskEditModal, openTaskLinkModal, isAnyEditableElementFocused } from './todoManager.js'; // 🟢 Merged imports
 import { handleMiniTagClick } from '../components/modals.js';
 import { generateTaskHTML, attachSubtaskEventListeners, attachTaskInlineEditListeners, handleTagAutocomplete, applySyntaxHighlighting } from '../core/ui-helpers.js';
-    const taskInput = document.getElementById('master-task-input');
-    const spaceSelect = document.getElementById('master-space-selector');
-
-    if (taskInput && spaceSelect) {
-        taskInput.addEventListener('input', (e) => {
-            const sid = parseInt(spaceSelect.value);
-            const spaces = getSpaces();
-            const targetSpace = spaces.find(s => s.id === sid);
-            handleTagAutocomplete(e, () => targetSpace?.tags || []);
-        });
-
-        taskInput.addEventListener('focus', () => {
-            if (taskInput.value.trim() === "") {
-                const currentFilters = (getFilterTags() || []).filter(t => !['ALL', 'UNTAGGED', 'AI', 'HALF SCREEN'].includes(t.toUpperCase()));
-                if (currentFilters.length > 0) {
-                    taskInput.value = '#1 ';
-                }
-            }
-        });
-    }
 
 import { renderSidebar } from '../components/sidebar.js';
 import { updateKeepTagButtonState } from './googleKeep.js';
@@ -110,6 +90,12 @@ export function renderMasterTodoList(container) {
         console.log("Master Render skipped: User is typing.");
         return;
     }
+    // 🟢 FIX: ไม่ต้อง re-render ถ้ามี Element ที่กำลังแก้ไขอยู่
+    if (isAnyEditableElementFocused()) {
+        console.log("RenderMasterTodoList skipped: Editable element is focused.");
+        return;
+    }
+    if (!container) return;
 
     const allSpaces = getSpaces().filter(s => !s.isArchived && !s.isDeleted);
     let totalTasks = 0;
@@ -329,6 +315,24 @@ function initMasterEvents() {
     const spaceSelect = document.getElementById('master-space-selector');
     const groupContainer = document.getElementById('master-groups-container');
 
+        // 🟢 Autocomplete Logic (Moved from top of file to here)
+        if (taskInput && spaceSelect) {
+            taskInput.addEventListener('input', (e) => {
+                const sid = parseInt(spaceSelect.value);
+                const spaces = getSpaces();
+                const targetSpace = spaces.find(s => s.id === sid);
+                handleTagAutocomplete(e, () => targetSpace?.tags || []);
+            });
+            taskInput.addEventListener('focus', () => {
+                if (taskInput.value.trim() === "") {
+                    const currentFilters = (getFilterTags() || []).filter(t => !['ALL', 'UNTAGGED', 'AI', 'HALF SCREEN'].includes(t.toUpperCase()));
+                    if (currentFilters.length > 0) {
+                        taskInput.value = '#1 ';
+                    }
+                }
+            });
+        }
+
     // 🟢 เก็บค่าเมื่อผู้ใช้เลือกเปลี่ยนใน Dropdown เอง
     if (spaceSelect) {
         spaceSelect.onchange = () => {
@@ -545,8 +549,11 @@ function initMasterEvents() {
                     saveData(true); 
                     onRefresh(); // 🟢 เอาการหน่วงเวลาออกเพื่อให้ทำงานทันที
                 }
-            }
-        });
+                    setTimeout(() => {
+                        if (!isAnyEditableElementFocused()) onRefresh();
+                    }, isChecked ? 800 : 0); // 800ms for completion animation, 0 for uncheck
+        }
+    });
 
         groupContainer.addEventListener('click', async (e) => {
             const target = e.target;
@@ -744,13 +751,27 @@ function initMasterEvents() {
                 if (sidebarItem) sidebarItem.click();
                 return;
             }
-            const taskItem = target.closest('.task-item');
+            const taskItem = target.closest('li[data-type]');
             if (!taskItem) return;
             const spaceId = parseInt(taskItem.dataset.spaceId);
             const taskIndex = parseInt(taskItem.dataset.index);
             if (target.closest('.btn-prominent-task')) {
+                const btn = target.closest('.btn-prominent-task');
+                const pIdxAttr = btn.getAttribute('data-parent-index');
+                const pIdx = pIdxAttr !== null ? parseInt(pIdxAttr) : null;
+
                 const space = getSpaces().find(s => s.id === spaceId);
-                const task = space.tasks[taskIndex];
+                let task;
+                if (pIdx !== null) {
+                    task = space.tasks[pIdx]?.subtasks?.[taskIndex];
+                    if (task) {
+                        task.isProminent = !task.isProminent;
+                        saveData(); onRefresh();
+                    }
+                    return;
+                }
+
+                task = space.tasks[taskIndex];
                 if (task.isProminent) {
                     task.isProminent = false;
                     const settings = getAppSettings();

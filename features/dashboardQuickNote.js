@@ -193,25 +193,6 @@ export function renderDashboardQuickNote() {
         };
     });
 
-    // New Formatting Buttons
-    el.querySelector('#db-note-checkbox').onclick = (e) => {
-        e.preventDefault();
-        document.execCommand('insertHTML', false, '<label class="google-task-checkbox" style="display:inline-flex; align-items:center; margin-right:8px;"><input type="checkbox"> <div class="checkmark-circle"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg></div></label>');
-    };
-    el.querySelector('#db-note-reset-format').onclick = (e) => {
-        e.preventDefault();
-        document.execCommand('removeFormat', false, null);
-    };
-    el.querySelector('#db-note-bold').onclick = (e) => { e.preventDefault(); document.execCommand('bold', false, null); };
-    el.querySelector('#db-note-italic').onclick = (e) => { e.preventDefault(); document.execCommand('italic', false, null); };
-    el.querySelector('#db-note-underline').onclick = (e) => { e.preventDefault(); document.execCommand('underline', false, null); };
-    el.querySelector('#db-note-strikethrough').onclick = (e) => { e.preventDefault(); document.execCommand('strikeThrough', false, null); };
-    el.querySelector('#db-note-bullet-list').onclick = (e) => { e.preventDefault(); document.execCommand('insertUnorderedList', false, null); };
-    el.querySelector('#db-note-numbered-list').onclick = (e) => { e.preventDefault(); document.execCommand('insertOrderedList', false, null); };
-
-    // The existing font size and color pickers already use execCommand and are functional.
-    // The editor.oninput already saves the innerHTML, so changes will persist.
-
 
     const editor = el.querySelector('#db-note-editor');
     if (editor) {

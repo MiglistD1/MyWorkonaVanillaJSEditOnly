@@ -385,7 +385,7 @@ body { margin: 0; font-family: var(--app-font); display: flex; height: 100vh; ba
 }
 .add-subtask-btn { opacity: 0.4; }
 .task-item:hover .add-subtask-btn { opacity: 1; }
-.subtask-item .btn-prominent-task { display: none !important; }
+
 
 /* 🟢 สไตล์สำหรับปุ่มซ่อน/แสดง Subtask */
 .toggle-subtasks-btn {
@@ -674,6 +674,14 @@ body { margin: 0; font-family: var(--app-font); display: flex; height: 100vh; ba
 .note-toolbar { display: flex; gap: 8px; padding: 8px 12px; border-bottom: 1px dashed var(--border-color); align-items: center; background: rgba(0,0,0,0.02);}
 .note-toolbar select { padding: 4px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--input-bg); color: var(--text-main); font-size: 12px; outline: none; cursor: pointer;}
 .note-area { width: 100%; flex: 1; min-height: 250px; font-family: var(--note-font, var(--app-font)); font-size: 16px; outline: none; line-height: 1.6; padding: 15px; box-sizing: border-box; color: var(--text-main); overflow-y: auto;}
+
+/* 📝 Workspace Note: Checkbox Strikethrough Effect */
+.note-area div:has(> .google-task-checkbox input:checked),
+.note-area p:has(> .google-task-checkbox input:checked) {
+    text-decoration: line-through;
+    color: var(--text-muted);
+    opacity: 0.6;
+}
 
 /* Google Keep Embed Improvements */
 #keep-iframe {
@@ -1030,11 +1038,22 @@ details[open] > .details-summary .summary-chevron {
 
 .task-item.prominent {
     background-color: rgba(47, 128, 237, 0.1) !important; /* ใช้สี Primary จางๆ เพื่อให้เด่นกว่าสี Hover ปกติ */
+    border: 1px solid var(--primary-color) !important; /* เพิ่มขอบสี Primary ให้งานหลักที่ติดธง */
+}
+
+.subtask-item.prominent {
+    background-color: rgba(255, 165, 0, 0.15) !important; /* พื้นหลังสีส้มอ่อนสำหรับ Subtask ที่ติดธง */
+    border: 2px solid orange !important; /* ขอบสีส้มที่หนาขึ้นสำหรับ Subtask ที่ติดธง */
 }
 
 .task-item.prominent .task-actual-text {
     font-weight: 700;
     color: var(--primary-color);
+}
+
+.subtask-item.prominent .task-actual-text {
+    font-weight: 700;
+    color: orange !important; /* เปลี่ยนสีข้อความให้เข้ากับธีมสีส้มของ Subtask ที่ติดธง */
 }
 
 /* --- Google Tasks Full Animation Checkbox --- */

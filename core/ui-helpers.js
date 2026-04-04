@@ -158,7 +158,7 @@ export function generateTaskHTML(task, index, {
 
     const svgBreakLink = `<svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.72 6.72 3 10.44a4 4 0 0 0 5.66 5.66l1.42-1.42M13.56 13.56l1.42-1.42a4 4 0 0 0-5.66-5.66l-1.42 1.42M8 12h8M3 21l18-18"/></svg>`;
     
-    const prominentClass = (task.isProminent && !isSubtask) ? 'prominent' : '';
+    const prominentClass = task.isProminent ? 'prominent' : '';
     const draggableClass = (isFiltered || isSubtask) ? '' : 'draggable-item';
     const handleHTML = isFiltered ? '' : `<div class="drag-handle" style="display: flex; align-items: center; cursor: grab; opacity: 0.4; flex-shrink: 0;">${dragHandleSvg}</div>`;
 
@@ -175,7 +175,7 @@ export function generateTaskHTML(task, index, {
     const dateColor = isDateOverdue ? '#ef4444' : (isSubtask ? 'var(--primary-color)' : 'var(--text-muted)');
     const textStyle = (isCompletedOrDeleted || isActuallyDeleted) 
         ? "flex: 1; word-break: break-word; white-space: normal; line-height: 1.4; color: var(--text-muted); text-decoration: line-through; opacity: 0.7;" 
-        : `flex: 1; word-break: break-word; white-space: normal; line-height: 1.4; color: ${task.isProminent && !isSubtask ? 'var(--primary-color)' : 'var(--text-main)'}; ${task.isProminent && !isSubtask ? 'font-weight: 700;' : ''}`;
+        : `flex: 1; word-break: break-word; white-space: normal; line-height: 1.4; color: ${task.isProminent ? 'var(--primary-color)' : 'var(--text-main)'}; ${task.isProminent ? 'font-weight: 700;' : ''}`;
 
     let dateDisplay = task.dueDate ? getShortDate(new Date(task.dueDate)) : '';
     if (task.completed && task.createdAt && task.completedAt) {
@@ -311,13 +311,12 @@ export function generateTaskHTML(task, index, {
     <li class="${isSubtask ? 'subtask-item' : 'task-item'} ${draggableClass} ${prominentClass} ${focusActiveClass} ${templateClass}" data-index="${index}" data-type="${itemType}" ${isMasterView ? `data-space-id="${spaceId}"` : ''} style="list-style: none; width: 100%; margin-bottom: 0px; border-bottom: 1px solid transparent; opacity: ${isActuallyDeleted ? '0.7' : '1'};">
         <div class="item-main-row" style="display: flex; align-items: center; gap: 6px; padding: 2px 0; width: 100%; min-height: 28px;">
             ${handleHTML}
-            ${!isSubtask ? `
-                <div class="focus-trigger-container">
-                    <button class="btn-icon btn-prominent-task ${task.isProminent ? 'active' : ''}" data-index="${index}" ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="Mark as Next Up" style="margin: 0; padding: 2px; flex-shrink: 0; color: ${task.isProminent ? 'var(--primary-color)' : 'var(--text-muted)'}; display: ${isProminentHidden ? 'none' : 'inline-flex'};">
-                        <svg class="svg-icon-sm"><use href="#icon-flag"></use></svg>
-                    </button>
-                    ${focusBtnHTML}
-                </div>` : ''}
+            <div class="focus-trigger-container">
+                <button class="btn-icon btn-prominent-task ${task.isProminent ? 'active' : ''}" data-index="${index}" ${isSubtask ? `data-parent-index="${parentIndex}"` : ''} ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="Mark as Next Up" style="margin: 0; padding: 2px; flex-shrink: 0; color: ${task.isProminent ? 'var(--primary-color)' : 'var(--text-muted)'}; display: ${isProminentHidden ? 'none' : 'inline-flex'};">
+                    <svg class="svg-icon-sm"><use href="#icon-flag"></use></svg>
+                </button>
+                ${focusBtnHTML}
+            </div>
 
             <label class="google-task-checkbox">
                 <input type="checkbox" class="${checkboxClass}" ${checkboxDataAttrs} ${isActuallyDeleted ? 'checked' : (task.completed ? 'checked' : '')}>
