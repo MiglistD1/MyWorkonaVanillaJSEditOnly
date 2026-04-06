@@ -63,25 +63,43 @@ export function initGoogleTasks(callbacks) {
     onRenderRef = onRender;
 
     // Load persistent state from storage
-    chrome.storage.local.get(['savedGoogleTasksListId', 'googleAuthToken', 'isGoogleSyncEnabled'], (res) => {
-        if (res.savedGoogleTasksListId) {
+    const keys = ['savedGoogleTasksListId', 'googleAuthToken', 'isGoogleSyncEnabled'];
+    const storageCallback = (res) => {
+        if (res && res.savedGoogleTasksListId) {
             currentGoogleListId = res.savedGoogleTasksListId;
         }
-        if (res.googleAuthToken) {
+        if (res && res.googleAuthToken) {
             googleAuthToken = res.googleAuthToken;
         }
-        if (typeof res.isGoogleSyncEnabled !== 'undefined') {
-            isGoogleSyncEnabled = res.isGoogleSyncEnabled;
+        if (res && typeof res.isGoogleSyncEnabled !== 'undefined') {
+            isGoogleSyncEnabled = (res.isGoogleSyncEnabled === true || res.isGoogleSyncEnabled === 'true');
         }
 
         // Initial UI update based on loaded state
         if (googleAuthToken) {
             updateLoginUI();
             updateToggleIcon();
-            fetchGoogleLists(); // โหลดรายการ List
-            syncAllGoogleTasks(); // ซิงค์ทันทีเมื่อโหลดข้อมูลเสร็จ
+            fetchGoogleLists(); 
+            syncAllGoogleTasks();
         }
-    });
+    };
+
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        chrome.storage.local.get(keys, storageCallback);
+    } else {
+        // Fallback for Web environment
+        try {
+            const res = {
+                savedGoogleTasksListId: localStorage.getItem('savedGoogleTasksListId'),
+                googleAuthToken: localStorage.getItem('googleAuthToken'),
+                isGoogleSyncEnabled: localStorage.getItem('isGoogleSyncEnabled')
+            };
+            storageCallback(res);
+        } catch (e) {
+            console.warn("Storage fallback failed", e);
+            storageCallback({});
+        }
+    }
 
     document.addEventListener('click', (e) => {
         // --- Space Specific List Toggle ---
@@ -111,12 +129,16 @@ export function initGoogleTasks(callbacks) {
 
         // 1. ปุ่ม Login
         if (e.target.closest('#connect-google-btn') || e.target.closest('#master-connect-google-btn')) {
-            chrome.identity.getAuthToken({ interactive: true }, (token) => {
-                if (chrome.runtime.lastError) return;
-                setGoogleAuthToken(token);
-                updateLoginUI();
-                fetchGoogleLists();
-            });
+            if (typeof chrome !== 'undefined' && chrome.identity) {
+                chrome.identity.getAuthToken({ interactive: true }, (token) => {
+                    if (chrome.runtime.lastError) return;
+                    setGoogleAuthToken(token);
+                    updateLoginUI();
+                    fetchGoogleLists();
+                });
+            } else {
+                alert("Google Login via Extension API is not available on Mobile/Web. Please use Drive Sync button instead for cloud data.");
+            }
         }
 
         // Deep Sync & Remove Duplicates

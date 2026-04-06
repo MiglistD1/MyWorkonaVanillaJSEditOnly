@@ -84,10 +84,14 @@ async function loadRewardData() {
 }
 
 async function saveRewardData() {
-    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-        await chrome.storage.local.set({ 'questRewardData': rewardData });
-    } else {
-        localStorage.setItem('questRewardData', JSON.stringify(rewardData));
+    try {
+        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+            await chrome.storage.local.set({ 'questRewardData': rewardData });
+        } else {
+            localStorage.setItem('questRewardData', JSON.stringify(rewardData));
+        }
+    } catch (e) {
+        console.error("Failed to save reward data", e);
     }
     syncLootWithGoogleTasks();
 }

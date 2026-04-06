@@ -15,12 +15,22 @@ export async function renderDefaultDashboard() {
 
     // 🟢 โหลดจาก Storage เฉพาะครั้งแรก ครั้งต่อไปอ่านจากแรมทันที
     if (!ccWidgetStateCache) {
-        const uiRes = await chrome.storage.local.get(['ccWidgetState']);
-        ccWidgetStateCache = uiRes.ccWidgetState || {
-            minimized: [],
-            order: ['todo', 'flow'],
-            isLocked: false
-        };
+        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+            const uiRes = await chrome.storage.local.get(['ccWidgetState']);
+            ccWidgetStateCache = uiRes.ccWidgetState || {
+                minimized: [],
+                order: ['todo', 'flow'],
+                isLocked: false
+            };
+        } else {
+            // Fallback สำหรับ Web/Mobile
+            const saved = localStorage.getItem('ccWidgetState');
+            ccWidgetStateCache = saved ? JSON.parse(saved) : {
+                minimized: [],
+                order: ['todo', 'flow'],
+                isLocked: false
+            };
+        }
     }
     const uiState = ccWidgetStateCache;
     const isMinimized = (id) => uiState.minimized.includes(id);
@@ -97,7 +107,11 @@ export async function renderDefaultDashboard() {
         btn.onclick = () => {
             const id = btn.dataset.id;
             if (!uiState.minimized.includes(id)) uiState.minimized.push(id);
-            chrome.storage.local.set({ ccWidgetState: uiState });
+            if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+                chrome.storage.local.set({ ccWidgetState: uiState });
+            } else {
+                localStorage.setItem('ccWidgetState', JSON.stringify(uiState));
+            }
             renderDefaultDashboard(); // 🟢 วาดใหม่ทันที ไม่ต้องรอ Storage Callback
         };
     });
@@ -123,7 +137,11 @@ export async function renderDefaultDashboard() {
         bub.onclick = () => {
             const id = bub.dataset.id;
             uiState.minimized = uiState.minimized.filter(m => m !== id);
-            chrome.storage.local.set({ ccWidgetState: uiState });
+            if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+                chrome.storage.local.set({ ccWidgetState: uiState });
+            } else {
+                localStorage.setItem('ccWidgetState', JSON.stringify(uiState));
+            }
             renderDefaultDashboard(); // 🟢 กู้คืนทันที
         };
     });
@@ -141,7 +159,11 @@ export async function renderDefaultDashboard() {
                 const finalOrder = [...newOrder];
                 uiState.order.forEach(id => { if(!finalOrder.includes(id)) finalOrder.push(id); });
                 uiState.order = finalOrder;
-                chrome.storage.local.set({ ccWidgetState: uiState });
+                if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+                    chrome.storage.local.set({ ccWidgetState: uiState });
+                } else {
+                    localStorage.setItem('ccWidgetState', JSON.stringify(uiState));
+                }
             }
         });
     }
@@ -151,7 +173,11 @@ export async function renderDefaultDashboard() {
     if (lockBtn) {
         lockBtn.onclick = () => {
             uiState.isLocked = !uiState.isLocked;
-            chrome.storage.local.set({ ccWidgetState: uiState });
+            if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+                chrome.storage.local.set({ ccWidgetState: uiState });
+            } else {
+                localStorage.setItem('ccWidgetState', JSON.stringify(uiState));
+            }
             renderDefaultDashboard(); // 🟢 ล็อคทันที
         };
     }

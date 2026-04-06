@@ -249,7 +249,7 @@ export function openKeepWithTag(tag, isSideView) {
         targetUrl += `#label/${encodedTag}`;
     }
 
-    if (isSideView && chrome.sidePanel) {
+    if (isSideView && typeof chrome !== 'undefined' && chrome.sidePanel) {
         chrome.sidePanel.setOptions({ path: targetUrl, enabled: true });
         chrome.sidePanel.open({ windowId: chrome.windows.WINDOW_ID_CURRENT });
     } else {

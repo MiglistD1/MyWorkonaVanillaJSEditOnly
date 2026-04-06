@@ -691,7 +691,7 @@ function initMasterEvents() {
 
                 if (task.linkData?.url) {
                     e.preventDefault();
-                    if (task.linkData.isSideview && chrome.sidePanel) {
+                    if (task.linkData.isSideview && typeof chrome !== 'undefined' && chrome.sidePanel) {
                         chrome.sidePanel.setOptions({ path: task.linkData.url, enabled: true });
                         chrome.sidePanel.open({ windowId: chrome.windows.WINDOW_ID_CURRENT });
                     } else { window.open(task.linkData.url, '_blank'); }

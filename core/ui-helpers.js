@@ -33,6 +33,9 @@ export function getFaviconUrl(tabUrl, favIconUrl) {
     try {
         // กลับมาใช้ API ของ Chrome Extension (ต้องมี permission: "favicon")
         // วิธีนี้จะได้ไอคอน Google Apps (Docs, Sheets, Drive) ที่ถูกต้องแยกตามประเภท
+        if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.getURL) {
+            throw new Error("Not in extension environment");
+        }
         const url = new URL(chrome.runtime.getURL("/_favicon/"));
         url.searchParams.set("pageUrl", tabUrl);
         url.searchParams.set("size", "32");

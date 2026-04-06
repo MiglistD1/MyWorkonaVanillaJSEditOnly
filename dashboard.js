@@ -153,14 +153,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Command Center Trigger
-        if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) {
-            document.querySelectorAll('.btn-cc-trigger').forEach(btn => {
-                btn.onclick = (e) => {
-                    e.preventDefault();
-                    handleSpaceChange(0, false);
-                };
-            });
-        }
+        document.querySelectorAll('.btn-cc-trigger').forEach(btn => {
+            btn.onclick = (e) => {
+                e.preventDefault();
+                handleSpaceChange(0, false);
+            };
+        });
 
         // Shortcut Bar Collapse Logic
         const btnCollapseLaunchers = document.getElementById('btn-collapse-launchers');
@@ -206,18 +204,40 @@ document.addEventListener('DOMContentLoaded', () => {
         autoExportSelect?.addEventListener('change', saveDataManagementSettings);
 
         btnManualExport?.addEventListener('click', () => {
-            chrome.storage.local.get(null, (allData) => {
+            const performExport = (allData) => {
                 const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);
                 const d = new Date();
                 const timestamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}_${String(d.getHours()).padStart(2, '0')}-${String(d.getMinutes()).padStart(2, '0')}`;
                 const filename = (appSettings.exportSubfolder || "MyBackups") + '/MyWorkspace_Backup_' + timestamp + '.json';
-                chrome.downloads.download({ url, filename }, () => {
+                
+                if (typeof chrome !== 'undefined' && chrome.downloads) {
+                    chrome.downloads.download({ url, filename }, () => {
+                        appSettings.lastExportTimestamp = Date.now();
+                        saveData();
+                        URL.revokeObjectURL(url);
+                    });
+                } else {
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = filename.split('/').pop();
+                    a.click();
                     appSettings.lastExportTimestamp = Date.now();
                     saveData();
-                    URL.revokeObjectURL(url);
-                });
-            });
+                    setTimeout(() => URL.revokeObjectURL(url), 100);
+                }
+            };
+
+            if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+                chrome.storage.local.get(null, performExport);
+            } else {
+                const data = {};
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    try { data[key] = JSON.parse(localStorage.getItem(key)); } catch(e) { data[key] = localStorage.getItem(key); }
+                }
+                performExport(data);
+            }
         });
 
         btnImportData?.addEventListener('click', () => fileImportInput?.click());
@@ -230,11 +250,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 try {
                     const data = JSON.parse(event.target.result);
                     if (confirm('Replace all existing data with this backup? This will reload the application.')) {
-                        chrome.storage.local.clear(() => {
-                            chrome.storage.local.set(data, () => {
-                                location.reload();
+                        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+                            chrome.storage.local.clear(() => {
+                                chrome.storage.local.set(data, () => { location.reload(); });
                             });
-                        });
+                        } else {
+                            localStorage.clear();
+                            Object.keys(data).forEach(k => localStorage.setItem(k, JSON.stringify(data[k])));
+                            location.reload();
+                        }
                     }
                 } catch (err) { alert('Invalid JSON file.'); }
             };

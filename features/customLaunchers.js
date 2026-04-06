@@ -256,24 +256,33 @@ function createLauncherBtn(item) {
                     const halfWidth = Math.floor(window.screen.availWidth / 2);
                     const screenHeight = window.screen.availHeight;
 
-                    // 1. Move Browser to the opposite side
-                    chrome.windows.getCurrent({}, (win) => {
-                        chrome.windows.update(win.id, { left: browserLeft, top: 0, width: halfWidth, height: screenHeight, state: 'normal' });
-                    });
-                    // 2. Open App (Native Host will handle moving App)
-                    chrome.runtime.sendNativeMessage('com.myworkona.launcher', { path: item.url, name: item.name, splitView: true, side: pos }, (response) => {
-                        if (chrome.runtime.lastError) console.error(chrome.runtime.lastError);
-                        if (response && response.status === 'error') alert("Launcher Error: " + response.message);
-                    });
+                    if (typeof chrome !== 'undefined' && chrome.windows && chrome.runtime) {
+                        // 1. Move Browser to the opposite side
+                        chrome.windows.getCurrent({}, (win) => {
+                            chrome.windows.update(win.id, { left: browserLeft, top: 0, width: halfWidth, height: screenHeight, state: 'normal' });
+                        });
+                        // 2. Open App (Native Host will handle moving App)
+                        chrome.runtime.sendNativeMessage('com.myworkona.launcher', { path: item.url, name: item.name, splitView: true, side: pos }, (response) => {
+                            if (chrome.runtime.lastError) console.error(chrome.runtime.lastError);
+                            if (response && response.status === 'error') alert("Launcher Error: " + response.message);
+                        });
+                    } else {
+                        alert("Local programs can only be launched via the Desktop Extension.");
+                    }
                 } else {
-                    chrome.runtime.sendNativeMessage('com.myworkona.launcher', { path: item.url, name: item.name, splitView: false }, (response) => {
-                        if (response && response.status === 'error') alert("Launcher Error: " + response.message);
-                    });
+                    if (typeof chrome !== 'undefined' && chrome.runtime) {
+                        chrome.runtime.sendNativeMessage('com.myworkona.launcher', { path: item.url, name: item.name, splitView: false }, (response) => {
+                            if (response && response.status === 'error') alert("Launcher Error: " + response.message);
+                        });
+                    } else {
+                        alert("Local programs can only be launched via the Desktop Extension.");
+                    }
                 }
             } else {
                 // Default: Web
                 if (item.isWebSplit) {
-                    chrome.windows.getCurrent({}, (win) => {
+                    if (typeof chrome !== 'undefined' && chrome.windows) {
+                        chrome.windows.getCurrent({}, (win) => {
                         const halfWidth = Math.floor(window.screen.availWidth / 2);
                         const screenHeight = window.screen.availHeight;
                         
@@ -300,7 +309,7 @@ function createLauncherBtn(item) {
                             });
                         } else {
                             // Original logic: just open in existing window (which is now half-screen)
-                            if (item.isSideView) {
+                            if (item.isSideView && chrome.sidePanel) {
                                 chrome.sidePanel.setOptions({ path: item.url, enabled: true });
                                 chrome.sidePanel.open({ windowId: win.id });
                             } else {
@@ -308,7 +317,10 @@ function createLauncherBtn(item) {
                             }
                         }
                     });
-                } else if (item.isSideView) {
+                    } else {
+                        openOrFocusTab(item.url);
+                    }
+                } else if (item.isSideView && typeof chrome !== 'undefined' && chrome.sidePanel) {
                     chrome.sidePanel.setOptions({ path: item.url, enabled: true });
                     chrome.sidePanel.open({ windowId: chrome.windows.WINDOW_ID_CURRENT });
                 } else {
