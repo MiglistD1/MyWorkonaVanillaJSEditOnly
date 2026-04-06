@@ -1,6 +1,9 @@
 /* ==========================================================================
    SIDEBAR & WORKSPACE LAYOUT
    ========================================================================== */
+/* ==========================================================================
+   SIDEBAR & WORKSPACE LAYOUT
+   ========================================================================== */
 .spacebar { width: 260px; background-color: var(--bg-spacebar); color: var(--text-main); display: flex; flex-direction: column; transition: width 0.35s ease, opacity 0.3s ease; flex-shrink: 0; border-right: 1px solid var(--border-color); will-change: width;}
 .spacebar.collapsed { width: 0; padding: 0; overflow: hidden; border: none; }
 .spacebar-header { padding: 25px 20px; font-size: 16px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; white-space: nowrap;}
