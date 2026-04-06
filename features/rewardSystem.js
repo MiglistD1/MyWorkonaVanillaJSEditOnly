@@ -369,18 +369,22 @@ export function initRewardSystem() {
     loadRewardData();
 
     // Listen for Google Tasks sync completion to refresh reward modal
-    chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
-        if (message.type === 'GOOGLE_TASKS_SYNC_COMPLETE') {
-            // 🟢 เมื่อการซิงค์หลักเสร็จ ให้โหลดข้อมูลรางวัลใหม่และสั่งซิงค์ Loot ทันทีเพื่อดึงยอดล่าสุดจาก Google
-            await loadRewardData();
-            await syncLootWithGoogleTasks();
-            
-            const modal = document.getElementById('reward-modal');
-            if (modal && modal.style.display === 'flex') {
-                renderRewardContent();
+    // 🟢 ตรวจสอบว่า chrome.runtime.onMessage มีอยู่ก่อนเรียกใช้
+    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) {
+        chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
+            if (message.type === 'GOOGLE_TASKS_SYNC_COMPLETE') {
+                // 🟢 เมื่อการซิงค์หลักเสร็จ ให้โหลดข้อมูลรางวัลใหม่และสั่งซิงค์ Loot ทันทีเพื่อดึงยอดล่าสุดจาก Google
+                await loadRewardData();
+                await syncLootWithGoogleTasks();
+                
+                const modal = document.getElementById('reward-modal');
+                if (modal && modal.style.display === 'flex') {
+                    renderRewardContent();
+                }
             }
         }
-    });
+        );
+    }
     
     // 🟢 1. ส่งออกข้อมูลเพื่อให้ระบบ Autocomplete ใน ui-helpers.js ดึงไปใช้แสดง Popup
     window.getRewardSystemData = () => rewardData;

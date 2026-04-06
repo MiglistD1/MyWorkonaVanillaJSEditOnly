@@ -153,12 +153,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Command Center Trigger
-        document.querySelectorAll('.btn-cc-trigger').forEach(btn => {
-            btn.onclick = (e) => {
-                e.preventDefault();
-                handleSpaceChange(0, false);
-            };
-        });
+        if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) {
+            document.querySelectorAll('.btn-cc-trigger').forEach(btn => {
+                btn.onclick = (e) => {
+                    e.preventDefault();
+                    handleSpaceChange(0, false);
+                };
+            });
+        }
 
         // Shortcut Bar Collapse Logic
         const btnCollapseLaunchers = document.getElementById('btn-collapse-launchers');

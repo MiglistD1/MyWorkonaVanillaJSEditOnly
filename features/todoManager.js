@@ -173,14 +173,16 @@ export function initTodoManager(callbacks) {
     document.head.appendChild(style);
 
     // Listen for background sync completion
-    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-        if (message.type === 'GOOGLE_TASKS_SYNC_COMPLETE') {
-            // 🟢 โหลดข้อมูลใหม่จาก Storage ก่อนเรนเดอร์ เพื่อให้เห็นการเปลี่ยนแปลงจาก Google Tasks
-            loadData(() => {
-                onRenderCallback(); 
-            });
-        }
-    });
+    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) {
+        chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+            if (message.type === 'GOOGLE_TASKS_SYNC_COMPLETE') {
+                // 🟢 โหลดข้อมูลใหม่จาก Storage ก่อนเรนเดอร์ เพื่อให้เห็นการเปลี่ยนแปลงจาก Google Tasks
+                loadData(() => {
+                    onRenderCallback(); 
+                });
+            }
+        });
+    }
     onRenderCallback = callbacks.onRender;
 
     // Event Listeners
