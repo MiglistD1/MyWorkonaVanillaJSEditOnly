@@ -1,6 +1,6 @@
 import Sortable from '../sortable.esm.js';
-import { getCurrentSpace, saveData, getShortDate, getAppSettings, setCurrentSpaceId, getSpaces, getFilterTags, loadData, getGlobalLaunchers, getLauncherTags } from '../core/storage.js';
 import { svgEdit, svgTrashRed, googleTasksIcon } from '../core/icons.js';
+import { getCurrentSpace, saveData, getShortDate, getAppSettings, setCurrentSpaceId, getSpaces, getFilterTags, loadData, getGlobalLaunchers, getLauncherTags, getCurrentSpaceId } from '../core/storage.js';
 import { generateMiniTagsBtn, generateTaskHTML, attachSubtaskEventListeners, attachTaskInlineEditListeners, handleTagAutocomplete, applySyntaxHighlighting } from '../core/ui-helpers.js';
 
 import { saveToDrive, getAuthToken } from '../core/driveSync.js';
@@ -188,6 +188,131 @@ export function initTodoManager(callbacks) {
     // Event Listeners
     document.getElementById('btn-add-task').addEventListener('click', addTask);
     document.getElementById('new-task-input').addEventListener('keypress', (e) => { if (e.key === 'Enter') addTask(); });
+
+    // 🟢 Mobile FAB & Input Overlay Logic - จัดการตัวแปรให้ถูกต้อง
+    const tasksColumn = document.getElementById('tasks-card'); // Use tasks-card as scrollable area
+    const isMobile = window.matchMedia("(max-width: 768px)").matches;
+    const isCommandCenter = getCurrentSpaceId() === 0;
+
+    if (isMobile && !isCommandCenter) { // 🟢 ไม่แสดง FAB ใน Command Center
+        let fab = document.getElementById('sf-mobile-fab-add');
+        if (!fab) { // สร้าง FAB ถ้ายังไม่มี
+            fab = document.createElement('button');
+            fab.id = 'sf-mobile-fab-add';
+            fab.className = 'sf-mobile-fab';
+            fab.innerHTML = '+';
+            document.body.appendChild(fab); // ติดที่ Body เพื่อให้ลอยอยู่เสมอ
+
+            // 🟢 เพิ่ม Logic ให้ FAB ซ่อนเมื่อเลื่อนลง และแสดงเมื่อเลื่อนขึ้น
+            let lastScrollTop = 0;
+            if (tasksColumn) {
+                tasksColumn.addEventListener('scroll', () => {
+                    const scrollTop = tasksColumn.scrollTop;
+                    if (scrollTop > lastScrollTop && scrollTop > 50) { // เลื่อนลง
+                        fab.style.transform = 'translateY(100px)'; // ซ่อนลงด้านล่าง
+                    } else { // เลื่อนขึ้น
+                        fab.style.transform = 'translateY(0)'; // แสดงขึ้นมา
+                    }
+                    lastScrollTop = scrollTop;
+                });
+            }
+        }
+
+        const taskInputBar = document.getElementById('new-task-input').closest('.task-input-bar'); // 🟢 หา Element โดยใช้ ID ที่แน่นอนกว่า
+        // 🟢 สร้าง Mobile FAB Menu
+        let fabMenu = document.getElementById('sf-mobile-fab-menu');
+        if (!fabMenu) {
+            fabMenu = document.createElement('div');
+            fabMenu.id = 'sf-mobile-fab-menu';
+            fabMenu.className = 'mobile-tools-popup sf-mobile-fab-menu'; // ใช้สไตล์เดียวกับ mobile-tools-popup
+            fabMenu.innerHTML = `
+                <div class="drag-handle-bar"></div>
+                <button id="sf-fab-menu-add-task" style="display:flex; align-items:center; gap:12px;"><svg class="svg-icon-lg" style="width:20px; height:20px;"><use href="#icon-pencil"></use></svg> Add new task</button>
+                <button id="sf-fab-menu-templates" style="display:flex; align-items:center; gap:12px;"><svg class="svg-icon-lg" style="width:20px; height:20px;"><use href="#icon-layers"></use></svg> Templates</button>
+            `;
+            document.body.appendChild(fabMenu);
+
+            // Event Listener สำหรับ FAB Menu
+            fabMenu.querySelector('#sf-fab-menu-add-task').onclick = (e) => {
+                e.stopPropagation();
+                fabMenu.classList.remove('is-active'); // ซ่อนเมนู
+                taskInputBar.classList.add('is-active'); // แสดงแถบพิมพ์
+                document.getElementById('new-task-input').focus();
+                fab.classList.add('is-hidden'); // ซ่อน FAB ชั่วคราวเมื่อแถบพิมพ์เปิด
+            };
+            fabMenu.querySelector('#sf-fab-menu-templates').onclick = (e) => {
+                e.stopPropagation();
+                fabMenu.classList.remove('is-active');
+                document.getElementById('btn-todo-templates')?.click(); // เปิด Modal Templates
+                fab.classList.remove('is-hidden'); // ซ่อน FAB ชั่วคราวเมื่อแถบพิมพ์เปิด
+            };
+
+            // 🟢 ปิด FAB Menu เมื่อคลิกนอกพื้นที่
+            document.addEventListener('click', (e) => {
+                if (!fabMenu.contains(e.target) && fabMenu.classList.contains('is-active')) {
+                    fabMenu.classList.remove('is-active');
+                }
+            });
+
+            // 🟢 Drag Logic for FAB Menu (Bottom Sheet)
+            const fabMenuHeader = fabMenu.querySelector('.drag-handle-bar');
+            let isDraggingMenu = false;
+            let startY = 0;
+            let initialY = 0;
+
+            if (fabMenuHeader) {
+                fabMenuHeader.addEventListener('touchstart', (e) => {
+                    if (fabMenu.classList.contains('is-active')) {
+                        isDraggingMenu = true;
+                        startY = e.touches[0].clientY;
+                        initialY = fabMenu.getBoundingClientRect().top;
+                        fabMenu.style.transition = 'none'; // ปิด transition ขณะลาก
+                    }
+                }, { passive: true });
+
+                document.addEventListener('touchmove', (e) => {
+                    if (!isDraggingMenu) return;
+                    const currentY = e.touches[0].clientY;
+                    const dy = currentY - startY;
+                    const newTop = Math.max(window.innerHeight / 2, initialY + dy); // ไม่ให้ลากขึ้นสูงเกินครึ่งจอ
+                    fabMenu.style.transform = `translateY(${newTop - fabMenu.getBoundingClientRect().height}px)`;
+                }, { passive: true });
+
+                document.addEventListener('touchend', () => {
+                    if (isDraggingMenu) {
+                        isDraggingMenu = false;
+                        fabMenu.style.transition = ''; // เปิด transition คืน
+                        const currentPos = fabMenu.getBoundingClientRect().top;
+                        if (currentPos > window.innerHeight * 0.7) { // ถ้าลากลงเกินครึ่ง ให้ปิดเมนู
+                            fabMenu.classList.remove('is-active');
+                        } else {
+                            fabMenu.style.transform = 'translateY(0)'; // Snap กลับไปที่เดิม
+                        }
+                    }
+                });
+            }
+        }
+
+        fab.onclick = (e) => { // เมื่อกด FAB
+            e.stopPropagation();
+            fabMenu.classList.add('is-active'); // แสดง FAB Menu (Bottom Sheet)
+            // fab.classList.add('is-hidden'); // ไม่ซ่อน FAB จนกว่าจะกด Add Task ในเมนู
+            document.getElementById('new-task-input').focus();
+        };
+
+        // คลิกที่อื่นเพื่อซ่อนแถบพิมพ์ (ยกเว้นในตัวแถบเอง)
+        document.addEventListener('click', (e) => {
+            if (taskInputBar && !taskInputBar.contains(e.target) && taskInputBar.classList.contains('is-active')) {
+                taskInputBar.classList.remove('is-active');
+                fab.classList.remove('is-hidden');
+            }
+            if (!fabMenu.contains(e.target) && fabMenu.classList.contains('is-active')) {
+                fabMenu.classList.remove('is-active');
+                fab.classList.remove('is-hidden');
+            }
+
+        });
+    }
 
     // 🟢 Template System Initialization
     initTodoTemplateSystem();
@@ -1735,6 +1860,161 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
     const archiveListUI = document.getElementById('archive-list');
     const trashListUI = document.getElementById('trash-task-list');
     const trashContainer = document.getElementById('trash-tasks-details');
+
+    // 🟢 1. จัดการตัวแปรและสถานะ Mobile
+    const isMobile = window.matchMedia("(max-width: 768px)").matches;
+    const isCommandCenter = getCurrentSpaceId() === 0;
+    const mobileTagBtn = document.getElementById('btn-open-mobile-tag-modal');
+
+    // 🟢 2. ระบบ Mobile FAB และ Menu (ย้ายมาไว้ที่นี่เพื่อให้รองรับการเปลี่ยน Space)
+    if (isMobile) {
+        const fab = document.getElementById('sf-mobile-fab-add');
+        const fabMenu = document.getElementById('sf-mobile-fab-menu');
+
+        // จัดการการแสดงผลของ FAB ตามหน้า (Command Center ไม่ให้มี)
+        if (fab) fab.style.setProperty('display', isCommandCenter ? 'none' : 'flex', 'important');
+
+        if (!isCommandCenter) {
+            let targetFab = fab;
+            if (!targetFab) {
+                targetFab = document.createElement('button');
+                targetFab.id = 'sf-mobile-fab-add';
+                targetFab.className = 'sf-mobile-fab';
+                targetFab.innerHTML = '+';
+                document.body.appendChild(targetFab);
+
+                // ระบบซ่อน FAB เมื่อเลื่อนจอ
+                const tasksCard = document.getElementById('tasks-card');
+                let lastSt = 0;
+                if (tasksCard) {
+                    tasksCard.onscroll = () => {
+                        let st = tasksCard.scrollTop;
+                        if (st > lastSt && st > 50) targetFab.style.transform = 'translateY(100px)';
+                        else targetFab.style.transform = 'translateY(0)';
+                        lastSt = st;
+                    };
+                }
+            }
+
+            // สร้าง Menu Popup ถ้ายังไม่มี
+            let targetMenu = fabMenu;
+            if (!targetMenu) {
+                targetMenu = document.createElement('div');
+                targetMenu.id = 'sf-mobile-fab-menu';
+                targetMenu.className = 'mobile-tools-popup';
+                targetMenu.innerHTML = `
+                    <div class="drag-handle-bar"></div>
+                    <button id="sf-fab-menu-add-task" style="display:flex; align-items:center; gap:12px;"><svg class="svg-icon-lg" style="width:20px; height:20px;"><use href="#icon-pencil"></use></svg> Add new task</button>
+                    <button id="sf-fab-menu-templates" style="display:flex; align-items:center; gap:12px;"><svg class="svg-icon-lg" style="width:20px; height:20px;"><use href="#icon-layers"></use></svg> Templates</button>
+                `;
+                document.body.appendChild(targetMenu);
+
+                targetMenu.querySelector('#sf-fab-menu-add-task').onclick = (e) => {
+                    e.stopPropagation();
+                    targetMenu.classList.remove('is-active');
+                    const bar = document.getElementById('new-task-input')?.closest('.task-input-bar');
+                    if (bar) bar.classList.add('is-active');
+                    document.getElementById('new-task-input').focus();
+                    document.getElementById('sf-mobile-fab-add')?.classList.add('is-hidden');
+                };
+
+                targetMenu.querySelector('#sf-fab-menu-templates').onclick = (e) => {
+                    e.stopPropagation();
+                    targetMenu.classList.remove('is-active');
+                    document.getElementById('btn-todo-templates')?.click();
+                };
+            }
+
+            targetFab.onclick = (e) => {
+                e.stopPropagation();
+                targetMenu.classList.add('is-active');
+            };
+        }
+    }
+
+    if (mobileTagBtn) {
+        mobileTagBtn.style.display = isMobile ? 'inline-flex' : 'none';
+    }
+
+    // รวบปุ่มบนหัว To-do เป็น Menu เดียวกันบนมือถือ
+    const btnToggleActions = document.getElementById('btn-toggle-task-actions');
+    const btnToggleProminent = document.getElementById('btn-toggle-prominent-tasks');
+    const btnExpand = document.getElementById('btn-expand-all-subtasks');
+    const btnCollapse = document.getElementById('btn-collapse-all-subtasks');
+    const btnTemplates = document.getElementById('btn-todo-templates');
+
+    if (isMobile) {
+        let mobileToolsBtn = document.getElementById('btn-mobile-todo-tools');
+        if (!mobileToolsBtn) {
+            mobileToolsBtn = document.createElement('button');
+            mobileToolsBtn.id = 'btn-mobile-todo-tools';
+            mobileToolsBtn.className = 'btn-icon mobile-only';
+            mobileToolsBtn.innerHTML = '⋮'; 
+            btnToggleActions.parentNode.insertBefore(mobileToolsBtn, btnToggleActions);
+        }
+
+        let menuPopup = document.getElementById('sf-mobile-tools-popup');
+        if (!menuPopup) {
+            menuPopup = document.createElement('div');
+            menuPopup.id = 'sf-mobile-tools-popup';
+            menuPopup.className = 'mobile-tools-popup';
+            document.body.appendChild(menuPopup);
+        }
+
+        // คลิกข้างนอกเพื่อปิดเมนู (รวมทั้ง FAB Menu และ Tools Menu)
+        if (!window._mobileMenuGlobalClickBound) {
+            document.addEventListener('click', (e) => {
+                const toolsMenu = document.getElementById('sf-mobile-tools-popup');
+                const fabMenu = document.getElementById('sf-mobile-fab-menu');
+                const inputBar = document.getElementById('new-task-input')?.closest('.task-input-bar');
+                
+                // 🟢 แก้ไข: ตรวจสอบว่าไม่ได้คลิกที่ตัวปุ่มเปิด (Trigger) เพื่อไม่ให้ปิดทันทีที่เปิด
+                if (toolsMenu && !toolsMenu.contains(e.target) && !e.target.closest('#btn-mobile-todo-tools')) toolsMenu.style.display = 'none';
+                if (fabMenu && !fabMenu.contains(e.target) && !e.target.closest('#sf-mobile-fab-add')) fabMenu.classList.remove('is-active');
+                
+                if (inputBar && !inputBar.contains(e.target) && inputBar.classList.contains('is-active') && !e.target.closest('#sf-mobile-fab-add')) {
+                    inputBar.classList.remove('is-active');
+                    document.getElementById('sf-mobile-fab-add')?.classList.remove('is-hidden');
+                }
+            });
+            window._mobileMenuGlobalClickBound = true;
+        }
+
+        mobileToolsBtn.onclick = (e) => {
+                e.stopPropagation();
+                // 🟢 อัปเดตเนื้อหาเมนูตามสถานะปัจจุบันก่อนแสดงผล
+                menuPopup.innerHTML = `
+                    <button data-action="1">👁️ ${space.showTaskActions ? 'Hide' : 'Show'} Quick Actions</button>
+                    <button data-action="2">🚩 ${space.hideProminentTasks ? 'Show' : 'Hide'} Flags</button>
+                    <div style="height:1px; background:var(--border-color); margin:4px 0; opacity:0.5;"></div>
+                    <button data-action="3">📂 Expand All Subtasks</button>
+                    <button data-action="4">📁 Collapse All Subtasks</button>
+                    <div style="height:1px; background:var(--border-color); margin:4px 0; opacity:0.5;"></div>
+                    <button data-action="5">📑 Templates</button>
+                `;
+                const isVisible = menuPopup.style.display === 'flex';
+                menuPopup.style.display = isVisible ? 'none' : 'flex';
+            };
+
+            menuPopup.onclick = (e) => {
+                const action = e.target.closest('button')?.dataset.action;
+                if (action === '1') btnToggleActions.click();
+                if (action === '2') btnToggleProminent.click();
+                if (action === '3') btnExpand.click();
+                // 🟢 เพิ่มปุ่ม Templates เข้าไปใน Mobile Menu ด้วย
+                if (action === '5') {
+                    document.getElementById('btn-todo-templates')?.click();
+                }
+                if (action === '4') btnCollapse.click();
+                menuPopup.style.display = 'none';
+            };
+
+        mobileToolsBtn.style.display = 'inline-flex';
+    } else {
+        // กลับสู่โหมด Desktop
+        const mobileToolsBtn = document.getElementById('btn-mobile-todo-tools');
+        if (mobileToolsBtn) mobileToolsBtn.style.display = 'none';
+    }
 
     // 🛑 ป้องกัน UI เอ๋อ: หากผู้ใช้กำลังพิมพ์งานอยู่ ห้ามวาดรายการใหม่ทับเด็ดขาด
     if (document.activeElement && document.activeElement.classList.contains('task-actual-text')) {

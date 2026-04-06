@@ -51,9 +51,9 @@ export function toggleHabitModal(space) {
 export function openHabitModal(space) {
     let modal = document.getElementById('habit-modal');
     if (!modal) {
-        const modalHTML = `
+        const modalHTML = ` 
         <div id="habit-modal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:1100; pointer-events:none;">
-            <div class="modal-content" style="position:absolute; width: 450px; max-height: 85vh; display:flex; flex-direction:column; background:var(--bg-card); pointer-events:auto; box-shadow: 0 10px 40px rgba(0,0,0,0.2); border: 1px solid var(--border-color); padding: 0; overflow:hidden;">
+            <div class="modal-content" style="position:absolute; display:flex; flex-direction:column; background:var(--bg-card); pointer-events:auto; box-shadow: 0 10px 40px rgba(0,0,0,0.2); border: 1px solid var(--border-color); padding: 0; overflow:hidden;">
                 <div id="habit-header" style="display:flex; justify-content:space-between; align-items:center; padding: 15px 20px; border-bottom:1px solid var(--border-color); background: var(--bg-spacebar); cursor: grab; user-select:none;">
                     <div>
                         <h3 style="margin:0; font-size:20px; display:flex; align-items:center; gap:8px;">
@@ -191,8 +191,16 @@ export function openHabitModal(space) {
 
     const state = getAppSettings().habitState;
     const content = modal.querySelector('.modal-content');
-    content.style.left = `${state.x}px`;
-    content.style.top = `${state.y}px`;
+    
+    // บนมือถือ: ล้างค่าพิกัด Inline สไตล์ทิ้ง เพื่อให้ CSS (@media) จัดการให้อยู่กึ่งกลางเอง
+    if (window.innerWidth <= 768) {
+        content.style.left = '';
+        content.style.top = '';
+        content.style.transform = '';
+    } else {
+        content.style.left = `${state.x}px`;
+        content.style.top = `${state.y}px`;
+    }
 
     updateHabitToggleUI();
     renderHabitList(space);

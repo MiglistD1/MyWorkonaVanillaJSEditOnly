@@ -87,18 +87,18 @@ export function applyAppSettings() {
             .task-actual-text { font-size: 13px !important; padding: 0 !important; }
             .google-task-checkbox { transform: scale(0.9); margin-right: 4px !important; flex-shrink: 0; }
             
-            /* 4. ช่องกรอกงานใหม่แบบ Floating Bottom Bar (แบบ Google Tasks) */
+            /* 4. ช่องกรอกงานใหม่แบบ Floating Bottom Bar (แบบ Google Tasks) - แก้ไขการซ่อน */
             .task-input-bar { 
                 position: fixed; bottom: 0; left: 0; right: 0; 
                 background: var(--bg-card); padding: 12px 16px; 
                 box-shadow: 0 -4px 20px rgba(0,0,0,0.1); 
                 z-index: 1000; border-radius: 16px 16px 0 0;
                 margin: 0 !important; width: 100% !important; 
-                visibility: hidden !important; 
+                visibility: hidden !important; /* เปลี่ยนจาก display: none เพื่อให้ JS หา Element เจอ */
                 transform: translateY(100%);
-                transition: transform 0.2s ease-out, visibility 0.2s;
+                transition: transform 0.2s ease-out, visibility 0.2s ease-out;
             }
-            .task-input-bar.is-active { visibility: visible !important; transform: translateY(0) !important; display: flex !important; }
+            .task-input-bar.is-active { display: flex !important; animation: slideUp 0.2s ease-out; }
 
             /* 5. ปุ่ม Actions ต่างๆ ให้ดูสะอาดขึ้น */
             .item-action-group { opacity: 1 !important; }
@@ -140,40 +140,28 @@ export function applyAppSettings() {
                 display: inline-flex !important;
                 background: var(--hover-bg) !important;
                 border-radius: 50% !important;
-                width: 24px !important; height: 24px !important;
+                width: 26px !important; height: 26px !important;
                 color: var(--primary-color) !important;
-                font-size: 14px !important; line-height: 1 !important;
+                font-size: 16px !important; line-height: 1 !important;
                 opacity: 1 !important;
             }
 
             /* 🟢 Floating Action Button (FAB) */
             .sf-mobile-fab {
                 position: fixed !important; bottom: 20px !important; right: 20px !important;
-                width: 44px !important; height: 44px !important; border-radius: 50% !important;
+                width: 56px !important; height: 56px !important; border-radius: 50% !important;
                 background: var(--primary-color) !important; color: white !important;
                 box-shadow: 0 4px 15px rgba(0,0,0,0.3) !important;
                 display: flex !important; align-items: center; justify-content: center;
-                font-size: 24px !important; z-index: 999; border: none !important;
+                font-size: 30px !important; z-index: 999; border: none !important;
                 transition: transform 0.2s active;
             }
             .sf-mobile-fab:active { transform: scale(0.9); }
-            .sf-mobile-fab.is-hidden { visibility: hidden !important; pointer-events: none !important; }
+            .sf-mobile-fab.is-hidden { display: none !important; }
             
             /* แสดงปุ่มเฉพาะบนมือถือ */
             .mobile-only {
                 display: inline-flex !important;
-            }
-
-            /* 🟢 บังคับให้ Modal (Habit Sheet) อยู่กึ่งกลางเสมอ */
-            .modal-content {
-                width: 90% !important;
-                max-width: 400px !important;
-                position: fixed !important;
-                top: 50% !important;
-                left: 50% !important;
-                transform: translate(-50%, -50%) !important;
-                margin: 0 !important;
-                max-height: 95vh !important;
             }
 
             /* 🟢 ปรับเมนู Popup ให้เป็น Bottom Sheet */
@@ -187,6 +175,19 @@ export function applyAppSettings() {
                 display: none; flex-direction: column; z-index: 10001;
                 animation: slideUp 0.3s ease-out;
             }
+            .mobile-tools-popup.is-active {
+                display: flex !important;
+                visibility: visible !important;
+                transform: translateY(0);
+                animation: slideUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+            }
+            .mobile-tools-popup .drag-handle-bar {
+                width: 40px; height: 4px; background: var(--border-color); border-radius: 2px;
+                margin: 0 auto 10px auto; opacity: 0.6; cursor: grab;
+                flex-shrink: 0;
+            }
+            /* เอา padding-bottom ออกเพื่อให้ drag handle อยู่ด้านบนสุด */
+            .mobile-tools-popup { padding-bottom: 10px !important; }
             .mobile-tools-popup button {
                 padding: 16px !important; width: 100% !important; text-align: left !important;
                 border: none !important; background: transparent !important;

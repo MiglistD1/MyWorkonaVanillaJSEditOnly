@@ -3,7 +3,9 @@ import { getShortDate, getAppSettings, getUnitCharFromThai, getFilterTags } from
 
 export function generateMiniTagsBtn(itemTags, type, index) {
   const count = itemTags ? itemTags.length : 0;
-  const btnText = count > 0 ? `${svgTag} ${count}` : '+ Tag';
+  const isMobile = window.innerWidth <= 768;
+  // บนมือถือ: ถ้ายังไม่มี Tag ให้เหลือแค่เครื่องหมาย +
+  const btnText = count > 0 ? `${svgTag} ${count}` : (isMobile ? '+' : '+ Tag');
   const activeClass = count > 0 ? 'has-tags' : '';
   return `<button class="btn-add-mini-tag btn-edit-tags ${activeClass}" data-type="${type}" data-index="${index}">${btnText}</button>`;
 }
@@ -180,7 +182,7 @@ export function generateTaskHTML(task, index, {
         : (isMasterView ? `data-space="${spaceId}" data-idx="${index}"` : `data-index="${index}"`);
 
     const editBtnClass = isMasterView ? 'edit-task-btn' : 'edit-task-text-btn';
-    const cloudIndicator = (task.googleTaskId) ? `<span style="display: inline-flex; align-items: center; margin-right: 6px; flex-shrink: 0; color: #2684fc;">${googleTasksIcon}</span>` : '';
+    const cloudIndicator = (task.googleTaskId) ? `<span style="width: 6px; height: 6px; background: #2684fc; border-radius: 50%; display: inline-block; margin-right: 6px; flex-shrink: 0;" title="Synced with Google Tasks"></span>` : '';
     
     const isDateOverdue = task.dueDate && !isCompletedOrDeleted && !isActuallyDeleted && new Date(task.dueDate).setHours(0,0,0,0) < new Date().setHours(0,0,0,0);
     const dateColor = isDateOverdue ? '#ef4444' : (isSubtask ? 'var(--primary-color)' : 'var(--text-muted)');
@@ -188,10 +190,15 @@ export function generateTaskHTML(task, index, {
         ? "flex: 1; word-break: break-word; white-space: normal; line-height: 1.4; color: var(--text-muted); text-decoration: line-through; opacity: 0.7;" 
         : `flex: 1; word-break: break-word; white-space: normal; line-height: 1.4; color: ${task.isProminent ? 'var(--primary-color)' : 'var(--text-main)'}; ${task.isProminent ? 'font-weight: 700;' : ''}`;
 
-    let dateDisplay = task.dueDate ? getShortDate(new Date(task.dueDate)) : '';
+    // 🟢 ย่อวันที่ให้สั้นลงสำหรับมือถือ
+    const formatDateMinimal = (d) => {
+        const m = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        return `${d.getDate()} ${m[d.getMonth()]}`;
+    };
+
+    let dateDisplay = task.dueDate ? formatDateMinimal(new Date(task.dueDate)) : '';
     if (task.completed && task.createdAt && task.completedAt) {
-        let diffDays = Math.ceil(Math.abs(new Date(task.completedAt).setHours(0,0,0,0) - new Date(task.createdAt).setHours(0,0,0,0)) / (1000 * 60 * 60 * 24));
-        dateDisplay = `${getShortDate(new Date(task.createdAt))} - ${getShortDate(new Date(task.completedAt))} (${diffDays===0?"0 Days":diffDays+" Days"})`;
+        dateDisplay = 'Done';
     }
 
     // Recursively render Sub-tasks

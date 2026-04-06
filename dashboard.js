@@ -265,6 +265,68 @@ document.addEventListener('DOMContentLoaded', () => {
             reader.readAsText(file);
         });
 
+        // 🟢 Mobile Tag Modal Logic
+        const mobileTagBtn = document.getElementById('btn-open-mobile-tag-modal');
+        const mobileTagModal = document.getElementById('mobile-tag-modal');
+        const mobileTagInput = document.getElementById('mobile-tag-input');
+        const mobileAddTagBtn = document.getElementById('mobile-add-tag-btn');
+        const mobileTagSelectionList = document.getElementById('mobile-tag-selection-list');
+        const mobileCloseTagModalBtn = document.getElementById('btn-close-mobile-tag-modal');
+
+        if (mobileTagBtn && mobileTagModal) {
+            const renderMobileTags = () => {
+                const space = getCurrentSpace();
+                if (!space) return;
+                if (!space.tags) space.tags = [];
+
+                const allTags = new Set(space.tags);
+                space.tasks.forEach(task => {
+                    if (task.tags) task.tags.forEach(t => allTags.add(t));
+                    if (task.subtasks) task.subtasks.forEach(sub => { if (sub.tags) sub.tags.forEach(t => allTags.add(t)); });
+                });
+
+                const sortedTags = Array.from(allTags).sort((a, b) => a.localeCompare(b));
+                const currentFilterTags = getFilterTags();
+
+                mobileTagSelectionList.innerHTML = sortedTags.map(tag => {
+                    const isActive = currentFilterTags.includes(tag);
+                    return `<div class="tag-pill ${isActive ? 'active' : ''}" data-tag="${tag}" style="font-size:12px; padding:4px 10px; cursor:pointer; height:auto; line-height:1.2;">${tag}</div>`;
+                }).join('');
+
+                mobileTagSelectionList.querySelectorAll('.tag-pill').forEach(pill => {
+                    pill.onclick = () => {
+                        const tag = pill.dataset.tag;
+                        const newFilterTags = [...currentFilterTags];
+                        const idx = newFilterTags.indexOf(tag);
+                        if (idx > -1) newFilterTags.splice(idx, 1);
+                        else newFilterTags.push(tag);
+                        setFilterTags(newFilterTags);
+                        saveData();
+                        renderMainContent();
+                        renderMobileTags(); // Re-render tags in modal to update active state
+                    };
+                });
+            };
+
+            mobileTagBtn.onclick = () => {
+                mobileTagModal.style.display = 'flex';
+                renderMobileTags();
+            };
+
+            mobileAddTagBtn.onclick = () => {
+                const newTag = mobileTagInput.value.trim();
+                const space = getCurrentSpace();
+                if (newTag && space && !space.tags.includes(newTag)) {
+                    space.tags.push(newTag);
+                    saveData();
+                    mobileTagInput.value = '';
+                    renderMobileTags();
+                }
+            };
+            mobileTagInput.onkeydown = (e) => { if (e.key === 'Enter') mobileAddTagBtn.click(); };
+            mobileCloseTagModalBtn.onclick = () => { mobileTagModal.style.display = 'none'; };
+        }
+
         renderSidebar();
         renderMainContent();
         updateArchivedStateUI();

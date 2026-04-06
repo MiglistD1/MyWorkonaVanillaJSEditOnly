@@ -18,7 +18,7 @@ export function renderMainContent() {
   const spaceId = getCurrentSpaceId();
   const globalSettings = getAppSettings();
   const mainGrid = document.getElementById('main-grid');
-  const isMobile = window.innerWidth <= 768;
+  const isMobile = window.matchMedia("(max-width: 768px)").matches;
   const tagBar = document.getElementById('tag-bar-container');
   const defaultContainer = document.getElementById('default-dashboard-container');
   const sBar = document.getElementById('schedule-mode-bar');
@@ -55,18 +55,17 @@ export function renderMainContent() {
   // Show normal space content
   if (mainGrid) mainGrid.style.display = 'grid';
   if (tagBar) tagBar.style.display = 'flex';
-  else if (tagBar) tagBar.style.display = 'none'; // Ensure it's hidden if not mobile but also not in command center
   if (defaultContainer) defaultContainer.style.display = 'none';
   if (toggleToolsBtn) toggleToolsBtn.style.display = 'inline-flex';
 
-  // บนมือถือ: บังคับซ่อนส่วนอื่นๆ เพื่อเน้น Todo list
+  // 🟢 Pure JS Approach: จัดการ Layout และซ่อน Container ผ่าน DOM Property
   if (isMobile) {
-      // ปรับปรุงการซ่อนโดยใช้ ID ที่ตรงกับ HTML จริง
+      // บังคับให้ Grid เหลือคอลัมน์เดียว (Tasks) ทันที
       if (mainGrid) mainGrid.style.gridTemplateColumns = '1fr';
-      document.getElementById('tabs-card').style.display = 'none';
-      document.getElementById('resources-card').style.display = 'none';
-      if (sBar) sBar.style.display = 'none';
-      if (fBar) fBar.style.display = 'none';
+
+      // สั่งปิดการแสดงผล Container หลักจาก ID (แม่นยำกว่า class)
+      document.getElementById('tabs-card')?.setAttribute('style', 'display:none !important');
+      document.getElementById('resources-card')?.setAttribute('style', 'display:none !important');
       if (toggleToolsBtn) toggleToolsBtn.style.display = 'none';
   }
 
@@ -96,18 +95,16 @@ export function renderMainContent() {
   const currentFilterTags = getFilterTags();
   const currentFilterMode = getFilterMode();
   const currentSearchQuery = getSearchQuery();
-  
-  // Render Tag Bar only if not mobile
-  if (!isMobile) {
-    renderTagBar(space, currentFilterTags, currentFilterMode, {  
-      onFilterChange: (tags, mode) => { 
-          setFilterTags(tags); 
-          setFilterMode(mode); 
-          renderMainContent(); 
-      }, 
-      onRenderMain: renderMainContent  
-    });
-  }
+
+  // Render Modules
+  renderTagBar(space, currentFilterTags, currentFilterMode, {  
+    onFilterChange: (tags, mode) => { 
+        setFilterTags(tags); 
+        setFilterMode(mode); 
+        renderMainContent(); 
+    }, 
+    onRenderMain: renderMainContent  
+  });
 
   renderTabs(space, currentSearchQuery);
   renderResources(space, currentFilterTags, currentFilterMode, currentSearchQuery, renderAll);
