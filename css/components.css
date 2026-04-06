@@ -1,0 +1,64 @@
+/* ==========================================================================
+   BUTTONS & ICONS
+   ========================================================================== */
+.btn-icon { box-sizing: border-box; background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 4px; transition: all 0.2s ease; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; opacity: 0.6;}
+.btn-icon:hover { color: var(--text-main); background: var(--border-color);}
+
+.launcher-btn { 
+    width: 32px; height: 32px; border-radius: 8px; cursor: pointer; 
+    display: flex; align-items: center; justify-content: center; 
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1); border: 1px solid rgba(0,0,0,0.05); 
+    transition: transform 0.1s, box-shadow 0.2s; color: #444;
+}
+.launcher-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+.launcher-btn:active { transform: translateY(0); }
+
+.launcher-add-btn { 
+    margin-top: 2px; width: 28px; height: 28px; border-radius: 6px; border: 1px dashed var(--border-color); 
+    background: transparent; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px;
+}
+.launcher-add-btn:hover { background: var(--hover-bg); color: var(--text-main); border-color: var(--text-muted); }
+
+.btn-refresh { border: none; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-main); padding: 4px; border-radius: 4px; transition: 0.2s;}
+.btn-refresh:hover { background: var(--border-color); color: var(--primary-color);}
+
+.btn-outline.active {
+    background-color: var(--primary-color) !important; 
+    color: #ffffff !important; 
+    border-color: var(--primary-color) !important;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+}
+
+/* ==========================================================================
+   TAG PILLS & HIGHLIGHTS
+   ========================================================================== */
+.tag-pill { padding: 4px 12px; border-radius: 20px; background: var(--bg-card); color: var(--text-main); font-size: 13px; cursor: pointer; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 6px; transition: 0.2s; white-space: nowrap; font-weight: 500;}
+.tag-pill.active { background: #e6f0ff; color: var(--primary-color); border-color: var(--primary-color); font-weight: 600;}
+.tag-pill:hover:not(.active) { background: var(--hover-bg); }
+
+.tag-pill.ai-tag { background: #fdf2f8; color: #db2777; border-color: #fbcfe8; font-weight: 600;}
+.tag-pill.ai-tag.active { background: #db2777; color: #fff; border-color: #db2777;}
+.dark-mode .tag-pill.ai-tag { background: #3b182b; color: #f472b6; border-color: #831843; }
+.dark-mode .tag-pill.ai-tag.active { background: #be185d; color: #fff; }
+
+.btn-add-tag { padding: 4px 12px; border-radius: 20px; background: var(--bg-card); border: 1px dashed var(--text-muted); color: var(--text-main); font-size: 13px; cursor: pointer; white-space: nowrap; font-weight: 600;}
+.btn-delete-tag, .btn-edit-tag { border: none; background: transparent; color: var(--text-muted); cursor: pointer; padding: 0; display:flex; transition: color 0.2s;}
+.btn-edit-tag:hover { color: var(--primary-color); }
+.btn-delete-tag:hover { color: #dc2626; }
+
+.hl-tag { display: inline-block; background: rgba(47, 128, 237, 0.1); color: var(--primary-color); padding: 0 6px; border-radius: 4px; border: 1px solid rgba(47, 128, 237, 0.2); font-weight: 600; margin: 0 2px; vertical-align: baseline; }
+
+/* ==========================================================================
+   MODALS (POP-UP WINDOWS)
+   ========================================================================== */
+.modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 2000; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); transition: all 0.3s ease;}
+.modal-content { background: var(--bg-card); width: 340px; border-radius: 8px; padding: 25px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); border: 1px solid var(--border-color);}
+
+/* Folder Edit Modal Specific */
+.folder-edit-preview { width: 60px; height: 60px; border-radius: 10px; border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; font-size: 24px;}
+
+/* Details/Summary Arrow Styling */
+summary { list-style: none; }
+summary::-webkit-details-marker { display: none; }
+.details-summary .summary-chevron { transition: transform 0.2s ease-in-out; }
+details[open] > .details-summary .summary-chevron { transform: rotate(90deg); }

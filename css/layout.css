@@ -1,0 +1,90 @@
+/* ==========================================================================
+   SIDEBAR (SPACEBAR)
+   ========================================================================== */
+.spacebar { 
+  width: 260px; background-color: var(--bg-spacebar); color: var(--text-main); 
+  display: flex; flex-direction: column; 
+  transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease; 
+  flex-shrink: 0; border-right: 1px solid var(--border-color); will-change: width;
+}
+.spacebar.collapsed { width: 0; padding: 0; overflow: hidden; border: none; }
+.spacebar-header { padding: 25px 20px; font-size: 16px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; white-space: nowrap;}
+.app-branding { display: flex; align-items: center; gap: 10px; overflow: hidden; }
+.app-icon-box { width: 28px; height: 28px; background: var(--primary-color); border-radius: 6px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 16px; color: white;}
+
+.space-group { padding: 10px 0; overflow-y: auto;}
+.space-group-title { font-size: 11px; text-transform: uppercase; padding: 0 20px 10px; letter-spacing: 1px; color: var(--text-muted); font-weight: 700; display:flex; justify-content: space-between; align-items: center;}
+.space-item { position: relative; padding: 4px 12px; margin: 1px 8px; border-radius: 6px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: background 0.2s, color 0.2s; font-size: var(--spacebar-font-size, 13px); white-space: nowrap; font-weight: 500; color: var(--spacebar-text-color, var(--text-muted)); }
+.space-item:hover { background-color: rgba(0, 0, 0, 0.05); color: var(--text-main); }
+.space-item.active { background-color: rgba(47, 128, 237, 0.1); font-weight: 700; color: var(--primary-color); }
+.space-actions { display: none; gap: 5px; }
+.space-item:hover .space-actions { display: flex; } 
+
+/* 🔵 ทำให้ปุ่มควบคุมดูโดดเด่นเมื่อ Sidebar ถูกซ่อน (Auto-collapse) */
+#btn-toggle-spacebar.sidebar-hidden,
+#btn-command-center-topbar.sidebar-hidden {
+  background-color: var(--primary-color) !important;
+  color: white !important;
+  box-shadow: 0 4px 12px rgba(47, 128, 237, 0.4);
+  transform: scale(1.1);
+}
+
+/* 🟢 จัดการการแสดงผลปุ่ม Command Center ใน Topbar (แสดงเฉพาะตอนซ่อน Sidebar) */
+#btn-command-center-topbar { display: none; }
+#spacebar.collapsed + .workspace #btn-command-center-topbar {
+    display: inline-flex;
+}
+
+/* ==========================================================================
+   WORKSPACE & TOPBAR
+   ========================================================================== */
+.workspace { flex: 1; display: flex; flex-direction: column; overflow: hidden; transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1); min-width: 0;}
+.topbar { background: var(--bg-body); padding: 15px 30px; display: flex; align-items: center; gap: 15px; flex-wrap: nowrap; position: sticky; top: 0; z-index: 1010; border-bottom: 1px solid var(--border-color); box-shadow: 0 2px 5px rgba(0,0,0,0.05); transition: background 0.3s ease, backdrop-filter 0.3s ease, box-shadow 0.3s ease; }
+
+.topbar.scrolled {
+  background: color-mix(in srgb, var(--bg-body), transparent 20%) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  border-bottom-color: color-mix(in srgb, var(--border-color), transparent 50%);
+}
+.workspace-title { font-size: 24px; margin: 0; color: var(--text-main); font-weight: 700; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
+
+/* ==========================================================================
+   SEARCH & UTILITY
+   ========================================================================== */
+.utility-group { display: flex; align-items: center; gap: 10px; margin-left: auto; transition: all 0.2s ease; }
+.utility-actions-row { display: flex; align-items: center; gap: 10px; }
+
+.search-container { display: flex; align-items: center; background: var(--bg-card); border-radius: 6px; padding: 5px 12px; border: 1px solid var(--border-color); width: 250px;}
+.search-container input { border: none; background: transparent; outline: none; flex: 1; padding: 5px; color: var(--text-main); font-family: inherit; font-size: 13px;}
+
+/* ==========================================================================
+   LAUNCHER BAR
+   ========================================================================== */
+.launchers-bar { display: flex; gap: 8px; align-items: flex-start; margin-right: 15px; }
+
+.topbar #btn-collapse-launchers {
+    background-color: var(--bg-card); border: 1px solid var(--border-color);
+    border-radius: 6px; width: 28px; height: 28px; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    color: var(--text-muted); display: flex; align-items: center; justify-content: center;
+}
+.topbar #btn-collapse-launchers:hover { background-color: var(--hover-bg); color: var(--text-main); }
+
+.topbar.launchers-collapsed .launchers-bar { display: none !important; }
+.topbar.launchers-collapsed #btn-collapse-launchers {
+    background-color: var(--primary-color) !important; color: white !important;
+    border-color: var(--primary-color); box-shadow: 0 4px 10px rgba(47, 128, 237, 0.3); transform: scale(1.05);
+}
+.topbar.launchers-collapsed #btn-collapse-launchers svg { transform: rotate(180deg); }
+
+.launcher-group { display: flex; flex-direction: column; align-items: center; margin-right: 8px; }
+.launcher-group-items { display: flex; gap: 8px; min-height: 32px; }
+.launcher-group-label { font-size: 10px; color: var(--text-muted); margin-top: 4px; font-weight: 600; opacity: 0.8; cursor: grab; transition: opacity 0.2s; user-select: none; }
+.launcher-group-label:hover { opacity: 1; }
+.launcher-separator { width: 1px; height: 24px; background-color: var(--border-color); margin: 4px 4px 0 4px; opacity: 0.6; }
+
+/* ==========================================================================
+   TAG BAR
+   ========================================================================== */
+.tag-bar { padding: 10px 30px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; min-height: 35px; flex-shrink: 0; }
