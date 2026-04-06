@@ -15,28 +15,39 @@ let sortTimeout = null;
 // 🔗 Cache สำหรับเก็บข้อมูลของ Space ที่ถูกเชื่อมต่อกับ Smart Flow (ชื่อ Step และลำดับ)
 let linkedSpaceInfoCache = {};
 
-// โหลดข้อมูลเบื้องต้นและดักฟังการเปลี่ยนแปลงจาก Smart Flow
-chrome.storage.local.get(['smartFlowItems'], (res) => {
-    if (res.smartFlowItems) {
-        linkedSpaceInfoCache = {};
-        res.smartFlowItems.forEach((item, index) => {
-            if (item.linkedSpaceId) {
-                linkedSpaceInfoCache[String(item.linkedSpaceId)] = { title: item.title, index: index + 1, isCompleted: !!item.isCompleted };
-            }
-        });
+// Helper function to update the linkedSpaceInfoCache
+const updateSmartFlowCache = (items) => {
+    linkedSpaceInfoCache = {};
+    (items || []).forEach((item, index) => {
+        if (item.linkedSpaceId) {
+            linkedSpaceInfoCache[String(item.linkedSpaceId)] = { title: item.title, index: index + 1, isCompleted: !!item.isCompleted };
+        }
+    });
+};
+
+// Hybrid Storage: Use chrome.storage.local in Extension, fallback to localStorage on Web
+if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+    chrome.storage.local.get(['smartFlowItems'], (res) => {
+        if (res.smartFlowItems) updateSmartFlowCache(res.smartFlowItems);
+    });
+    chrome.storage.onChanged.addListener((changes) => {
+        if (changes.smartFlowItems) {
+            updateSmartFlowCache(changes.smartFlowItems.newValue);
+            renderSidebar(); // 🟢 รีเฟรชทันทีเมื่อมีการเปลี่ยนการเชื่อมต่อใน Smart Flow
+        }
+    });
+} else {
+    // Web environment fallback (e.g. GitHub Pages)
+    const storedData = localStorage.getItem('smartFlowItems');
+    if (storedData) {
+        try { updateSmartFlowCache(JSON.parse(storedData)); } catch (e) { console.error("Hybrid Storage Error:", e); }
     }
-});
-chrome.storage.onChanged.addListener((changes) => {
-    if (changes.smartFlowItems) {
-        linkedSpaceInfoCache = {};
-        (changes.smartFlowItems.newValue || []).forEach((item, index) => {
-            if (item.linkedSpaceId) {
-                linkedSpaceInfoCache[String(item.linkedSpaceId)] = { title: item.title, index: index + 1, isCompleted: !!item.isCompleted };
-            }
-        });
-        renderSidebar(); // 🟢 รีเฟรชทันทีเมื่อมีการเปลี่ยนการเชื่อมต่อใน Smart Flow
-    }
-});
+    window.addEventListener('storage', (e) => {
+        if (e.key === 'smartFlowItems') {
+            try { updateSmartFlowCache(JSON.parse(e.newValue)); renderSidebar(); } catch (e) {}
+        }
+    });
+}
 
 /**
  * Synchronizes the spaces array with the current DOM order in the sidebar.
