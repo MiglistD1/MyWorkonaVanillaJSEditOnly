@@ -86,6 +86,18 @@ export function initFocusTimer() {
     const overlayTitle = document.getElementById('overlay-title');
     const overlayDesc = document.getElementById('overlay-desc');
 
+    // Helper function to format remaining time as HH:MM:SS
+    function formatTimeLeft(seconds) {
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = seconds % 60;
+        return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    }
+    function formatClockTime(timestamp) {
+        const d = new Date(timestamp);
+        return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+    }
+
     let globalInterval = null;
 
     const titleObserver = new MutationObserver(() => {
@@ -160,15 +172,23 @@ export function initFocusTimer() {
             statusText.style.color = '#10b981';
             activeArea.style.display = 'flex';
             pauseBtn.style.display = 'block';
-            updateCountdownText(state.timeLeft);
+            if (state.startTime && state.endTime && state.timeLeft >= 0) {
+                countdownEl.innerText = `${formatClockTime(state.startTime)} - ${formatClockTime(state.endTime)} (${formatTimeLeft(state.timeLeft)})`;
+            } else { // Fallback if for some reason startTime/endTime are missing or timeLeft is negative
+                countdownEl.innerText = formatTimeLeft(state.timeLeft);
+            }
         } else if (state.mode === 'paused') {
             toggleBtn.style.background = '#10b981';
             toggleCircle.style.transform = 'translateX(22px)';
             statusText.innerHTML = `${svgFocusIcon} Focus Mode: PAUSED`;
             statusText.style.color = '#f59e0b';
             activeArea.style.display = 'flex';
-            resumeBtn.style.display = 'block';
-            updateCountdownText(state.timeLeft);
+            resumeBtn.style.display = 'block'; // Ensure resume button is visible when paused
+            if (state.startTime && state.endTime && state.timeLeft >= 0) {
+                countdownEl.innerText = `${formatClockTime(state.startTime)} - ${formatClockTime(state.endTime)} (${formatTimeLeft(state.timeLeft)})`;
+            } else { // Fallback if for some reason startTime/endTime are missing or timeLeft is negative
+                countdownEl.innerText = formatTimeLeft(state.timeLeft);
+            }
             lockOverlay.style.display = 'flex';
             overlayTitle.innerHTML = "☕ Paused";
             overlayDesc.innerHTML = "Space locked while paused<br>Click 'Resume' above when ready.";
@@ -187,11 +207,12 @@ export function initFocusTimer() {
         const currentSpace = getCurrentSpace();
         if (!currentSpace) return; // Skip if in Command Center
 
+        const now = Date.now();
         getSpaces().forEach(space => {
             if (!space.focusTimer) return;
             if (space.focusTimer.mode === 'running') {
-                space.focusTimer.timeLeft--;
-                if (space.focusTimer.timeLeft <= 0) {
+                // หยุดเมื่อเวลาปัจจุบันถึงหรือเลยเวลาสิ้นสุดที่กำหนดไว้
+                if (space.focusTimer.endTime && now >= space.focusTimer.endTime) {
                     space.focusTimer.mode = 'off';
                     space.focusTimer.timeLeft = 0;
                     if (currentSpace && space.id === currentSpace.id) {
@@ -199,6 +220,12 @@ export function initFocusTimer() {
                         renderUIForCurrentSpace(); // Render full UI only when state changes
                         renderSidebar();
                     }
+                }
+                // อัปเดต timeLeft เพื่อให้ระบบอื่นๆ (เช่น แถบความคืบหน้า) ยังทำงานได้
+                if (space.focusTimer.endTime) {
+                    space.focusTimer.timeLeft = Math.max(0, Math.floor((space.focusTimer.endTime - now) / 1000));
+                } else {
+                    space.focusTimer.timeLeft--;
                 }
                 saveData();
                 if (currentSpace && space.id === currentSpace.id) needsUpdate = true;
@@ -212,7 +239,13 @@ export function initFocusTimer() {
 
         // 🟢 Optimized: อัปเดตเฉพาะตัวเลขเวลา ไม่ต้อง Render ใหม่ทั้งแถบ
         if (needsUpdate && currentSpace.focusTimer.mode === 'running') {
-            updateCountdownText(currentSpace.focusTimer.timeLeft);
+            if (currentSpace.focusTimer.startTime && currentSpace.focusTimer.endTime && currentSpace.focusTimer.timeLeft >= 0) {
+                const startStr = formatClockTime(currentSpace.focusTimer.startTime);
+                const endStr = formatClockTime(currentSpace.focusTimer.endTime);
+                countdownEl.innerText = `${startStr} - ${endStr} (${formatTimeLeft(currentSpace.focusTimer.timeLeft)})`;
+            } else {
+                updateCountdownText(currentSpace.focusTimer.timeLeft);
+            }
         }
     }, 1000);
 
@@ -244,6 +277,8 @@ export function initFocusTimer() {
         if (!space.focusTimer) space.focusTimer = { mode: 'off', timeLeft: 0 };
         const state = space.focusTimer;
         const minutes = parseInt(timeInput.value) || 25;
+        state.startTime = Date.now();
+        state.endTime = state.startTime + (minutes * 60 * 1000);
         state.timeLeft = minutes * 60;
         state.mode = 'running';
         saveData();
@@ -268,6 +303,8 @@ export function initFocusTimer() {
         if (!space.focusTimer) space.focusTimer = { mode: 'off', timeLeft: 0 };
         const state = space.focusTimer;
         state.mode = 'running';
+        // คำนวณเวลาสิ้นสุดใหม่โดยอิงจากเวลาที่เหลืออยู่ (Resume)
+        state.endTime = Date.now() + (state.timeLeft * 1000);
         saveData();
         renderUIForCurrentSpace();
         renderSidebar();

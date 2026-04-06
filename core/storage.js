@@ -60,9 +60,7 @@ let appSettings = {
     h: 150,
     collapsed: false
   },
-  focusedTask: null, // 🟢 { spaceId, createdAt } เก็บงานที่กำลังโฟกัสอยู่เพียงหนึ่งเดียว
-  isGoogleTaskView: false,
-  isGoogleTaskSideView: false
+  focusedTask: null // 🟢 { spaceId, createdAt } เก็บงานที่กำลังโฟกัสอยู่เพียงหนึ่งเดียว
 };
 
 // URL Params Logic

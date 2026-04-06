@@ -336,79 +336,6 @@ export function initTodoManager(callbacks) {
     }
     applyTaskSectionsOrder();
 
-    // ☁️ Google Task View Toggle Logic
-    const btnToggleGView = document.getElementById('btn-toggle-gtask-view');
-    const btnOpenGTasks = document.getElementById('btn-sf-open-tasks');
-    const btnSideGTasks = document.getElementById('btn-sf-tasks-side-view');
-    const tasksCard = document.getElementById('tasks-card');
-
-    // 🟢 ปรับปรุงให้ดึงค่าจาก Space แยกกัน และทำให้เรียกใช้ได้จากภายนอก
-    window.updateGTaskViewUI = () => {
-        const space = getCurrentSpace();
-        if (!space) return;
-
-        const isActive = !!space.isGoogleTaskView;
-        if (tasksCard) tasksCard.classList.toggle('gtask-view-active', isActive);
-        if (btnSideGTasks) btnSideGTasks.classList.toggle('active-side-view', !!space.isGoogleTaskSideView);
-
-        // Update Toggle Button Content
-        if (btnToggleGView) {
-            btnToggleGView.innerHTML = isActive ? `<div class="gtask-active-indicator"></div>` : "Switch Google Task";
-            btnToggleGView.className = isActive ? "btn-gtask-toggle-circle" : "btn-gtask-toggle-text";
-        }
-    };
-
-    if (btnToggleGView) {
-        btnToggleGView.onclick = () => {
-            const space = getCurrentSpace();
-            if (!space) return;
-            space.isGoogleTaskView = !space.isGoogleTaskView;
-            saveData();
-            window.updateGTaskViewUI();
-        };
-    }
-
-    // 🟢 ตัวการใหญ่ 2 (Ultimate Delegation): จัดการทั้งปุ่ม Toggle และ Open ในที่เดียว
-    // แก้ไขปัญหาคำสั่งหลุดหายเมื่อ UI วาดใหม่ และใช้ Capture Phase (true) เพื่อดักหน้าคำสั่งอื่น
-    document.addEventListener('click', (e) => {
-        const target = e.target;
-
-        // 1. จัดการปุ่ม Toggle (ไอคอนสี่เหลี่ยมแบ่งจอ) - บังคับให้เปลี่ยนสถานะ Class เสมอแม้ UI จะวาดใหม่
-        const sideToggleBtn = target.closest('#btn-sf-tasks-side-view');
-        if (sideToggleBtn) {
-            e.preventDefault(); e.stopPropagation();
-            const space = getCurrentSpace();
-            const targetStore = space || getAppSettings();
-
-            if (space?.isLocked) return;
-
-            targetStore.isGoogleTaskSideView = !targetStore.isGoogleTaskSideView;
-            saveData();
-            sideToggleBtn.classList.toggle('active-side-view', targetStore.isGoogleTaskSideView);
-            return;
-        }
-
-        // 2. จัดการปุ่ม Open Google Tasks
-        const openBtn = target.closest('#btn-sf-open-tasks');
-        if (openBtn) {
-            e.preventDefault();
-            e.stopPropagation();
-            e.stopImmediatePropagation(); // 🔴 บังคับหยุดคำสั่งแอบแฝงอื่นๆ ทันที
-
-            const realSideBtn = document.getElementById('btn-sf-tasks-side-view');
-            const isSideViewActive = realSideBtn && realSideBtn.classList.contains('active-side-view');
-
-            if (isSideViewActive && window.splitViewManager) {
-                // 🚀 สั่งเปิดผ่าน Custom Split View Manager ของเราแทน Split View ของ Google
-                window.splitViewManager.open("https://tasks.google.com/", 'google-tasks-card');
-            } else {
-                openGoogleTasks(false);
-            }
-        }
-    }, true); // ใช้ capture phase เพื่อให้ดักได้เร็วที่สุด
-
-    window.updateGTaskViewUI(); // เรียกใช้ครั้งแรกเพื่อรักษาสถานะเดิม
-
     // Edit Modal Events
     document.getElementById('btn-close-task-edit').addEventListener('click', () => { document.getElementById('task-edit-modal').style.display = 'none'; }); //
     document.getElementById('btn-save-task-edit').addEventListener('click', saveEditedTask);
@@ -1792,11 +1719,6 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
 
     // Update Google Task UI (Space-specific list settings)
     updateGoogleTaskUI(space);
-
-    // 🟢 อัปเดตโหมด Switch Google Task เฉพาะของ Space นี้เมื่อมีการ Render
-    if (typeof window.updateGTaskViewUI === 'function') {
-        window.updateGTaskViewUI();
-    }
 
     // ตรวจสอบและรีเซ็ตสถานะ Habit ของวันใหม่ก่อนคำนวณจำนวนงานบนปุ่ม
     checkAndResetHabits(space);

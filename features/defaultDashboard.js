@@ -188,14 +188,6 @@ function renderGoogleIntegrations() {
                         <button id="master-btn-keep-tag" class="btn-icon app-btn" title="Filter Label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg></button>
                     </div>
                 </div>
-                <div class="app-row">
-                    <span class="app-label label-tasks">Tasks</span>
-                    <div class="app-controls">
-                        <button id="master-btn-open-tasks" class="btn-icon app-btn" title="Open Tasks" style="color:#2684fc;"><svg viewBox="0 0 24 24" fill="currentColor" style="width:20px;height:20px;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"></path></svg></button>
-                        <button class="btn-icon app-btn side-view-toggle" id="master-tasks-side-view-btn" title="Toggle Side View"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="15" y1="3" x2="15" y2="21"></line></svg></button>
-                        <button id="master-connect-google-btn" class="btn-icon app-btn" title="Connect Google Tasks"><svg style="width:20px;height:20px;"><use href="#icon-google-minimal"></use></svg></button>
-                    </div>
-                </div>
             </div>
             <div style="width:1px; height:16px; background:var(--border-color); margin:0 4px;"></div>
         </div>

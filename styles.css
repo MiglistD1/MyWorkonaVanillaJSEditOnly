@@ -602,6 +602,13 @@ body { margin: 0; font-family: var(--app-font); display: flex; height: 100vh; ba
     opacity: 1; 
 }
 
+/* 🚫 ซ่อนปุ่ม Switch Google Task และการควบคุม Sync ทั้งหมด */
+#btn-toggle-gtask-view, 
+.gtask-switch-group, 
+#sf-google-task-view-controls {
+    display: none !important;
+}
+
 /* 🔴 Space specific list toggle button - Prominent Red Style */
 #btn-toggle-specific-list {
     position: relative;
@@ -2208,96 +2215,6 @@ details[open] > .details-summary .summary-chevron {
     display: inline-flex !important;
     align-items: center;
     justify-content: center;
-}
-
-.btn-generate-from-temp:hover {
-    background: #10b981 !important;
-    color: white !important;
-    border-color: #10b981 !important;
-    transform: scale(1.1) translateY(-1px);
-    box-shadow: 0 4px 8px rgba(16, 185, 129, 0.25);
-}
-
-.btn-generate-from-temp:active {
-    transform: scale(0.85) translateY(0);
-    box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
-    transition-duration: 0.1s !important;
-}
-
-/* ☁️ Google Task View Active State */
-#tasks-card.gtask-view-active #todo-list-section-wrapper {
-    display: none !important;
-}
-#tasks-card.gtask-view-active #sf-google-task-view-controls {
-    display: flex !important;
-}
-
-/* ☁️ New Google Task View Switcher UI */
-.gtask-switch-group {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 0;
-    border-radius: 20px;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-#tasks-card.gtask-view-active .gtask-switch-group {
-    background: transparent;
-    padding: 0;
-    box-shadow: none;
-}
-
-/* 🎨 พื้นหลังสีที่ 1: สำหรับกลุ่มปุ่มควบคุมซ้าย */
-#tasks-card.gtask-view-active #sf-google-task-view-controls {
-    background: var(--hover-bg);
-    padding: 4px 6px;
-    border-radius: 10px;
-    display: flex !important;
-}
-
-.btn-gtask-toggle-text {
-    background: transparent;
-    border: 1px solid var(--border-color);
-    color: var(--text-muted);
-    font-size: 11px;
-    font-weight: 800;
-    padding: 4px 12px;
-    border-radius: 15px;
-    cursor: pointer;
-    white-space: nowrap;
-    transition: all 0.2s;
-}
-
-/* 🎨 พื้นหลังสีที่ 2: สำหรับปุ่มสลับโหมดขวา */
-.btn-gtask-toggle-circle {
-    width: 28px;
-    height: 28px;
-    border-radius: 10px;
-    background: rgba(0, 0, 0, 0.05);
-    border: none;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    transition: all 0.2s;
-}
-.dark-mode .btn-gtask-toggle-circle { background: rgba(255, 255, 255, 0.05); }
-.btn-gtask-toggle-circle:hover { background: var(--hover-bg); }
-
-/* 🔘 ตัวปุ่มวงกลมแบบจางและเล็ก */
-.gtask-active-indicator {
-    width: 12px;
-    height: 12px;
-    background: var(--text-muted);
-    border-radius: 50%;
-    opacity: 0.6;
-    transition: all 0.2s;
-}
-.btn-gtask-toggle-circle:hover .gtask-active-indicator {
-    opacity: 1;
-    transform: scale(1.1);
 }
 
 /* 🔴 สไตล์สำหรับแถวงานที่ "ไม่เสร็จ/ล้มเหลว" (เลือก X) */

@@ -140,6 +140,10 @@ export function renderFocusPersistentPopup() {
             el.querySelector('#sf-focus-popup-pause-resume').onclick = (e) => {
                 e.stopPropagation();
                 flowState.isPaused = !flowState.isPaused;
+                if (!flowState.isPaused) {
+                    // เมื่อกลับมาทำงานต่อ ให้เลื่อนเวลาสิ้นสุดออกไปตามเวลาที่เหลือ
+                    flowState.focusEndTime = Date.now() + (flowState.focusTimeLeft * 1000);
+                }
                 saveFlow();
             };
             el.querySelector('#sf-focus-popup-minimize').onclick = (e) => {
@@ -153,8 +157,13 @@ export function renderFocusPersistentPopup() {
 
     // 🟢 Selective Update: อัปเดตเฉพาะข้อมูลภายใน ไม่ทำลาย Element (แก้บัคลากไม่ได้)
     const isPaused = flowState.isPaused;
-    const isCritical = (flowState.focusTimeLeft > 0 && flowState.focusTimeLeft <= 10 && !isPaused);
-    const timeText = isPaused ? 'PAUSED' : formatFocusTime(flowState.focusTimeLeft);
+    const isCritical = (flowState.focusTimeLeft > 0 && flowState.focusTimeLeft <= 60 && !isPaused);
+    
+    let timeText = isPaused ? 'PAUSED' : formatFocusTime(flowState.focusTimeLeft);
+    if (!isPaused && flowState.focusStartTime && flowState.focusEndTime && flowState.focusTimeLeft >= 0) {
+        timeText = `${formatFocusClock(flowState.focusStartTime)} - ${formatFocusClock(flowState.focusEndTime)} (${formatFocusTime(flowState.focusTimeLeft)})`;
+    }
+
     const statusColor = isPaused ? '#f59e0b' : (isCritical ? '#ef4444' : '#10b981');
 
     // 🟢 ป้องกันการ Snap Back: อัปเดตพิกัดเฉพาะเมื่อไม่ได้กำลังลากอยู่
@@ -182,7 +191,7 @@ export function renderFocusPersistentPopup() {
     if (timeEl) {
         timeEl.innerText = timeText;
         timeEl.style.color = statusColor;
-        timeEl.style.fontSize = isPaused ? '24px' : '42px';
+        timeEl.style.fontSize = isPaused ? '24px' : (timeText.includes('-') ? '28px' : '42px');
     }
     if (statusEl) {
         statusEl.innerText = isPaused ? 'PAUSED' : (isCritical ? 'FINISHING...' : 'FOCUSING');
@@ -199,6 +208,11 @@ export function renderFocusPersistentPopup() {
         progressFill.style.width = `${percent}%`;
         progressFill.style.background = statusColor;
     }
+}
+
+function formatFocusClock(timestamp) {
+    const d = new Date(timestamp);
+    return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
 }
 
 function setupFocusPopupDrag(el) {
@@ -275,6 +289,8 @@ export async function initSmartFlow() {
         flowState.focusMode = res.smartFlowFocusTimer.focusMode;
         flowState.isFocusRunning = res.smartFlowFocusTimer.isFocusRunning;
         flowState.focusTimeLeft = res.smartFlowFocusTimer.focusTimeLeft;
+        flowState.focusStartTime = res.smartFlowFocusTimer.focusStartTime;
+        flowState.focusEndTime = res.smartFlowFocusTimer.focusEndTime;
         flowState.isPaused = res.smartFlowFocusTimer.isPaused;
     }
 
@@ -292,6 +308,8 @@ export async function saveFlow() {
             focusMode: flowState.focusMode,
             isFocusRunning: flowState.isFocusRunning,
             focusTimeLeft: flowState.focusTimeLeft,
+            focusStartTime: flowState.focusStartTime,
+            focusEndTime: flowState.focusEndTime,
             isPaused: flowState.isPaused
         }
     });
@@ -822,14 +840,29 @@ function updateFlowTimers() {
 
     let needsFullRender = false;
 
+    const now = Date.now();
+
     // 🟢 จัดการตัวจับเวลา Focus
-    if (flowState.isFocusRunning && !flowState.isPaused && flowState.focusTimeLeft > 0) {
-        flowState.focusTimeLeft--;
+    if (flowState.isFocusRunning && !flowState.isPaused) {
+        if (flowState.focusEndTime && now >= flowState.focusEndTime) {
+            flowState.focusTimeLeft = 0;
+        } else if (flowState.focusEndTime) {
+            flowState.focusTimeLeft = Math.max(0, Math.floor((flowState.focusEndTime - now) / 1000));
+        } else {
+            flowState.focusTimeLeft--;
+        }
         
         // อัปเดตตัวเลขเวลาที่ปุ่มหัว Card โดยตรงเพื่อความสมูท
         const btnText = document.getElementById('sf-widget-focus-text');
         const btn = document.getElementById('sf-widget-focus-btn');
-        if (btnText) btnText.innerText = flowState.isPaused ? "Paused" : formatFocusTime(flowState.focusTimeLeft);
+        if (btnText) {
+            if (flowState.isPaused) btnText.innerText = "Paused";
+            else if (flowState.focusStartTime && flowState.focusEndTime) {
+                btnText.innerText = `${formatFocusClock(flowState.focusStartTime)} - ${formatFocusClock(flowState.focusEndTime)}`;
+            } else {
+                btnText.innerText = formatFocusTime(flowState.focusTimeLeft);
+            }
+        }
         
         // อัปเดตคลาสสีปุ่ม
         if (btn) {
@@ -985,6 +1018,8 @@ export function showFocusPopup(anchorEl) {
             flowState.focusTimeLeft = 0;
         } else {
             const mins = parseInt(popup.querySelector('#sf-popup-custom-mins').value);
+            flowState.focusStartTime = Date.now();
+            flowState.focusEndTime = flowState.focusStartTime + (mins * 60 * 1000);
             flowState.focusTimeLeft = mins * 60;
             flowState.isFocusRunning = true;
             flowState.isPaused = false;

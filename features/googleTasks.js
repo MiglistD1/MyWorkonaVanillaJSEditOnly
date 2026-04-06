@@ -244,7 +244,7 @@ export function updateGoogleTaskUI(space) {
 export async function syncAllGoogleTasks() {
     // Notify UI that sync has started
     chrome.runtime.sendMessage({ type: 'GOOGLE_TASKS_SYNC_START' }).catch(() => {});
-
+    
     let hasChanged = false; // ประกาศไว้ที่ระดับบนสุดของฟังก์ชันเพื่อให้ทุกส่วนเข้าถึงได้
 
     // 🟢 แก้ไขบัค Revert: ถ้าทำงานอยู่ในหน้าเว็บ (UI) ให้ใช้ข้อมูลในแรม ไม่ต้องโหลดจาก Disk
@@ -260,7 +260,7 @@ export async function syncAllGoogleTasks() {
     const syncEnabled = typeof res.isGoogleSyncEnabled !== 'undefined' ? res.isGoogleSyncEnabled : true;
 
     if (!googleAuthToken || !syncEnabled) {
-        chrome.runtime.sendMessage({ type: 'GOOGLE_TASKS_SYNC_COMPLETE' }).catch(() => {});
+        // If sync is disabled, no changes are expected, so no need to send completion message
         return;
     }
 
@@ -364,12 +364,13 @@ export async function syncAllGoogleTasks() {
     if (hasChanged) {
         saveData(true); // 🟢 ใช้โหมดบันทึกทันที (Immediate) เพื่อป้องกันหน้าจอดึงข้อมูลเก่าไปวาดใหม่ก่อนเซฟเสร็จ
     }
-    // แจ้งเตือน UI ว่าซิงค์เสร็จสิ้น
-    chrome.runtime.sendMessage({ type: 'GOOGLE_TASKS_SYNC_COMPLETE' }).catch(() => {});
-
-    // 🟢 NEW: Call onRenderRef directly after sync completes to ensure UI update
-    if (onRenderRef) {
-        onRenderRef();
+    
+    if (hasChanged) { // 🟢 แจ้งเตือนและเรียก onRenderRef เฉพาะเมื่อมีข้อมูลเปลี่ยนแปลงจริง
+        chrome.runtime.sendMessage({ type: 'GOOGLE_TASKS_SYNC_COMPLETE' }).catch(() => {});
+        if (onRenderRef) {
+            onRenderRef();
+            console.log("UI re-rendered due to Google Tasks sync changes.");
+        }
     }
 }
 
