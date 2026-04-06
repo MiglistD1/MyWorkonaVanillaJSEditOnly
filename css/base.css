@@ -1,22 +1,164 @@
-/* ==========================================================================
-   BASE & VARIABLES
-   ========================================================================== */
 :root {
-  --primary-color: #2f80ed; 
-  --app-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
-  --bg-body: #f4f4f0; --bg-spacebar: #ebebe6; --bg-card: #ffffff;
-  --text-main: #111111; --text-muted: #555555; --border-color: #cccccc; 
-  --hover-bg: #e2e2e0; --input-bg: #ffffff;
+  --primary-color: #2f80ed;
+  --app-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+  /* 🔴 Dark, clear, high-contrast Notion style */
+  --bg-body: #f4f4f0;
+  --bg-spacebar: #ebebe6;
+  --bg-card: #ffffff;
+  --text-main: #111111; /* Solid black */
+  --text-muted: #555555; /* Dark gray */
+  --border-color: #cccccc; /* Clear border */
+  --hover-bg: #e2e2e0;
+  --input-bg: #ffffff;
 }
+
 body.dark-mode { 
-  --bg-body: #191919; --bg-spacebar: #202020; --bg-card: #252525; 
-  --text-main: #eeeeee; --text-muted: #aaaaaa; --border-color: #444444; 
-  --hover-bg: #333333; --input-bg: #2b2b2b; 
+  --bg-body: #191919; 
+  --bg-spacebar: #202020; 
+  --bg-card: #252525; 
+  --text-main: #eeeeee; 
+  --text-muted: #aaaaaa;
+  --border-color: #444444; 
+  --hover-bg: #333333; 
+  --input-bg: #2b2b2b; 
 }
-body { margin: 0; font-family: var(--app-font); display: flex; height: 100vh; background-color: var(--bg-body); color: var(--text-main); font-size: var(--app-font-size, 15px); overflow: hidden; -webkit-font-smoothing: antialiased; transition: background-color 0.4s ease; }
-@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-.spin { animation: spin 1s linear infinite; }
-.svg-icon, .svg-icon-sm, .svg-icon-lg, svg:not(.sf-watch-progress-ring) { stroke-width: 1.2px !important; stroke: currentColor !important; vector-effect: non-scaling-stroke; }
+
+body { 
+  margin: 0; 
+  font-family: var(--app-font); 
+  display: flex; 
+  height: 100vh; 
+  background-color: var(--bg-body); 
+  color: var(--text-main); 
+  font-size: var(--app-font-size, 15px); 
+  overflow: hidden; 
+  -webkit-font-smoothing: antialiased; 
+  transition: background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1); 
+}
+
+summary {
+    list-style: none; /* Remove default marker */
+}
+
+summary::-webkit-details-marker {
+    display: none; /* Remove default marker in Safari */
+}
+
+.svg-icon, .svg-icon-sm, .svg-icon-lg, svg:not(.sf-watch-progress-ring) {
+    stroke-width: 1.2px;
+    stroke: currentColor; /* 🟢 บังคับใหไอคอนมีสีเสมอ (แกไอคอนหาย) */
+    vector-effect: non-scaling-stroke;
+}
+
 .svg-icon { width: 16px; height: 16px; vertical-align: middle; fill: none; stroke-linecap: round; stroke-linejoin: round; transition: transform 0.2s ease;}
 .svg-icon-sm { width: 15px; height: 15px; vertical-align: middle; fill: none; stroke-linecap: round; stroke-linejoin: round; color: inherit;}
 .svg-icon-lg { width: 22px; height: 22px; vertical-align: middle; fill: none; stroke-linecap: round; stroke-linejoin: round;}
+
+.checkmark-circle {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 2px solid var(--border-color, #ccc);
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0 !important;
+    line-height: 0 !important;
+    overflow: visible !important;
+    box-sizing: border-box !important;
+    transition: all 0.2s cubic-bezier(0.4, 0.0, 0.2, 1);
+    background: transparent;
+    position: relative;
+}
+
+.checkmark-circle svg {
+    width: 11px !important;
+    height: 11px !important;
+    fill: none !important;
+    opacity: 0;
+    display: block !important;
+    margin: 0 !important;
+    stroke-width: 3px !important;
+    flex-shrink: 0 !important;
+    transform-origin: center center !important;
+}
+
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.spin { animation: spin 1s linear infinite; }
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+@keyframes badgePop {
+    0% { transform: scale(0); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes lootDropPop {
+    0% { transform: translateY(0) scale(0.5); opacity: 0; }
+    30% { transform: translateY(-60px) scale(1.2); opacity: 1; }
+    100% { transform: translateY(-100px) scale(1); opacity: 0; }
+}
+
+@keyframes drawGoogleCheck {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes burstOut {
+  0% { opacity: 1; transform: scale(0.8); }
+  50% { opacity: 0.5; transform: scale(2.5); }
+  100% { opacity: 0; transform: scale(3.5); }
+}
+
+@keyframes flash-yellow-confirm {
+    0% { background-color: rgba(255, 255, 0, 0.8); transform: scale(1.1); }
+    100% { background-color: transparent; transform: scale(1); }
+}
+
+@keyframes sf-shake {
+    0% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    50% { transform: translateX(5px); }
+    75% { transform: translateX(-5px); }
+    100% { transform: translateX(0); }
+}
+
+@keyframes sf-link-slide-in {
+    from {
+        opacity: 0;
+        transform: translateY(-50%) translateX(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(-50%) translateX(0);
+    }
+}
+
+.drag-handle { cursor: grab; padding: 0px; display: inline-flex; color: var(--text-muted); opacity: 0.5; margin-right: 0; flex-shrink: 0;}
+.drag-handle:hover { opacity: 1; color: var(--primary-color); }
+
+.item-main-row { display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 2px; min-width: 0; flex-wrap: nowrap;}
+
+.delete-btn-red,
+.btn-icon[style*="color: #dc2626"],
+.btn-icon[style*="color:red"],
+.delete-res-btn, .delete-task-btn, .flow-opt-delete, .btn-remove-temp-task {
+    color: var(--text-muted) !important;
+    opacity: 0.25 !important;
+    fill: none !important;
+    transition: all 0.2s ease;
+}
+
+.section-label { font-size: 14px; color: var(--text-muted); margin-top: 15px; margin-bottom: 8px; font-weight: 700; display: flex; justify-content: space-between; align-items: center; letter-spacing: 0.5px;}
+
+.loot-drop-item {
+    position: fixed;
+    pointer-events: none;
+    z-index: 20000;
+    font-weight: 900;
+    font-size: 20px;
+    text-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    display: flex;
+    align-items: center;
+    animation: lootDropPop 1.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}

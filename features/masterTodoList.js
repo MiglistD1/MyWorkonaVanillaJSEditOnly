@@ -235,7 +235,7 @@ function renderProgressSection(allSpaces, totalTasks) {
                             ${isSingle ? 'Single' : 'Multi'}
                         </button>
                     </div>
-                    <select id="google-task-list-select-master" class="master-space-select" style="display: none; height: 20px; font-size: 10px; margin-left: 4px; padding: 0 4px; border-radius: 4px;"></select>
+                    <select id="google-task-list-select-master" class="master-space-select" style="display: none; height: 20px; font-size: 10px; margin-left: 4px; padding: 0 4px; border-radius: 4px; max-width: 100px; text-overflow: ellipsis;"></select>
                 </div>
                 <span id="progress-text" style="font-weight: 700; color: var(--primary-color);"> ${masterTodoListState.showOnlyFlagged ? 'Flagged' : ''} Tasks Remaining</span>
             </div>

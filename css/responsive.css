@@ -1,25 +1,156 @@
-/* ==========================================================================
-   RESPONSIVE & MOBILE LAYOUT
-   ========================================================================== */
+@media (max-width: 1100px) {
+  .utility-group { display: none; }
+  #btn-utility-more { display: flex !important; }
+  .topbar { flex-wrap: wrap; }
+
+  .utility-group.show-popup {
+    display: flex;
+    position: absolute;
+    top: 65px;
+    right: 20px;
+    flex-direction: column;
+    background: var(--bg-card);
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    z-index: 10000;
+    border: 1px solid var(--border-color);
+    align-items: stretch;
+    width: 280px;
+  }
+
+  .utility-group.show-popup .search-container {
+    display: flex !important;
+    width: 100% !important;
+    box-sizing: border-box;
+    margin-bottom: 10px;
+  }
+
+  .utility-group.show-popup .utility-actions-row {
+    display: flex !important;
+    width: 100% !important;
+    gap: 8px;
+    justify-content: space-between;
+  }
+
+  .utility-group.show-popup .utility-actions-row button,
+  .utility-group.show-popup .utility-actions-row .btn {
+    display: flex !important;
+    justify-content: center;
+    margin: 0;
+    flex: 1;
+    height: 36px;
+    padding: 0 8px !important;
+  }
+
+  .utility-group.show-popup .utility-actions-row #toggle-tools-btn {
+    flex: 2.5; 
+    font-size: 11px !important;
+  }
+
+  .content-grid { grid-template-columns: 1fr !important; overflow-y: visible !important; height: auto !important; }
+  .workspace { overflow-y: auto !important; }
+  .card { max-height: none !important; margin-bottom: 10px; overflow: visible !important; }
+  .card-body { overflow-y: visible !important; }
+
+  .card-header-vertical { display: none !important; }
+
+  .launchers-bar {
+    width: 100%;
+    flex-basis: 100%;
+    order: 10;
+    margin: 10px -30px 0 -30px;
+    padding: 12px 30px;
+    background: var(--bg-card);
+    border-top: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 15px 12px;
+  }
+
+  .topbar {
+    padding-bottom: 15px;
+  }
+
+  .dashboard-grid {
+      grid-template-columns: 1fr !important;
+      padding: 10px;
+  }
+
+  #topbar-overflow-popup.show {
+      display: block !important;
+  }
+
+  #focus-mode-bar, #schedule-mode-bar {
+    transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease, padding 0.3s ease, border-bottom-width 0.3s ease !important;
+    overflow: hidden;
+    max-height: 100px;
+  }
+
+  .workspace.hide-bars #focus-mode-bar,
+  .workspace.hide-bars #schedule-mode-bar {
+    max-height: 0 !important;
+    opacity: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    border-bottom-width: 0 !important;
+    pointer-events: none;
+  }
+
+  #btn-master-add-task {
+      padding: 0 10px;
+      font-size: 12px;
+  }
+}
+
 @media (min-width: 1101px) {
-    .content-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.3fr); padding: 0 30px 30px; transition: 0.35s ease; gap: 20px; overflow-y: auto; overflow-x: hidden; flex: 1; height: auto; min-height: 0; align-items: start; }
+    .content-grid {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.3fr);
+        padding: 0 30px 30px;
+        transition: grid-template-columns 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    }
     .content-grid.tabs-collapsed { grid-template-columns: 60px minmax(0, 1fr) minmax(0, 1.3fr); }
     .content-grid.resources-collapsed { grid-template-columns: minmax(0, 1fr) 60px minmax(0, 1.3fr); }
     .content-grid.tasks-collapsed { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 60px; }
-    .content-grid.tabs-collapsed.resources-collapsed { grid-template-columns: 60px 60px minmax(0, 1fr); }
+    .content-grid.tabs-collapsed.resources-collapsed { grid-template-columns: 60px 60px minmax(0, 1.3fr); }
     .content-grid.tabs-collapsed.tasks-collapsed { grid-template-columns: 60px minmax(0, 1fr) 60px; }
     .content-grid.resources-collapsed.tasks-collapsed { grid-template-columns: minmax(0, 1fr) 60px 60px; }
     .content-grid.tabs-collapsed.resources-collapsed.tasks-collapsed { grid-template-columns: 60px 60px 60px; }
+
+    .content-grid.tabs-collapsed #tabs-card #tabs-header-normal,
+    .content-grid.tabs-collapsed #tabs-card #tabs-card-body,
+    .content-grid.resources-collapsed #resources-card #resources-header-normal,
+    .content-grid.resources-collapsed #resources-card #resources-card-body,
+    .content-grid.tasks-collapsed #tasks-card #tasks-header-normal,
+    .content-grid.tasks-collapsed #tasks-card #tasks-card-body {
+        display: none;
+    }
+
+    .content-grid.tabs-collapsed #tabs-card #tabs-header-collapsed,
+    .content-grid.resources-collapsed #resources-card #resources-header-collapsed,
+    .content-grid.tasks-collapsed #tasks-card #tasks-header-collapsed {
+        display: flex;
+        animation: fadeIn 0.4s ease;
+    }
 }
 
-@media (max-width: 1100px) {
-  .content-grid { display: grid; grid-template-columns: 1fr; gap: 20px; padding: 0 20px 20px; overflow-y: auto; overflow-x: hidden; flex: 1; height: auto; min-height: 0; align-items: start; }
-  .topbar { flex-wrap: wrap; }
-  .utility-group { display: none; }
-  #btn-utility-more { display: flex !important; }
-  .utility-group.show-popup { display: flex; position: absolute; top: 65px; right: 20px; flex-direction: column; background: var(--bg-card); padding: 15px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); z-index: 10000; border: 1px solid var(--border-color); align-items: stretch; width: 280px; }
-  .utility-group.show-popup .search-container { display: flex !important; width: 100% !important; box-sizing: border-box; margin-bottom: 10px; }
-  .utility-group.show-popup .utility-actions-row { display: flex !important; width: 100% !important; gap: 8px; justify-content: space-between; }
-  .utility-group.show-popup .utility-actions-row button, .utility-group.show-popup .utility-actions-row .btn { display: flex !important; justify-content: center; margin: 0; flex: 1; height: 36px; padding: 0 8px !important; }
-  .utility-group.show-popup .utility-actions-row #toggle-tools-btn { flex: 2.5; font-size: 11px !important; }
+@media (min-width: 1000px) {
+    .dashboard-grid {
+        grid-template-columns: 1.5fr 1fr;
+    }
+
+    .dashboard-grid-inner:has(.widget-card + .widget-card) {
+        flex-direction: row;
+        align-items: flex-start;
+    }
+
+    .master-todo-widget {
+        flex: 1.5;
+        min-width: 0;
+    }
+    .smart-flow-widget {
+        flex: 1;
+        min-width: 0;
+    }
 }
