@@ -1,8 +1,9 @@
 import Sortable from '../sortable.esm.js';
-import { getCurrentSpace, saveData, getShortDate, getAppSettings, setCurrentSpaceId, getSpaces, getFilterTags, loadData } from '../core/storage.js';
+import { getCurrentSpace, saveData, getShortDate, getAppSettings, setCurrentSpaceId, getSpaces, getFilterTags, loadData, getGlobalLaunchers, getLauncherTags } from '../core/storage.js';
 import { svgEdit, svgTrashRed, googleTasksIcon } from '../core/icons.js';
 import { generateMiniTagsBtn, generateTaskHTML, attachSubtaskEventListeners, attachTaskInlineEditListeners, handleTagAutocomplete, applySyntaxHighlighting } from '../core/ui-helpers.js';
 
+import { saveToDrive, getAuthToken } from '../core/driveSync.js';
 import { svgRefresh, svgSpinner } from '../core/icons.js';
 import { syncAllGoogleTasks, createGoogleTask, updateGoogleTaskUI, getTargetListId } from './googleTasks.js';
 import { checkAndResetHabits, renderHabitList } from './habitSheet.js';
@@ -34,6 +35,31 @@ function sortSpaceTasks(space) {
         }
         return 0;
     });
+}
+
+/** ☁️ ฟังก์ชันสำหรับสั่ง Sync ข้อมูลขึ้น Google Drive อัตโนมัติ (Background Auto-Sync) */
+async function triggerCloudSave() {
+    // ตรวจสอบสถานะการล็อกอินแบบเงียบๆ (ไม่เด้งหน้าต่างถาม)
+    const token = await getAuthToken(false);
+    if (!token) return; // ถ้าไม่ได้ล็อกอิน Drive ไว้ ก็ไม่ต้องทำอะไรต่อ
+
+    // เตรียมข้อมูลชุดเดียวกับที่ระบบ Restore (loadFromDrive) ต้องการ
+    const fullAppData = {
+        mySpacesData: getSpaces(),
+        appSettings: getAppSettings(),
+        lastSpaceId: getCurrentSpaceId(),
+        globalLaunchers: getGlobalLaunchers(),
+        launcherTags: getLauncherTags()
+    };
+
+    // ระบบ Debounce: หน่วงเวลา 5 วินาทีก่อนเซฟ เพื่อรวบรวมการแก้ไขหลายๆ อย่างไว้ในครั้งเดียว
+    if (window._driveSyncTimeout) clearTimeout(window._driveSyncTimeout);
+    window._driveSyncTimeout = setTimeout(() => {
+        // เรียกใช้ฟังก์ชันที่เตรียมไว้ใน window (หรือจะเรียกจาก import ก็ได้)
+        window.saveToDrive(fullAppData).then(success => {
+            if (success) console.log("☁️ Auto-synced tasks to Google Drive");
+        });
+    }, 5000);
 }
 
 let fetchGoogleAPI = null;
@@ -920,6 +946,7 @@ export function initTodoManager(callbacks) {
             }
 
             saveData(true); // บันทึกทันที
+            triggerCloudSave(); // ☁️ ซิงค์ไปที่ Cloud หลังเปลี่ยนสถานะงาน
 
             // 🟢 เอาการหน่วงเวลาออกตามคำขอเพื่อให้ UI ลื่นไหลขึ้น
             onRenderCallback(); 
@@ -1503,6 +1530,7 @@ async function addTask() {
         playTaskAddedSound();
         input.value = ''; input.disabled = false; input.placeholder = "Type a task..."; input.focus();
         saveData(); 
+        triggerCloudSave(); // ☁️ ซิงค์ไปที่ Cloud หลังเพิ่มงานใหม่
         onRenderCallback(); 
     } 
 }
@@ -1588,6 +1616,7 @@ async function saveEditedTask() {
     document.getElementById('task-edit-modal').style.display = 'none';
     btnSave.innerText = "Save"; btnSave.disabled = false;
     saveData(); 
+    triggerCloudSave(); // ☁️ ซิงค์ไปที่ Cloud หลังแก้ไขเสร็จ
     if (_fromCommandCenter) {
         setCurrentSpaceId(0); // Reset to Command Center
         if (window.renderDefaultDashboard) window.renderDefaultDashboard(); // 🟢 แก้ไข: เรียกผ่าน window เพื่อป้องกัน Reference Error
@@ -1679,6 +1708,7 @@ async function saveTaskLink() {
     if (task) {
         task.linkData = { url, isSideview };
         saveData();
+        triggerCloudSave(); // ☁️ ซิงค์ไปที่ Cloud
         document.getElementById('task-link-modal').style.display = 'none';
         if (editingLinkSpaceId === 0 || window._isModalOpenedFromCommandCenter) {
             import('./defaultDashboard.js').then(m => m.renderDefaultDashboard());
@@ -1927,6 +1957,7 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
                 }
 
                 saveData(); 
+                triggerCloudSave(); // ☁️ ซิงค์ไปที่ Cloud หลังจัดลำดับงาน
                 onRenderCallback(); 
             },
             // เมื่อลากจาก Sub-task กลับมาเป็นงานหลัก
@@ -1950,6 +1981,7 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
                     space.tasks.splice(newMainIdx, 0, newMainTask);
                     
                     saveData();
+                    triggerCloudSave(); // ☁️ ซิงค์ไปที่ Cloud
                     onRenderCallback();
                 }
             }
