@@ -277,7 +277,17 @@ function setupFocusPopupDrag(el) {
 
 export async function initSmartFlow() {
     if (isFlowDataLoaded) return; // 🟢 ถ้ามีข้อมูลในแรมแล้ว ให้ข้ามการดึงจาก Storage ไปเลย
-    const res = await chrome.storage.local.get(['smartFlowItems', 'smartFlowTags', 'smartFlowFocusTimer']);
+    let res;
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        res = await chrome.storage.local.get(['smartFlowItems', 'smartFlowTags', 'smartFlowFocusTimer']);
+    } else {
+        res = {
+            smartFlowItems: JSON.parse(localStorage.getItem('smartFlowItems') || '[]'),
+            smartFlowTags: JSON.parse(localStorage.getItem('smartFlowTags') || '[]'),
+            smartFlowFocusTimer: JSON.parse(localStorage.getItem('smartFlowFocusTimer') || 'null')
+        };
+    }
+
     flowItems = res.smartFlowItems || [];
     flowState.managedTags = res.smartFlowTags || [];
     const appSettings = getAppSettings();
@@ -300,11 +310,11 @@ export async function initSmartFlow() {
 }
 
 export async function saveFlow() {
-    await chrome.storage.local.set({ 
+    const data = {
         'smartFlowItems': flowItems,
         'smartFlowTags': flowState.managedTags,
         'appSettings': { ...getAppSettings(), focusPopupState: flowState.focusPopupState },
-        'smartFlowFocusTimer': { // 🟢 บันทึกสถานะเวลาปัจจุบัน
+        'smartFlowFocusTimer': {
             focusMode: flowState.focusMode,
             isFocusRunning: flowState.isFocusRunning,
             focusTimeLeft: flowState.focusTimeLeft,
@@ -312,7 +322,13 @@ export async function saveFlow() {
             focusEndTime: flowState.focusEndTime,
             isPaused: flowState.isPaused
         }
-    });
+    };
+
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        await chrome.storage.local.set(data);
+    } else {
+        Object.keys(data).forEach(key => localStorage.setItem(key, JSON.stringify(data[key])));
+    }
 }
 
 /**

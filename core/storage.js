@@ -114,7 +114,15 @@ export function saveData(immediate = false) {
     // Debounce: Wait 500ms, if called again, cancel the old one (reduces frequent saves when typing notes)
     if (saveTimeout) clearTimeout(saveTimeout);
     const performSave = () => {
-        chrome.storage.local.set({ 'mySpacesData': spaces, 'lastSpaceId': currentSpaceId, 'appSettings': appSettings, 'globalLaunchers': globalLaunchers, 'launcherTags': launcherTags }); 
+        const data = { 'mySpacesData': spaces, 'lastSpaceId': currentSpaceId, 'appSettings': appSettings, 'globalLaunchers': globalLaunchers, 'launcherTags': launcherTags };
+        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+            chrome.storage.local.set(data); 
+        } else {
+            // Fallback for Web/Mobile (localStorage)
+            Object.keys(data).forEach(key => {
+                localStorage.setItem(key, JSON.stringify(data[key]));
+            });
+        }
     };
 
     if (immediate) performSave();
@@ -122,7 +130,9 @@ export function saveData(immediate = false) {
 }
 
 export function loadData(onLoadComplete) {
-  chrome.storage.local.get(['mySpacesData', 'lastSpaceId', 'appSettings', 'globalLaunchers', 'launcherTags'], function(res) {
+  const keys = ['mySpacesData', 'lastSpaceId', 'appSettings', 'globalLaunchers', 'launcherTags'];
+
+  const processResult = (res) => {
     // Add check for res to prevent undefined
     if (res && res.mySpacesData && res.mySpacesData.length > 0) {
       spaces = res.mySpacesData;
@@ -160,7 +170,23 @@ export function loadData(onLoadComplete) {
     }
 
     if (onLoadComplete) onLoadComplete();
-  });
+  };
+
+  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+    // Mode: Extension
+    chrome.storage.local.get(keys, processResult);
+  } else {
+    // Mode: Web (GitHub Pages / Mobile)
+    const res = {};
+    keys.forEach(key => {
+        const val = localStorage.getItem(key);
+        if (val) {
+            try { res[key] = JSON.parse(val); } 
+            catch(e) { res[key] = val; }
+        }
+    });
+    processResult(res);
+  }
 }
 
 /**

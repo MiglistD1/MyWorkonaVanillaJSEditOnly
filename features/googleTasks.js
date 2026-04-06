@@ -11,19 +11,31 @@ let onRenderRef = null;
 // Function to save auth token
 function setGoogleAuthToken(token) {
     googleAuthToken = token;
-    chrome.storage.local.set({ 'googleAuthToken': token });
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        chrome.storage.local.set({ 'googleAuthToken': token });
+    } else {
+        localStorage.setItem('googleAuthToken', token);
+    }
 }
 
 // Function to save current Google List ID
 function setCurrentGoogleListId(listId) {
     currentGoogleListId = listId;
-    chrome.storage.local.set({ 'savedGoogleTasksListId': listId });
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        chrome.storage.local.set({ 'savedGoogleTasksListId': listId });
+    } else {
+        localStorage.setItem('savedGoogleTasksListId', listId);
+    }
 }
 
 // Function to save sync enabled state
 function setIsGoogleSyncEnabled(enabled) {
     isGoogleSyncEnabled = enabled;
-    chrome.storage.local.set({ 'isGoogleSyncEnabled': enabled });
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        chrome.storage.local.set({ 'isGoogleSyncEnabled': enabled });
+    } else {
+        localStorage.setItem('isGoogleSyncEnabled', String(enabled));
+    }
 }
 
 /**
@@ -119,19 +131,20 @@ export function initGoogleTasks(callbacks) {
     });
 
     // 4. ตรวจสอบ Token เงียบๆ (Silent Auth) - to refresh token or initial load if not in storage
-    chrome.identity.getAuthToken({ interactive: false }, (token) => {
-        if (token) {
-            setGoogleAuthToken(token);
-            updateLoginUI();
-            updateToggleIcon();
-            fetchGoogleLists();
-            syncAllGoogleTasks();
-        } else {
-            // If silent auth fails, clear token from storage
-            setGoogleAuthToken(null);
-            updateLoginUI(); // Update UI to logged out state
-        }
-    });
+    if (typeof chrome !== 'undefined' && chrome.identity && chrome.identity.getAuthToken) {
+        chrome.identity.getAuthToken({ interactive: false }, (token) => {
+            if (token) {
+                setGoogleAuthToken(token);
+                updateLoginUI();
+                updateToggleIcon();
+                fetchGoogleLists();
+                syncAllGoogleTasks();
+            } else {
+                setGoogleAuthToken(null);
+                updateLoginUI();
+            }
+        });
+    }
 
     // 5. Automatic Periodic Sync (Pull from Google every 1 minute) - REMOVED
     // This is replaced by chrome.alarms in background.js for better background process management.
@@ -253,7 +266,16 @@ export async function syncAllGoogleTasks() {
         await new Promise(resolve => loadData(resolve));
     }
 
-    const res = await chrome.storage.local.get(['googleAuthToken', 'savedGoogleTasksListId', 'isGoogleSyncEnabled']);
+    let res;
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        res = await chrome.storage.local.get(['googleAuthToken', 'savedGoogleTasksListId', 'isGoogleSyncEnabled']);
+    } else {
+        res = {
+            googleAuthToken: localStorage.getItem('googleAuthToken'),
+            savedGoogleTasksListId: localStorage.getItem('savedGoogleTasksListId'),
+            isGoogleSyncEnabled: localStorage.getItem('isGoogleSyncEnabled') === 'true'
+        };
+    }
     
     googleAuthToken = res.googleAuthToken; // อัปเดต Token ใน Module
     const listId = res.savedGoogleTasksListId || '@default';

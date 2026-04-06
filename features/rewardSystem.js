@@ -35,8 +35,15 @@ let rewardData = {
 };
 
 async function loadRewardData() {
-    const res = await chrome.storage.local.get(['questRewardData']);
-    if (res.questRewardData) {
+    let res;
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        res = await chrome.storage.local.get(['questRewardData']);
+    } else {
+        const data = localStorage.getItem('questRewardData');
+        res = { questRewardData: data ? JSON.parse(data) : null };
+    }
+
+    if (res && res.questRewardData) {
         const saved = res.questRewardData; // 🟢 FIX: ประกาศตัวแปร saved เพื่อแก้ ReferenceError
         // ปรับปรุงการโหลดข้อมูล: ป้องกันการเขียนทับด้วยค่าว่าง
         rewardData = { 
@@ -77,7 +84,11 @@ async function loadRewardData() {
 }
 
 async function saveRewardData() {
-    await chrome.storage.local.set({ 'questRewardData': rewardData }); // บันทึกข้อมูลรางวัลทั้งหมด
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        await chrome.storage.local.set({ 'questRewardData': rewardData });
+    } else {
+        localStorage.setItem('questRewardData', JSON.stringify(rewardData));
+    }
     syncLootWithGoogleTasks();
 }
 
