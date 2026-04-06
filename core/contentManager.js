@@ -18,6 +18,7 @@ export function renderMainContent() {
   const spaceId = getCurrentSpaceId();
   const globalSettings = getAppSettings();
   const mainGrid = document.getElementById('main-grid');
+  const isMobile = window.innerWidth <= 768;
   const tagBar = document.getElementById('tag-bar-container');
   const defaultContainer = document.getElementById('default-dashboard-container');
   const sBar = document.getElementById('schedule-mode-bar');
@@ -56,6 +57,14 @@ export function renderMainContent() {
   if (tagBar) tagBar.style.display = 'flex';
   if (defaultContainer) defaultContainer.style.display = 'none';
   if (toggleToolsBtn) toggleToolsBtn.style.display = 'inline-flex';
+
+  // บนมือถือ: บังคับซ่อนส่วนอื่นๆ เพื่อเน้น Todo list
+  if (isMobile) {
+      const tabsCol = document.querySelector('.tabs-column');
+      const resCol = document.querySelector('.resources-column');
+      if (tabsCol) tabsCol.style.display = 'none';
+      if (resCol) resCol.style.display = 'none';
+  }
 
   const space = getCurrentSpace(); if (!space) return;
   document.getElementById('current-space-title').innerText = space.name;

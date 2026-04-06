@@ -61,6 +61,61 @@ export function applyAppSettings() {
         document.body.classList.remove('dark-mode'); 
         if(toggleDarkBtn) toggleDarkBtn.innerText = '☀️'; 
     }
+
+    // --- Mobile Optimization CSS Injection ---
+    let mobileStyle = document.getElementById('mobile-optimized-css');
+    if (!mobileStyle) {
+        mobileStyle = document.createElement('style');
+        mobileStyle.id = 'mobile-optimized-css';
+        document.head.appendChild(mobileStyle);
+    }
+    mobileStyle.innerHTML = `
+        @media (max-width: 768px) {
+            /* 1. ซ่อนส่วนที่ไม่เกี่ยวข้องกับ To-do */
+            .tabs-column, .resources-column, .topbar .search-wrapper { display: none !important; }
+            #main-grid { grid-template-columns: 1fr !important; padding: 0 !important; gap: 0 !important; }
+            .tasks-column { padding: 0 !important; background: var(--bg-card) !important; border-radius: 0 !important; }
+            
+            /* 2. ปรับ Sidebar ให้เป็น Drawer เต็มหน้าจอ */
+            #spacebar:not(.collapsed) { width: 85% !important; z-index: 10001; }
+            
+            /* 3. UI To-do แบบ Google Tasks */
+            .task-item { padding: 12px 16px !important; border-bottom: 1px solid var(--border-color) !important; align-items: flex-start !important; }
+            .task-actual-text { font-size: 16px !important; padding: 4px 0 !important; }
+            .google-task-checkbox { transform: scale(1.2); margin-right: 12px !important; }
+            
+            /* 4. ช่องกรอกงานใหม่แบบ Floating Bottom Bar (แบบ Google Tasks) */
+            .task-input-bar { 
+                position: fixed; bottom: 0; left: 0; right: 0; 
+                background: var(--bg-card); padding: 12px 16px; 
+                box-shadow: 0 -4px 20px rgba(0,0,0,0.1); 
+                z-index: 1000; border-radius: 16px 16px 0 0;
+                margin: 0 !important; width: 100% !important;
+            }
+            
+            /* 5. ปุ่ม Actions ต่างๆ ให้ดูสะอาดขึ้น */
+            .item-action-group { opacity: 1 !important; }
+            .toggle-actions-btn { width: 32px; height: 32px; display: flex !important; align-items: center; justify-content: center; }
+            
+            /* 6. ส่วนหัว Header */
+            .card-header { padding: 16px !important; border-bottom: none !important; }
+            #header-tasks-text { font-size: 20px !important; font-weight: 800 !important; }
+            
+            /* พื้นที่ว่างด้านล่างกันโดนบัง */
+            #task-list { padding-bottom: 80px !important; }
+            
+            /* จัดการปุ่ม Drive Sync ให้เห็นชัด */
+            .drive-sync-wrapper { margin-right: 10px; }
+
+            /* ป้ายกำกับ (Tags) บนมือถือ */
+            .btn-edit-tags { 
+                background: var(--hover-bg) !important; 
+                border-radius: 12px !important; 
+                padding: 4px 10px !important; 
+                font-size: 12px !important;
+            }
+        }
+    `;
 }
 
 export function initSettingsManager(callbacks) {

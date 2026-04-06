@@ -145,6 +145,7 @@ export function generateTaskHTML(task, index, {
     const isSubtask = depth > 0;
     const isCompletedOrDeleted = task.completed; // For line-through if completed
     const isActuallyDeleted = task.isDeleted; // For trash-specific styling and buttons
+    const isMobile = window.innerWidth <= 768;
 
     const appSettings = getAppSettings();
     const templateClass = task.isFromTemplate ? 'is-from-template' : '';
