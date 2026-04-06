@@ -37,7 +37,7 @@ export function renderDriveSyncUI(text = null, isLoading = false) {
     if (!menu) {
         menu = document.createElement('div');
         menu.className = 'drive-sync-menu dropdown-menu';
-        menu.style.cssText = `display:none; position:absolute; top:110%; right:0; width:180px; padding:6px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:8px; box-shadow:0 10px 25px rgba(0,0,0,0.1); z-index:1000; flex-direction:column; gap:4px;`;
+        menu.style.cssText = `display:none; position:absolute; top:110%; right:0; width:145px; padding:4px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:8px; box-shadow:0 10px 25px rgba(0,0,0,0.1); z-index:1000; flex-direction:column; gap:2px;`;
         wrapper.appendChild(menu);
     }
 
@@ -65,15 +65,19 @@ export function renderDriveSyncUI(text = null, isLoading = false) {
 
         // ใส่เนื้อหาใน Menu
         menu.innerHTML = `
-            <button class="menu-item" id="ds-btn-auth" style="display:flex; align-items:center; gap:8px; padding:8px; border:none; background:transparent; cursor:pointer; font-size:12px; font-weight:600; color:var(--text-main); border-radius:6px; width:100%;">
+            <button class="menu-item" id="ds-btn-auth" style="display:flex; align-items:center; gap:8px; padding:6px; border:none; background:transparent; cursor:pointer; font-size:11px; font-weight:600; color:var(--text-main); border-radius:6px; width:100%;">
                 ${accessToken ? '🟢 Connected' : '⚪ Connect Drive'}
             </button>
-            <div style="height:1px; background:var(--border-color); margin:2px 4px;"></div>
-            <button class="menu-item" id="ds-btn-upload" style="display:flex; align-items:center; gap:8px; padding:8px; border:none; background:transparent; cursor:pointer; font-size:12px; color:var(--text-main); border-radius:6px; width:100%;">
-                ${svgCloudUp} Force Overwrite (Upload)
+            <div style="height:1px; background:var(--border-color); margin:1px 4px;"></div>
+            <button class="menu-item" id="ds-btn-upload" style="display:flex; align-items:center; gap:8px; padding:6px; border:none; background:transparent; cursor:pointer; font-size:11px; color:var(--text-main); border-radius:6px; width:100%;">
+                ${svgCloudUp} Overwrite (Up)
             </button>
-            <button class="menu-item" id="ds-btn-download" style="display:flex; align-items:center; gap:8px; padding:8px; border:none; background:transparent; cursor:pointer; font-size:12px; color:var(--text-main); border-radius:6px; width:100%;">
-                ${svgCloudDown} Force Import (Download)
+            <button class="menu-item" id="ds-btn-download" style="display:flex; align-items:center; gap:8px; padding:6px; border:none; background:transparent; cursor:pointer; font-size:11px; color:var(--text-main); border-radius:6px; width:100%;">
+                ${svgCloudDown} Import (Down)
+            </button>
+            <div style="height:1px; background:var(--border-color); margin:1px 4px;"></div>
+            <button class="menu-item" id="ds-btn-settings" style="display:flex; align-items:center; gap:8px; padding:6px; border:none; background:transparent; cursor:pointer; font-size:11px; color:var(--text-muted); border-radius:6px; width:100%;">
+                <svg class="svg-icon-xs" style="width:12px;height:12px;"><use href="#icon-settings"></use></svg> Path Settings
             </button>
         `;
 
@@ -88,6 +92,7 @@ export function renderDriveSyncUI(text = null, isLoading = false) {
         };
         menu.querySelector('#ds-btn-upload').onclick = () => { menu.style.display = 'none'; forceUploadToDrive(); };
         menu.querySelector('#ds-btn-download').onclick = () => { menu.style.display = 'none'; forceDownloadFromDrive(); };
+        menu.querySelector('#ds-btn-settings').onclick = () => { menu.style.display = 'none'; showSyncPathSettings(); };
 
         // Toggle Menu
         btnMain.onclick = (e) => {
@@ -106,6 +111,47 @@ export function renderDriveSyncUI(text = null, isLoading = false) {
         });
         window._driveSyncBound = true;
     }
+}
+
+/**
+ * 📁 Sync Path Settings Modal
+ */
+function showSyncPathSettings() {
+    const settings = getAppSettings();
+    const folder = settings.driveSyncFolderName || 'MyWorkona_Backups';
+    const file = settings.driveSyncFileName || 'myworkona_todos.json';
+
+    const modalId = 'ds-path-settings-modal';
+    let modal = document.getElementById(modalId);
+    if (modal) modal.remove();
+
+    const html = `
+        <div class="modal-overlay" id="${modalId}" style="display:flex; z-index:11000; background:rgba(0,0,0,0.2);">
+            <div class="modal-content" style="width:280px; padding:20px; border-radius:12px;">
+                <h3 style="margin-top:0; font-size:15px; font-weight:800;">📁 Drive Sync Settings</h3>
+                <div class="settings-group" style="margin-top:15px;">
+                    <label style="font-size:10px; font-weight:800; color:var(--text-muted); text-transform:uppercase;">Folder Name</label>
+                    <input type="text" id="ds-folder-input" class="settings-input" value="${folder}" placeholder="Root if empty" style="font-size:13px; margin-top:4px;">
+                </div>
+                <div class="settings-group" style="margin-top:12px;">
+                    <label style="font-size:10px; font-weight:800; color:var(--text-muted); text-transform:uppercase;">JSON Filename</label>
+                    <input type="text" id="ds-file-input" class="settings-input" value="${file}" style="font-size:13px; margin-top:4px;">
+                </div>
+                <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:20px;">
+                    <button class="btn btn-outline" style="font-size:11px; padding:4px 12px;" onclick="document.getElementById('${modalId}').remove()">Cancel</button>
+                    <button class="btn btn-primary" id="ds-btn-save-path" style="font-size:11px; padding:4px 12px;">Save Changes</button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', html);
+
+    document.getElementById('ds-btn-save-path').onclick = () => {
+        settings.driveSyncFolderName = document.getElementById('ds-folder-input').value.trim();
+        settings.driveSyncFileName = document.getElementById('ds-file-input').value.trim() || 'myworkona_todos.json';
+        saveData(true);
+        document.getElementById(modalId).remove();
+    };
 }
 
 /**
@@ -242,18 +288,53 @@ export async function forceDownloadFromDrive() {
 }
 
 /**
+ * 📂 ค้นหาหรือสร้างโฟลเดอร์เป้าหมาย
+ */
+async function getOrCreateFolderId(folderName) {
+    if (!folderName) return null;
+    try {
+        const query = encodeURIComponent(`name = '${folderName}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`);
+        const res = await driveApiFetch(`https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id)`, { method: 'GET' }, false);
+        const data = await res.json();
+        if (data.files && data.files.length > 0) return data.files[0].id;
+
+        // สร้างใหม่หากไม่พบ (หมายเหตุ: สิทธิ์ drive.file จะมองเห็นเฉพาะโฟลเดอร์ที่แอปนี้สร้างขึ้น)
+        const createRes = await driveApiFetch(`https://www.googleapis.com/drive/v3/files`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: folderName, mimeType: 'application/vnd.google-apps.folder' })
+        }, false);
+        const folder = await createRes.json();
+        return folder.id;
+    } catch (e) { return null; }
+}
+
+/**
  * Search for the specific backup file on Drive
  */
 async function findFileId() {
     const token = await getAuthToken(false);
     if (!token) return null;
 
+    const settings = getAppSettings();
+    const fileName = settings.driveSyncFileName || FILE_NAME;
+    const folderName = settings.driveSyncFolderName;
+
     try {
-        const query = encodeURIComponent(`name = '${FILE_NAME}' and trashed = false`);
-        // เรียก findFileId แบบ interactive = true เฉพาะเมื่อจำเป็นจริงๆ 
-        // แต่ในที่นี้ใช้ false เพราะปกติถูกเรียกต่อจาก getAuthToken(true) ใน save/load อยู่แล้ว
-        const response = await driveApiFetch(`https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id)`, { method: 'GET' }, false);
-        if (!response.ok) return null;
+        let queryStr = `name = '${fileName}' and trashed = false`;
+        
+        // หากมีการระบุโฟลเดอร์ ให้ค้นหาภายใต้โฟลเดอร์นั้น
+        if (folderName) {
+            const folderId = await getOrCreateFolderId(folderName);
+            if (folderId) queryStr += ` and '${folderId}' in parents`;
+        }
+
+        const response = await driveApiFetch(
+            `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(queryStr)}&fields=files(id)`, 
+            { method: 'GET' }, 
+            false
+        );
+        if (!response || !response.ok) return null;
         const result = await response.json();
         return result.files && result.files.length > 0 ? result.files[0].id : null;
     } catch (e) {
@@ -268,8 +349,10 @@ export async function saveToDrive(jsonData) {
     try {
         const token = await getAuthToken(true);
         if (!token) return false;
-
+        
+        const settings = getAppSettings();
         const fileId = await findFileId();
+        const fileName = settings.driveSyncFileName || FILE_NAME;
         const body = JSON.stringify(jsonData);
 
         if (fileId) {
@@ -280,11 +363,14 @@ export async function saveToDrive(jsonData) {
             });
             return response.ok;
         } else {
-            const metadata = { name: FILE_NAME, mimeType: 'application/json' };
+            const folderId = await getOrCreateFolderId(settings.driveSyncFolderName);
+            const metadata = { name: fileName, mimeType: 'application/json' };
+            if (folderId) metadata.parents = [folderId];
+
             const boundary = '-------314159265358979323846';
             const delimiter = "\r\n--" + boundary + "\r\n";
             const close_delim = "\r\n--" + boundary + "--";
-
+            
             const multipartBody = delimiter +
                 'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
                 JSON.stringify(metadata) +

@@ -61,6 +61,8 @@ let appSettings = {
     collapsed: false
   },
   lastUpdated: 0, // 🟢 เก็บเวลาล่าสุดที่มีการแก้ไขข้อมูล
+  driveSyncFileName: 'myworkona_todos.json',
+  driveSyncFolderName: 'MyWorkona_Backups',
   focusedTask: null // 🟢 { spaceId, createdAt } เก็บงานที่กำลังโฟกัสอยู่เพียงหนึ่งเดียว
 };
 
