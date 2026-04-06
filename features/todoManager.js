@@ -653,6 +653,7 @@ export function initTodoManager(callbacks) {
                 fetchGoogleAPI(`/lists/${targetListId}/tasks/${task.googleTaskId}`, 'PATCH', { status: 'completed' });
             }
             saveData(); onRenderCallback();
+            triggerCloudSave();
         }
         // Restore Task
         // 🟢 NEW: Restore Task (from trash)
@@ -670,7 +671,9 @@ export function initTodoManager(callbacks) {
                         sub.expiryAt = null;
                     });
                 }
-                saveData(); onRenderCallback();
+                saveData();
+                onRenderCallback();
+                triggerCloudSave();
             }
         }
         // Permanent Delete Task
@@ -681,7 +684,9 @@ export function initTodoManager(callbacks) {
                     const targetListId = getCurrentGoogleListId(space);
                     fetchGoogleAPI(`/lists/${targetListId}/tasks/${space.tasks[idx].googleTaskId}`, 'DELETE'); 
                 }
-                space.tasks.splice(idx, 1); saveData(); onRenderCallback();
+                space.tasks.splice(idx, 1);
+                saveData(); onRenderCallback();
+                triggerCloudSave();
             }
         }
         // 🟢 NEW: Permanent Delete Subtask
@@ -696,7 +701,9 @@ export function initTodoManager(callbacks) {
                     fetchGoogleAPI(`/lists/${targetListId}/tasks/${subtask.googleTaskId}`, 'DELETE');
                 }
                 space.tasks[pIdx].subtasks.splice(sIdx, 1);
-                saveData(); onRenderCallback();
+                saveData();
+                onRenderCallback();
+                triggerCloudSave();
             }
         }
 
@@ -746,8 +753,9 @@ export function initTodoManager(callbacks) {
                 const sub = space.tasks[pIdx].subtasks.splice(sIdx, 1)[0];
                 // สร้างเป็น Main Task ใหม่ (ไม่มีงานย่อยติดไป)
                 space.tasks.push({ ...sub, subtasks: [], createdAt: Date.now() });
-                saveData();
-                onRenderCallback();
+                saveData(); // Save data locally
+                triggerCloudSave(); // Trigger cloud save after converting
+                onRenderCallback(); // Rerender UI
             }
         }
         // Sub-task Sync Toggle
@@ -2000,9 +2008,11 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
             getGoogleAuthToken: getGoogleAuthToken,
             getCurrentGoogleListId: getCurrentGoogleListId,
             isGoogleSyncEnabled: isGoogleSyncEnabled
-        }, () => { // This is the onUpdate callback for re-rendering
+        }, () => {
+            // This is the onUpdate callback for re-rendering from subtask changes
             saveData();
             onRenderCallback();
+            triggerCloudSave(); // ☁️ ซิงค์ไปที่ Cloud หลังแก้ไข Subtask (Checkbox หรือ Delete)
         });
 
         if (subListEl.sortable) subListEl.sortable.destroy();

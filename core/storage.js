@@ -71,6 +71,49 @@ if (typeof window !== 'undefined') {
   if (!Number.isNaN(n)) sharedSpaceId = n;
 }
 
+// --- Hybrid Storage Helpers ---
+/**
+ * Saves a key-value pair (or multiple pairs if data is an object) to either chrome.storage.local or localStorage.
+ * @param {string|object} key The key to store the data under, or an object of key-value pairs.
+ * @param {*} [value] The data to store if `key` is a string.
+ * @returns {Promise<void>} A promise that resolves when the data is saved.
+ */
+export async function saveDataItem(key, value) {
+  const dataToSave = typeof key === 'object' ? key : { [key]: value };
+  return new Promise(resolve => {
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+      chrome.storage.local.set(dataToSave, resolve);
+    } else {
+      for (const k in dataToSave) {
+        localStorage.setItem(k, JSON.stringify(dataToSave[k]));
+      }
+      resolve();
+    }
+  });
+}
+
+/**
+ * Loads data for a given key (or multiple keys) from either chrome.storage.local or localStorage.
+ * @param {string|string[]} keys The key(s) to retrieve the data for.
+ * @returns {Promise<object>} A promise that resolves with an object containing the retrieved data.
+ */
+export async function loadDataItem(keys) {
+  return new Promise(resolve => {
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+      chrome.storage.local.get(keys, resolve); // result will be an object {key: value, ...}
+    } else {
+      const result = {};
+      const keysArray = Array.isArray(keys) ? keys : [keys];
+      keysArray.forEach(key => {
+        const value = localStorage.getItem(key);
+        try { result[key] = JSON.parse(value); }
+        catch (e) { result[key] = value; } // Return as-is if not valid JSON
+      });
+      resolve(result);
+    }
+  });
+}
+
 // --- Getters ---
 export const getSpaces = () => spaces;
 export const getCurrentSpaceId = () => currentSpaceId;
@@ -116,11 +159,11 @@ export function saveData(immediate = false) {
     const performSave = () => {
         const data = { 'mySpacesData': spaces, 'lastSpaceId': currentSpaceId, 'appSettings': appSettings, 'globalLaunchers': globalLaunchers, 'launcherTags': launcherTags };
         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-            chrome.storage.local.set(data); 
+            saveDataItem(data); 
         } else {
             // Fallback for Web/Mobile (localStorage)
             Object.keys(data).forEach(key => {
-                localStorage.setItem(key, JSON.stringify(data[key]));
+                saveDataItem(key, data[key]);
             });
         }
     };
@@ -128,10 +171,11 @@ export function saveData(immediate = false) {
     if (immediate) performSave();
     else saveTimeout = setTimeout(performSave, 200);
 }
-
-export function loadData(onLoadComplete) {
+ 
+export async function loadData(onLoadComplete) {
   const keys = ['mySpacesData', 'lastSpaceId', 'appSettings', 'globalLaunchers', 'launcherTags'];
-
+  const loadedData = await loadDataItem(keys);
+ 
   const processResult = (res) => {
     // Add check for res to prevent undefined
     if (res && res.mySpacesData && res.mySpacesData.length > 0) {
@@ -140,7 +184,7 @@ export function loadData(onLoadComplete) {
     } else {
       spaces = [{ id: 1, name: "My First Space", iconType: "emoji", icon: "📄", tabs: [], resources: [], driveFiles: [], note: "", tasks: [], tags: [] }];
     }
-
+ 
     if (sharedSpaceId !== null && (sharedSpaceId === 0 || spaces.some((s) => s.id === sharedSpaceId))) {
       currentSpaceId = sharedSpaceId;
     }
@@ -159,34 +203,20 @@ export function loadData(onLoadComplete) {
     }
     
     if(!appSettings.quickColors) appSettings.quickColors = ["#ff4d4f", "#4a86e8", "#52c41a"];
-
+ 
     if (res && res.globalLaunchers) { globalLaunchers = res.globalLaunchers; }
     if (res && res.launcherTags) { launcherTags = res.launcherTags; }
-
+ 
     // Migration for users who have launcher tags but not the central list
     if ((!launcherTags || launcherTags.length === 0) && globalLaunchers.length > 0) {
         const existingTags = new Set(globalLaunchers.map(l => l.tag).filter(t => t));
         launcherTags = Array.from(existingTags);
     }
-
+ 
     if (onLoadComplete) onLoadComplete();
   };
-
-  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-    // Mode: Extension
-    chrome.storage.local.get(keys, processResult);
-  } else {
-    // Mode: Web (GitHub Pages / Mobile)
-    const res = {};
-    keys.forEach(key => {
-        const val = localStorage.getItem(key);
-        if (val) {
-            try { res[key] = JSON.parse(val); } 
-            catch(e) { res[key] = val; }
-        }
-    });
-    processResult(res);
-  }
+ 
+  processResult(loadedData);
 }
 
 /**
