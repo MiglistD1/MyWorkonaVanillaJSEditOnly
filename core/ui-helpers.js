@@ -30,20 +30,27 @@ export function getFaviconUrl(tabUrl, favIconUrl) {
     if (favIconUrl && favIconUrl.startsWith('data:')) {
         return favIconUrl;
     }
-    try {
-        // กลับมาใช้ API ของ Chrome Extension (ต้องมี permission: "favicon")
-        // วิธีนี้จะได้ไอคอน Google Apps (Docs, Sheets, Drive) ที่ถูกต้องแยกตามประเภท
-        if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.getURL) {
-            throw new Error("Not in extension environment");
-        }
-        const url = new URL(chrome.runtime.getURL("/_favicon/"));
-        url.searchParams.set("pageUrl", tabUrl);
-        url.searchParams.set("size", "32");
-        return url.toString();
-    } catch (e) {
-        // Fallback: รูปโลก Minimal (SVG)
-        return 'data:image/svg+xml;charset=utf-8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%239ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>';
+
+    // 1. กรณีอยู่ในสภาพแวดล้อม Extension ให้ใช้ API ของ Chrome
+    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.getURL) {
+        try {
+            const url = new URL(chrome.runtime.getURL("/_favicon/"));
+            url.searchParams.set("pageUrl", tabUrl);
+            url.searchParams.set("size", "32");
+            return url.toString();
+        } catch (e) { /* ถ้าล้มเหลวให้ไปข้อถัดไป */ }
     }
+
+    // 2. กรณีเปิดผ่าน Web (เช่น GitHub Pages) ให้ใช้ Google Favicon Service แทนเพื่อให้เห็นไอคอนจริง
+    if (tabUrl && tabUrl.startsWith('http')) {
+        try {
+            const domain = new URL(tabUrl).hostname;
+            return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+        } catch (e) { /* ถ้าดึงไม่ได้ให้ไปข้อสุดท้าย */ }
+    }
+
+    // 3. Fallback สุดท้าย: รูปโลก Minimal (SVG) - แก้ไขโดยใช้ %22 แทน " เพื่อไม่ให้ HTML attribute พัง
+    return 'data:image/svg+xml;charset=utf-8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2224%22 height=%2224%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%239ca3af%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><circle cx=%2212%22 cy=%2212%22 r=%2210%22></circle><line x1=%222%22 y1=%2212%22 x2=%2222%22 y2=%2212%22></line><path d=%22M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z%22></path></svg>';
 }
 
 /**
