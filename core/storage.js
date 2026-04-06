@@ -60,6 +60,7 @@ let appSettings = {
     h: 150,
     collapsed: false
   },
+  lastUpdated: 0, // 🟢 เก็บเวลาล่าสุดที่มีการแก้ไขข้อมูล
   focusedTask: null // 🟢 { spaceId, createdAt } เก็บงานที่กำลังโฟกัสอยู่เพียงหนึ่งเดียว
 };
 
@@ -157,6 +158,8 @@ export function saveData(immediate = false) {
     // Debounce: Wait 500ms, if called again, cancel the old one (reduces frequent saves when typing notes)
     if (saveTimeout) clearTimeout(saveTimeout);
     const performSave = () => {
+        // ⏱️ อัปเดต Timestamp ทุกครั้งก่อนบันทึกจริง เพื่อระบุว่าข้อมูลก้อนนี้คือเวอร์ชันล่าสุด
+        appSettings.lastUpdated = Date.now();
         const data = { 'mySpacesData': spaces, 'lastSpaceId': currentSpaceId, 'appSettings': appSettings, 'globalLaunchers': globalLaunchers, 'launcherTags': launcherTags };
         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
             saveDataItem(data); 

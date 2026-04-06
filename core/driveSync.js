@@ -5,7 +5,7 @@ import {
     saveData
 } from './storage.js';
 
-// 🔴 [วาง Client ID ตัวใหม่ของคุณที่นี่]
+// 🔴 [PLACE YOUR NEW CLIENT ID HERE]
 const CLIENT_ID = '586837492075-e2cf86u76n2c9dil0equ98trbraqnngh.apps.googleusercontent.com';
 
 const SCOPES = 'https://www.googleapis.com/auth/drive.file';
@@ -13,6 +13,100 @@ const FILE_NAME = 'myworkona_todos.json';
 const REDIRECT_URI = window.location.origin + window.location.pathname;
 
 let accessToken = null;
+import { svgGoogleDrive, svgCloudOff, svgRefresh, svgSpinner, svgCloudUp, svgCloudDown, svgEdit } from './icons.js';
+
+/**
+ * 🎨 อัปเดต UI ของปุ่ม Drive Sync ให้แสดงสถานะการทำงาน
+ */
+export function renderDriveSyncUI(text = null, isLoading = false) {
+    const btnMain = document.getElementById('btn-drive-sync');
+    if (!btnMain) return;
+
+    // สร้าง Wrapper เพื่อใส่ Dropdown ถ้ายังไม่มี
+    let wrapper = btnMain.parentElement.closest('.drive-sync-wrapper');
+    if (!wrapper) {
+        wrapper = document.createElement('div');
+        wrapper.className = 'drive-sync-wrapper';
+        wrapper.style.position = 'relative';
+        btnMain.parentNode.insertBefore(wrapper, btnMain);
+        wrapper.appendChild(btnMain);
+    }
+
+    // สร้าง Dropdown Menu
+    let menu = wrapper.querySelector('.drive-sync-menu');
+    if (!menu) {
+        menu = document.createElement('div');
+        menu.className = 'drive-sync-menu dropdown-menu';
+        menu.style.cssText = `display:none; position:absolute; top:110%; right:0; width:180px; padding:6px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:8px; box-shadow:0 10px 25px rgba(0,0,0,0.1); z-index:1000; flex-direction:column; gap:4px;`;
+        wrapper.appendChild(menu);
+    }
+
+    if (isLoading) {
+        btnMain.innerHTML = `${svgSpinner}`;
+        btnMain.disabled = true;
+    } else {
+        btnMain.disabled = false;
+        btnMain.style.padding = '4px 8px';
+        btnMain.style.borderRadius = '20px';
+        btnMain.style.height = '30px';
+        btnMain.style.minWidth = 'auto';
+        
+        if (accessToken) {
+            btnMain.innerHTML = `${svgGoogleDrive} <span style="font-size:10px; font-weight:800; margin-left:4px;">Connected</span>`;
+            btnMain.style.background = 'rgba(52, 168, 83, 0.1)';
+            btnMain.style.color = '#34a853';
+            btnMain.style.border = '1px solid #34a853';
+        } else {
+            btnMain.innerHTML = `${svgCloudOff}`;
+            btnMain.style.background = 'var(--bg-body)';
+            btnMain.style.color = 'var(--text-muted)';
+            btnMain.style.border = '1px solid var(--border-color)';
+        }
+
+        // ใส่เนื้อหาใน Menu
+        menu.innerHTML = `
+            <button class="menu-item" id="ds-btn-auth" style="display:flex; align-items:center; gap:8px; padding:8px; border:none; background:transparent; cursor:pointer; font-size:12px; font-weight:600; color:var(--text-main); border-radius:6px; width:100%;">
+                ${accessToken ? '🟢 Connected' : '⚪ Connect Drive'}
+            </button>
+            <div style="height:1px; background:var(--border-color); margin:2px 4px;"></div>
+            <button class="menu-item" id="ds-btn-upload" style="display:flex; align-items:center; gap:8px; padding:8px; border:none; background:transparent; cursor:pointer; font-size:12px; color:var(--text-main); border-radius:6px; width:100%;">
+                ${svgCloudUp} Force Overwrite (Upload)
+            </button>
+            <button class="menu-item" id="ds-btn-download" style="display:flex; align-items:center; gap:8px; padding:8px; border:none; background:transparent; cursor:pointer; font-size:12px; color:var(--text-main); border-radius:6px; width:100%;">
+                ${svgCloudDown} Force Import (Download)
+            </button>
+        `;
+
+        // Bind Events ใน Menu
+        menu.querySelector('#ds-btn-auth').onclick = async () => {
+            menu.style.display = 'none';
+            if (!accessToken) {
+                renderDriveSyncUI("Connecting...", true);
+                const token = await getAuthToken(true);
+                if (token) syncDataAfterLogin();
+            }
+        };
+        menu.querySelector('#ds-btn-upload').onclick = () => { menu.style.display = 'none'; forceUploadToDrive(); };
+        menu.querySelector('#ds-btn-download').onclick = () => { menu.style.display = 'none'; forceDownloadFromDrive(); };
+
+        // Toggle Menu
+        btnMain.onclick = (e) => {
+            e.stopPropagation();
+            const isHidden = menu.style.display === 'none';
+            // ปิด Dropdown อื่นๆ ก่อน
+            document.querySelectorAll('.dropdown-menu').forEach(m => m.style.display = 'none');
+            menu.style.display = isHidden ? 'flex' : 'none';
+        };
+    }
+
+    // ปิดเมนูเมื่อคลิกที่อื่น
+    if (!window._driveSyncBound) {
+        document.addEventListener('click', (e) => {
+            if (!wrapper.contains(e.target)) menu.style.display = 'none';
+        });
+        window._driveSyncBound = true;
+    }
+}
 
 /**
  * Hybrid Auth: Supports chrome.identity (Extension) or Manual Redirect (Web)
@@ -89,6 +183,61 @@ async function driveApiFetch(url, options = {}, interactive = false) {
     } catch (e) {
         console.error("Drive API Fetch Error:", e);
         throw e;
+    }
+}
+
+/**
+ * ⬆️ บังคับอัปโหลดข้อมูลปัจจุบันจาก Local ไปยัง Google Drive ทันที
+ */
+export async function forceUploadToDrive() {
+    if (!confirm("⚠️ Force Upload to Google Drive?\n\nการดำเนินการนี้จะเขียนทับข้อมูลทั้งหมดบน Google Drive ด้วยข้อมูลในเครื่องของคุณตอนนี้\n\nต้องการดำเนินการต่อหรือไม่?")) return;
+
+    renderDriveSyncUI("Uploading...", true);
+    try {
+        const localData = {
+            mySpacesData: getSpaces(),
+            appSettings: getAppSettings(),
+            lastSpaceId: getCurrentSpaceId(),
+            globalLaunchers: getGlobalLaunchers(),
+            launcherTags: getLauncherTags()
+        };
+        const success = await saveToDrive(localData);
+        if (success) {
+            alert("✅ ข้อมูลถูกอัปโหลดขึ้น Google Drive เรียบร้อยแล้ว!");
+            // อัปเดต timestamp ใน local เพื่อให้ตรงกับที่เพิ่งอัปโหลด
+            getAppSettings().lastUpdated = Date.now();
+            saveData(true); // บันทึก timestamp ที่แก้ไข
+        } else {
+            alert("❌ อัปโหลดล้มเหลว! โปรดตรวจสอบการเชื่อมต่ออินเทอร์เน็ตและสิทธิ์การเข้าถึง Google Drive");
+        }
+    } catch (e) {
+        console.error("Force upload failed:", e);
+        alert("❌ เกิดข้อผิดพลาดในการอัปโหลด! โปรดตรวจสอบ Console");
+    } finally {
+        renderDriveSyncUI();
+    }
+}
+
+/**
+ * ⬇️ บังคับดาวน์โหลดข้อมูลจาก Google Drive มาทับข้อมูล Local ทันที
+ */
+export async function forceDownloadFromDrive() {
+    if (!confirm("⚠️ Force Download from Google Drive?\n\nการดำเนินการนี้จะเขียนทับข้อมูลทั้งหมดในเครื่องของคุณด้วยข้อมูลจาก Google Drive\n\nต้องการดำเนินการต่อหรือไม่?")) return;
+
+    renderDriveSyncUI("Downloading...", true);
+    try {
+        const driveData = await loadFromDrive();
+        if (driveData) {
+            applyDriveData(driveData);
+            // applyDriveData จะ reload หน้าเอง
+        } else {
+            alert("❌ ไม่พบข้อมูลบน Google Drive หรือการดาวน์โหลดล้มเหลว!");
+        }
+    } catch (e) {
+        console.error("Force download failed:", e);
+        alert("❌ เกิดข้อผิดพลาดในการดาวน์โหลด! โปรดตรวจสอบ Console");
+    } finally {
+        renderDriveSyncUI();
     }
 }
 
@@ -178,19 +327,58 @@ export async function loadFromDrive() {
     }
 }
 
+/**
+ * 🔄 ตรวจสอบข้อมูลบน Cloud แบบเงียบๆ และแจ้งเตือนหากพบข้อมูลใหม่
+ * ช่วยให้ข้อมูลระหว่าง มือถือ คอม และ Extension ตรงกันเสมอ
+ */
+export async function autoCheckCloudUpdate() {
+    const token = await getAuthToken(false); // เช็คแบบเงียบๆ ไม่เด้งหน้า Login
+    if (!token) return;
+
+    const driveData = await loadFromDrive();
+    if (driveData) {
+        const cloudTime = driveData.appSettings?.lastUpdated || 0;
+        const localTime = getAppSettings().lastUpdated || 0;
+
+        if (cloudTime > localTime) {
+            // ☁️ ข้อมูลบน Cloud ใหม่กว่า -> ถามเพื่อโหลดลงเครื่อง
+            const cloudDate = new Date(cloudTime).toLocaleString();
+            if (confirm(`☁️ Cloud Sync: พบข้อมูลที่ใหม่กว่าบน Google Drive (${cloudDate})\n\nคุณต้องการโหลดข้อมูลล่าสุดนี้มาใช้หรือไม่?`)) {
+                applyDriveData(driveData);
+            }
+        } else if (localTime > cloudTime) {
+            // 💻 ข้อมูลในเครื่อง (Extension) ใหม่กว่า -> อัปโหลดขึ้น Cloud ทันทีเพื่ออัปเดตไฟล์บน Drive
+            console.log("☁️ Local data is newer. Syncing to Google Drive...");
+            const localData = {
+                mySpacesData: getSpaces(),
+                appSettings: getAppSettings(),
+                lastSpaceId: getCurrentSpaceId(),
+                globalLaunchers: getGlobalLaunchers(),
+                launcherTags: getLauncherTags()
+            };
+            await saveToDrive(localData);
+        }
+        renderDriveSyncUI();
+    }
+}
+
+function applyDriveData(driveData) {
+    if (driveData.mySpacesData) setSpaces(driveData.mySpacesData);
+    if (driveData.appSettings) setAppSettings(driveData.appSettings);
+    if (driveData.lastSpaceId !== undefined) setCurrentSpaceId(driveData.lastSpaceId);
+    if (driveData.globalLaunchers) setGlobalLaunchers(driveData.globalLaunchers);
+    if (driveData.launcherTags) setLauncherTags(driveData.launcherTags);
+
+    saveData(true);
+    alert("Sync Complete! Reloading...");
+    location.reload();
+}
+
 async function syncDataAfterLogin() {
     const driveData = await loadFromDrive();
     if (driveData) {
         if (confirm("Sync Found: Restore data from Google Drive? This will overwrite local data.")) {
-            if (driveData.mySpacesData) setSpaces(driveData.mySpacesData);
-            if (driveData.appSettings) setAppSettings(driveData.appSettings);
-            if (driveData.lastSpaceId !== undefined) setCurrentSpaceId(driveData.lastSpaceId);
-            if (driveData.globalLaunchers) setGlobalLaunchers(driveData.globalLaunchers);
-            if (driveData.launcherTags) setLauncherTags(driveData.launcherTags);
-
-            saveData(true);
-            alert("Sync Complete! Reloading...");
-            location.reload();
+            applyDriveData(driveData);
         }
     } else {
         const localData = {
@@ -206,18 +394,12 @@ async function syncDataAfterLogin() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Silent auth check on load
+    // 🟢 เมื่อเปิดแอป ให้พยายามตรวจสอบข้อมูลจาก Cloud ทันที
     getAuthToken(false).then(token => {
-        if (token) console.log("Drive connected.");
+        if (token) autoCheckCloudUpdate();
+        renderDriveSyncUI();
     });
-
-    const syncBtn = document.getElementById('btn-drive-sync');
-    if (syncBtn) {
-        syncBtn.onclick = async () => {
-            const token = await getAuthToken(true);
-            if (token) syncDataAfterLogin();
-        }
-    }
+    // logic ย้ายไปอยู่ใน renderDriveSyncUI แล้ว
 });
 
 // 🌏 บันทึกฟังก์ชันไว้ที่ window เพื่อให้โมดูลอื่นเรียกใช้งานได้ง่าย (เช่น Todo Manager)
