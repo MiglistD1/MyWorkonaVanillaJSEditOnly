@@ -21,14 +21,15 @@ import { svgGoogleDrive, svgCloudOff, svgRefresh, svgSpinner, svgCloudUp, svgClo
 export function renderDriveSyncUI(text = null, isLoading = false) {
     const btnMain = document.getElementById('btn-drive-sync');
     if (!btnMain) return;
-
+    
     // สร้าง Wrapper เพื่อใส่ Dropdown ถ้ายังไม่มี
     let wrapper = btnMain.parentElement.closest('.drive-sync-wrapper');
     if (!wrapper) {
         wrapper = document.createElement('div');
         wrapper.className = 'drive-sync-wrapper';
         wrapper.style.position = 'relative';
-        btnMain.parentNode.insertBefore(wrapper, btnMain);
+        const driveSyncContainer = document.getElementById('drive-sync-container');
+        if (driveSyncContainer) driveSyncContainer.appendChild(wrapper);
         wrapper.appendChild(btnMain);
     }
 

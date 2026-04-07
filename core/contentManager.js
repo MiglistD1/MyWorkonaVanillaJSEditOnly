@@ -6,7 +6,7 @@ import {
 import { applyAppSettings } from './settings-manager.js';
 import { renderTabs } from '../components/tabs.js';
 import { renderResources, renderDriveFiles } from '../components/resources.js';
-import { renderTasks, renderQuickNotes } from '../features/todoManager.js';
+import { renderTasks, renderQuickNotes, applyTaskSectionsOrder } from '../features/todoManager.js';
 import { renderTagBar } from '../components/tagBar.js';
 import { renderLaunchers } from '../features/customLaunchers.js';
 import { renderSidebar } from '../components/sidebar.js';
@@ -55,7 +55,6 @@ export function renderMainContent() {
   // Show normal space content
   if (mainGrid) mainGrid.style.display = 'grid';
   if (tagBar) tagBar.style.display = 'flex';
-  else if (tagBar) tagBar.style.display = 'none'; // Ensure it's hidden if not mobile but also not in command center
   if (defaultContainer) defaultContainer.style.display = 'none';
   if (toggleToolsBtn) toggleToolsBtn.style.display = 'inline-flex';
 
@@ -79,15 +78,13 @@ export function renderMainContent() {
   // Headers
   const headers = space.headers || {};
   document.getElementById('header-tabs-text').innerText = headers.tabHeader || "Tabs";
-  document.getElementById('vertical-tabs-text').innerText = headers.tabHeader || "Tabs";
+  // document.getElementById('vertical-tabs-text').innerText = headers.tabHeader || "Tabs"; // REMOVED
   document.getElementById('header-res-text').innerText = headers.resourceHeader || "Resources";
   document.getElementById('header-tasks-text').innerText = headers.taskHeader || "Tasks & Notes";
-  document.getElementById('vertical-res-text').innerText = headers.resourceHeader || "Resources";
-  document.getElementById('vertical-tasks-text').innerText = headers.taskHeader || "Tasks & Notes";
 
   // Apply collapsed states
   const grid = document.getElementById('main-grid');
-  if (grid) {
+  if (grid && !isMobile) { // NEW: Only apply grid classes on desktop for better mobile control
       grid.classList.toggle('tabs-collapsed', globalSettings.isTabsCollapsed);
       grid.classList.toggle('resources-collapsed', globalSettings.isResourcesCollapsed);
       grid.classList.toggle('tasks-collapsed', globalSettings.isTasksCollapsed);
@@ -103,7 +100,7 @@ export function renderMainContent() {
       onFilterChange: (tags, mode) => { 
           setFilterTags(tags); 
           setFilterMode(mode); 
-          renderMainContent(); 
+          renderAll();
       }, 
       onRenderMain: renderMainContent  
     });
@@ -114,6 +111,7 @@ export function renderMainContent() {
   renderDriveFiles(space, currentFilterTags, currentFilterMode, currentSearchQuery, renderAll);
   renderTasks(space, currentFilterTags, currentFilterMode, currentSearchQuery);
   renderQuickNotes(space);
+  applyTaskSectionsOrder();
   renderDashboardQuickNote(); // 🟢 อัปเดตการแสดงผลตามสถานะ Pin เมื่อเปลี่ยน Space
   renderFocusPersistentPopup(); // 🟢 Render persistent popup when switching to a regular space
 
@@ -141,12 +139,25 @@ function setupCollapsing() {
             settings[key] = !settings[key];
             grid.classList.toggle(key.replace('is', '').replace('C', '-c').toLowerCase(), settings[key]);
             saveData();
+            // 🟢 สั่งวาดใหม่เพื่อให้ปุ่มวงกลมปรากฏใน Tag Bar ทันที
+            renderMainContent();
         };
         const btn = document.getElementById(btnId);
         const header = document.getElementById(headerId);
         if (btn) btn.onclick = toggle;
         if (header) header.onclick = toggle;
     };
+    
+    // NEW: Tabs Collapsing
+    const toggleTabs = () => {
+        settings.isTabsCollapsed = !settings.isTabsCollapsed;
+        if (grid) grid.classList.toggle('tabs-collapsed', settings.isTabsCollapsed);
+        saveData();
+        renderMainContent();
+    };
+
+    const btnCollapseTabs = document.getElementById('btn-collapse-tabs-inline');
+    if (btnCollapseTabs) btnCollapseTabs.onclick = toggleTabs;
 
     setup('btn-collapse-res-inline', 'resources-header-collapsed', 'isResourcesCollapsed');
     setup('btn-collapse-tasks-inline', 'tasks-header-collapsed', 'isTasksCollapsed');

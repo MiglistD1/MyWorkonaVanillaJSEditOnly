@@ -83,22 +83,77 @@ let currentTemplateTasks = []; // ตัวแปรชั่วคราวข�
 
 // Helpers
 
-function applyTaskSectionsOrder() {
+export function applyTaskSectionsOrder() {
     const todoWrapper = document.getElementById('todo-list-section-wrapper');
     const noteWrapper = document.getElementById('quick-note-wrapper');
-    const order = getAppSettings().taskSectionOrder || 'todo-first';
+    if (!todoWrapper || !noteWrapper) return;
 
-    if (todoWrapper && noteWrapper) {
+    const settings = getAppSettings();
+    const isMobile = window.innerWidth <= 768;
+    // บนมือถือ: บังคับโน้ตกลับมาฝั่ง Tasks เสมอเพราะคอลัมน์ Tabs ถูกซ่อน
+    const location = isMobile ? 'tasks' : (settings.quickNoteLocation || 'tasks');
+    const order = settings.taskSectionOrder || 'todo-first';
+
+    // 1. จัดการตำแหน่งคอลัมน์ (Column Placement)
+    if (location === 'tabs') {
+        const tabsBody = document.getElementById('tabs-card-body');
+        if (tabsBody && noteWrapper.parentElement !== tabsBody) {
+            tabsBody.appendChild(noteWrapper);
+        }
+        noteWrapper.style.order = '';
+        noteWrapper.style.marginTop = '15px';
+        
+        const tasksBody = document.getElementById('tasks-card-body');
+        if (tasksBody && todoWrapper.parentElement !== tasksBody) {
+            tasksBody.appendChild(todoWrapper);
+        }
+        todoWrapper.style.order = '1';
+        todoWrapper.style.marginTop = '0';
+    } else {
+        const tasksBody = document.getElementById('tasks-card-body');
+        if (tasksBody) {
+            if (noteWrapper.parentElement !== tasksBody) tasksBody.appendChild(noteWrapper);
+            if (todoWrapper.parentElement !== tasksBody) tasksBody.appendChild(todoWrapper);
+        }
+
         if (order === 'note-first') {
-            todoWrapper.style.order = '2';
             noteWrapper.style.order = '1';
-            noteWrapper.style.marginTop = '15px';
+            todoWrapper.style.order = '2';
+            noteWrapper.style.marginTop = '0';
+            todoWrapper.style.marginTop = '15px';
         } else {
             todoWrapper.style.order = '1';
             noteWrapper.style.order = '2';
-            noteWrapper.style.marginTop = '0';
+            todoWrapper.style.marginTop = '0';
+            noteWrapper.style.marginTop = '15px';
         }
     }
+
+    // 2. อัปเดตไอคอนปุ่ม (Toggle UI Icon)
+    const btnMove = document.getElementById('btn-move-note-location');
+    const btnNoteUp = document.getElementById('btn-order-note-up');
+    const btnTodoUp = document.getElementById('btn-order-todo-up');
+
+    // 🟢 กำหนดสไตล์ความโดดเด่น (Prominence Styles)
+    const activeStyle = 'color: #2f80ed; background: rgba(47, 128, 237, 0.15); border: 1px solid rgba(47, 128, 237, 0.5); opacity: 1; box-shadow: 0 0 8px rgba(47, 128, 237, 0.2);';
+    const inactiveStyle = 'color: var(--text-muted); background: transparent; border: 1px solid transparent; opacity: 0.5;';
+    const baseBtnStyle = 'padding: 2px; width: 18px; height: 18px; border-radius: 4px; display: flex; align-items: center; justify-content: center; transition: all 0.2s ease;';
+
+    if (btnMove) {
+        if (location === 'tabs') {
+            btnMove.innerHTML = `<svg class="svg-icon-sm" style="width:12px; height:12px;"><use href="#icon-chevron-right"></use></svg>`;
+            btnMove.title = "Move back to Tasks Column";
+        } else {
+            btnMove.innerHTML = `<svg class="svg-icon-sm" style="width:12px; height:12px;"><use href="#icon-chevron-left"></use></svg>`;
+            btnMove.title = "Move to Tabs Column";
+        }
+        // 🔵 ปรับสีปุ่มย้ายฝั่ง (Tabs/Tasks)
+        btnMove.style.cssText = (location === 'tabs') ? `${baseBtnStyle} ${activeStyle}` : `${baseBtnStyle} ${inactiveStyle}`;
+    }
+
+    // 🔵 ปรับสีปุ่มลำดับ (Up/Down)
+    if (btnNoteUp) btnNoteUp.style.cssText = (order === 'note-first' && location === 'tasks') ? `${baseBtnStyle} ${activeStyle}` : `${baseBtnStyle} ${inactiveStyle}`;
+    if (btnTodoUp) btnTodoUp.style.cssText = (order === 'todo-first' && location === 'tasks') ? `${baseBtnStyle} ${activeStyle}` : `${baseBtnStyle} ${inactiveStyle}`;
 }
 
 /** 🎵 Sound Helpers สำหรับความรู้สึก Premium */
@@ -293,11 +348,13 @@ export function initTodoManager(callbacks) {
             }
         }
 
-        fab.onclick = (e) => { // เมื่อกด FAB
+        // 🟢 Fix: FAB Directly opens task input bar and focuses the field for immediate typing
+        fab.onclick = (e) => {
             e.stopPropagation();
-            fabMenu.classList.add('is-active'); // แสดง FAB Menu (Bottom Sheet)
-            // fab.classList.add('is-hidden'); // ไม่ซ่อน FAB จนกว่าจะกด Add Task ในเมนู
-            document.getElementById('new-task-input').focus();
+            const bar = document.getElementById('new-task-input')?.closest('.task-input-bar');
+            if (bar) bar.classList.add('is-active');
+            document.getElementById('new-task-input')?.focus();
+            fab.classList.add('is-hidden');
         };
 
         // คลิกที่อื่นเพื่อซ่อนแถบพิมพ์ (ยกเว้นในตัวแถบเอง)
@@ -477,6 +534,7 @@ export function initTodoManager(callbacks) {
     // Section Order Events
     const btnNoteUp = document.getElementById('btn-order-note-up');
     const btnTodoUp = document.getElementById('btn-order-todo-up');
+    const btnMoveLocation = document.getElementById('btn-move-note-location');
     if (btnNoteUp && btnTodoUp) {
         btnNoteUp.onclick = () => {
             getAppSettings().taskSectionOrder = 'note-first';
@@ -485,6 +543,15 @@ export function initTodoManager(callbacks) {
         btnTodoUp.onclick = () => {
             getAppSettings().taskSectionOrder = 'todo-first';
             saveData(); applyTaskSectionsOrder();
+        };
+    }
+    if (btnMoveLocation) {
+        btnMoveLocation.onclick = () => {
+            const settings = getAppSettings();
+            const current = settings.quickNoteLocation || 'tasks';
+            settings.quickNoteLocation = (current === 'tasks') ? 'tabs' : 'tasks';
+            saveData();
+            applyTaskSectionsOrder();
         };
     }
     applyTaskSectionsOrder();
@@ -658,6 +725,30 @@ export function initTodoManager(callbacks) {
             return;
         }
 
+        // 🔘 Toggle Hide Pending Subtasks
+        const hidePendingBtn = e.target.closest('.hide-pending-subtasks-btn');
+        if (hidePendingBtn) {
+            const idx = parseInt(hidePendingBtn.dataset.index);
+            if (space.tasks[idx]) {
+                space.tasks[idx].pendingSubtasksHidden = !space.tasks[idx].pendingSubtasksHidden;
+                saveData();
+                onRenderCallback();
+            }
+            return;
+        }
+
+        // 🔘 Toggle Hide Completed Subtasks
+        const hideCompletedBtn = e.target.closest('.hide-completed-subtasks-btn');
+        if (hideCompletedBtn) {
+            const idx = parseInt(hideCompletedBtn.dataset.index);
+            if (space.tasks[idx]) {
+                space.tasks[idx].completedSubtasksHidden = !space.tasks[idx].completedSubtasksHidden;
+                saveData();
+                onRenderCallback();
+            }
+            return;
+        }
+
         // NEW: Toggle Subtasks Visibility
         const toggleSubtasksBtn = e.target.closest('.toggle-subtasks-btn');
         if (toggleSubtasksBtn) {
@@ -681,6 +772,18 @@ export function initTodoManager(callbacks) {
                 collapsibleActions.style.display = isHidden ? 'flex' : 'none';
                 toggleBtn.classList.toggle('expanded');
             }
+        }
+
+        // 🔘 Toggle Subtask Specific Controls
+        const subtaskMenuBtn = e.target.closest('.toggle-subtask-controls-btn');
+        if (subtaskMenuBtn) {
+            const idx = parseInt(subtaskMenuBtn.dataset.index);
+            if (space.tasks[idx]) {
+                space.tasks[idx].subtaskControlsOpen = !space.tasks[idx].subtaskControlsOpen;
+                saveData();
+                onRenderCallback();
+            }
+            return;
         }
 
         // 🔘 Main Task Sync Toggle
@@ -1925,9 +2028,13 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
                 };
             }
 
+            // 🟢 Fix: Ensure the re-rendered FAB also triggers the task input directly
             targetFab.onclick = (e) => {
                 e.stopPropagation();
-                targetMenu.classList.add('is-active');
+                const bar = document.getElementById('new-task-input')?.closest('.task-input-bar');
+                if (bar) bar.classList.add('is-active');
+                document.getElementById('new-task-input')?.focus();
+                targetFab.classList.add('is-hidden');
             };
         }
     }

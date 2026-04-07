@@ -1495,7 +1495,7 @@ async function showPostTransitionConfirmPopup(item) {
     let modal = document.getElementById(modalId);
     
     if (!modal) {
-        const html = `
+    const html = `
             <div class="modal-overlay sf-post-confirm-overlay" id="${modalId}" style="z-index: 30000; background: none; backdrop-filter: none; display:none;">
                 <div class="modal-content sf-post-confirm-popup" style="padding: 0; position: fixed;">
                     <div id="sf-post-result-header" style="background: var(--bg-spacebar); padding: 6px 10px; cursor: grab; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border-color);">
@@ -1506,8 +1506,8 @@ async function showPostTransitionConfirmPopup(item) {
                     <div style="padding: 12px 10px; display: flex; flex-direction: column; gap: 8px; align-items: center;">
                         <div style="font-size: 11px; font-weight: 700; text-align: center; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #fff;">${item.title}</div>
                         <div style="display: flex; gap: 8px;">
-                            <button class="sf-result-action-btn sf-res-fail" id="sf-btn-res-fail" title="Fail">${cancelIcon()}</button>
-                            <button class="sf-result-action-btn sf-res-success" id="sf-btn-res-success" title="Success">${checkIcon()}</button>
+                            <button class="sf-result-action-btn sf-res-fail" id="sf-btn-res-fail" title="Fail" style="width:30px; height:30px;">${cancelIcon()}</button>
+                            <button class="sf-result-action-btn sf-res-success" id="sf-btn-res-success" title="Success" style="width:30px; height:30px;">${checkIcon()}</button>
                         </div>
                     </div>
                 </div>
@@ -1531,7 +1531,7 @@ async function showPostTransitionConfirmPopup(item) {
 
         const margin = 25; // ระยะห่างจากขอบจอ
         const posX = window.innerWidth - popupContent.offsetWidth - margin;
-        const posY = margin; // 🟢 ย้ายไปอยู่ด้านบน
+        const posY = 75; // 🟢 ย้ายไปอยู่ด้านบน
         
         popupContent.style.left = `${posX}px`;
         popupContent.style.top = `${posY}px`;

@@ -18,7 +18,7 @@ import { openOrFocusTab } from './core/ui-helpers.js';
 import { initDashboardQuickNote } from './features/dashboardQuickNote.js';
 import { 
   getAppSettings, saveData, loadData, getSpaces,
-  getCurrentSpaceId, setCurrentSpaceId, setFilterTags, setSearchQuery, getCurrentSpace
+  getCurrentSpaceId, setCurrentSpaceId, getFilterTags, setFilterTags, setSearchQuery, getCurrentSpace, getFilterMode, setFilterMode
 } from './core/storage.js';
 
 
@@ -160,14 +160,6 @@ document.addEventListener('DOMContentLoaded', () => {
             };
         });
 
-        // Shortcut Bar Collapse Logic
-        const btnCollapseLaunchers = document.getElementById('btn-collapse-launchers');
-        if (btnCollapseLaunchers) {
-            btnCollapseLaunchers.addEventListener('click', () => {
-                document.querySelector('.topbar').classList.toggle('launchers-collapsed');
-            });
-        }
-
         // Topbar Utility Group Popup Logic
         const utilityMoreBtn = document.getElementById('btn-utility-more');
         const utilityGroup = document.getElementById('utility-group');
@@ -277,33 +269,129 @@ document.addEventListener('DOMContentLoaded', () => {
             const renderMobileTags = () => {
                 const space = getCurrentSpace();
                 if (!space) return;
-                if (!space.tags) space.tags = [];
+                const filterTags = getFilterTags();
+                const filterMode = getFilterMode();
+                const isSingle = !!space.isSingleSelectMode;
+                const isLocked = !!space.isTagModeLocked;
 
-                const allTags = new Set(space.tags);
-                space.tasks.forEach(task => {
-                    if (task.tags) task.tags.forEach(t => allTags.add(t));
-                    if (task.subtasks) task.subtasks.forEach(sub => { if (sub.tags) sub.tags.forEach(t => allTags.add(t)); });
+                // 🟢 1. สร้าง Header (โหมดการกรอง)
+                let html = `
+                    <div style="width:100%; display: flex; align-items: center; gap: 8px; margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px solid var(--border-color);">
+                        <div style="display: flex; align-items: center; gap: 4px; background: var(--bg-body); padding: 4px 8px; border-radius: 8px; border: 1px solid var(--border-color);">
+                            <button id="mobile-tag-lock-btn" class="btn-icon" title="${isLocked ? 'Unlock' : 'Lock'}" style="color: ${isLocked ? '#ef4444' : '#10b981'}; opacity: ${isLocked ? '1' : '0.4'};">
+                                <svg class="svg-icon-sm"><use href="#icon-${isLocked ? 'lock-minimal' : 'unlock-minimal'}"></use></svg>
+                            </button>
+                            <button id="mobile-tag-select-btn" class="btn-tag-mode" style="padding: 4px 10px; font-size: 12px; border-radius: 4px; font-weight: bold; background: ${isSingle ? '#f3e8ff' : '#dcfce7'}; color: ${isSingle ? '#6b21a8' : '#166534'}; border: 1px solid ${isSingle ? '#6b21a8' : '#166534'}; opacity: ${isLocked ? '0.7' : '1'};">
+                                ${isSingle ? 'Single' : 'Multi'}
+                            </button>
+                            <button id="mobile-tag-mode-btn" class="btn-tag-mode" style="padding: 4px 10px; font-size: 12px; border-radius: 4px; font-weight: bold; background: ${filterMode === 'OR' ? '#e3f2fd' : '#ffebee'}; color: ${filterMode === 'OR' ? '#0b6e99' : '#991b1b'}; border: 1px solid ${filterMode === 'OR' ? '#0b6e99' : '#991b1b'}; opacity: ${isLocked ? '0.7' : '1'};">
+                                ${filterMode}
+                            </button>
+                        </div>
+                    </div>
+                `;
+
+                // 🟢 2. ส่วนของ System Tags
+                const systemTags = [
+                    { label: "All", value: "ALL", active: filterTags.length === 0 },
+                    { label: "🚫 No Tag", value: "UNTAGGED", active: filterTags.includes("UNTAGGED") },
+                    { label: "🤖 AI", value: "AI", active: filterTags.includes("AI") },
+                    { label: "💻 Half screen", value: "HALF SCREEN", active: filterTags.includes("HALF SCREEN") }
+                ];
+
+                html += `<div style="width:100%; font-size:10px; font-weight:800; color:var(--text-muted); text-transform:uppercase; margin-bottom:8px; letter-spacing:0.5px;">Standard Tags</div>`;
+                html += `<div style="width:100%; display:flex; flex-wrap:wrap; gap:8px; margin-bottom:20px;">`;
+                systemTags.forEach(t => {
+                    html += `<div class="tag-pill ${t.active ? 'active' : ''}" data-tag="${t.value}">${t.label}</div>`;
                 });
+                html += `</div>`;
 
-                const sortedTags = Array.from(allTags).sort((a, b) => a.localeCompare(b));
-                const currentFilterTags = getFilterTags();
+                // 🟢 3. ส่วนของ Custom Tags (ดึงจาก Space และ Items)
+                const allTagsSet = new Set(space.tags || []);
+                space.tasks.forEach(task => {
+                    if (task.tags) task.tags.forEach(t => allTagsSet.add(t));
+                    if (task.subtasks) task.subtasks.forEach(sub => { if (sub.tags) sub.tags.forEach(t => allTagsSet.add(t)); });
+                });
+                const sortedCustom = Array.from(allTagsSet).filter(t => !['AI', 'HALF SCREEN'].includes(t.toUpperCase())).sort((a, b) => a.localeCompare(b));
 
-                mobileTagSelectionList.innerHTML = sortedTags.map(tag => {
-                    const isActive = currentFilterTags.includes(tag);
-                    return `<div class="tag-pill ${isActive ? 'active' : ''}" data-tag="${tag}" style="font-size:12px; padding:4px 10px; cursor:pointer; height:auto; line-height:1.2;">${tag}</div>`;
-                }).join('');
+                html += `<div style="width:100%; font-size:10px; font-weight:800; color:var(--text-muted); text-transform:uppercase; margin-bottom:8px; letter-spacing:0.5px;">Your Tags</div>`;
+                html += `<div style="width:100%; display:flex; flex-wrap:wrap; gap:8px;">`;
+                sortedCustom.forEach(tag => {
+                    const isActive = filterTags.includes(tag.toUpperCase());
+                    html += `
+                        <div class="tag-pill ${isActive ? 'active' : ''}" data-tag="${tag.toUpperCase()}" style="display:flex; align-items:center; gap:6px;">
+                            <span>${tag}</span>
+                            <button class="btn-icon mobile-tag-edit-trigger" data-tag="${tag}" style="padding:2px; opacity:0.5; margin-left:4px;">⋮</button>
+                        </div>`;
+                });
+                html += `</div>`;
+
+                mobileTagSelectionList.innerHTML = html;
+                mobileTagSelectionList.style.flexDirection = 'column';
+                mobileTagSelectionList.style.alignItems = 'flex-start';
+
+                // --- Bind Events ---
+                const lockBtn = document.getElementById('mobile-tag-lock-btn');
+                const selectBtn = document.getElementById('mobile-tag-select-btn');
+                const modeBtn = document.getElementById('mobile-tag-mode-btn');
+
+                lockBtn.onclick = () => { space.isTagModeLocked = !space.isTagModeLocked; saveData(); renderMobileTags(); };
+                selectBtn.onclick = () => { if (isLocked) return; space.isSingleSelectMode = !isSingle; saveData(); renderMobileTags(); };
+                modeBtn.onclick = () => {
+                    if (isLocked) return;
+                    const nextMode = filterMode === 'OR' ? 'AND' : 'OR';
+                    setFilterMode(nextMode);
+                    saveData();
+                    renderMainContent();
+                    renderMobileTags();
+                };
 
                 mobileTagSelectionList.querySelectorAll('.tag-pill').forEach(pill => {
-                    pill.onclick = () => {
+                    pill.onclick = (e) => {
+                        if (e.target.tagName === 'BUTTON') return;
                         const tag = pill.dataset.tag;
-                        const newFilterTags = [...currentFilterTags];
-                        const idx = newFilterTags.indexOf(tag);
-                        if (idx > -1) newFilterTags.splice(idx, 1);
-                        else newFilterTags.push(tag);
-                        setFilterTags(newFilterTags);
+                        let newTags;
+                        if (tag === 'ALL') {
+                            newTags = [];
+                        } else {
+                            if (isSingle) {
+                                newTags = filterTags.includes(tag) && filterTags.length === 1 ? [] : [tag];
+                            } else {
+                                newTags = [...filterTags];
+                                const idx = newTags.indexOf(tag);
+                                if (idx > -1) newTags.splice(idx, 1);
+                                else newTags.push(tag);
+                            }
+                        }
+                        setFilterTags(newTags);
                         saveData();
                         renderMainContent();
-                        renderMobileTags(); // Re-render tags in modal to update active state
+                        renderMobileTags();
+                    };
+                });
+
+                // ระบบแก้ไขป้ายกำกับ
+                mobileTagSelectionList.querySelectorAll('.mobile-tag-edit-trigger').forEach(btn => {
+                    btn.onclick = (e) => {
+                        e.stopPropagation();
+                        const tag = btn.dataset.tag;
+                        const action = prompt(`Edit tag "${tag}"?\nType 'rename' or 'delete'.`, 'rename');
+                        if (action === 'rename') {
+                            const newName = prompt(`Rename tag "${tag}" to:`, tag);
+                            if (newName && newName.trim() !== "" && newName.trim() !== tag) {
+                                const validName = newName.trim();
+                                const updateT = (item) => { if (item.tags) item.tags = item.tags.map(t => t === tag ? validName : t); };
+                                space.resources.forEach(updateT); space.driveFiles.forEach(updateT);
+                                space.tasks.forEach(updateT); space.tabs.forEach(updateT);
+                                const idx = space.tags.indexOf(tag); if (idx !== -1) space.tags[idx] = validName;
+                                saveData(); renderMainContent(); renderMobileTags();
+                            }
+                        } else if (action === 'delete') {
+                            if (confirm(`Delete tag "${tag}"?`)) {
+                                space.tags = space.tags.filter(t => t !== tag);
+                                saveData(); renderMainContent(); renderMobileTags();
+                            }
+                        }
                     };
                 });
             };

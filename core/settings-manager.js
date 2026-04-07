@@ -87,18 +87,176 @@ export function applyAppSettings() {
             .task-actual-text { font-size: 13px !important; padding: 0 !important; }
             .google-task-checkbox { transform: scale(0.9); margin-right: 4px !important; flex-shrink: 0; }
             
+            /* 🟢 จัดวาง Topbar ใหม่: ชื่อ Space อยู่บน, ปุ่มทั้ง 4 (CC, Sidebar, Rewards, Drive) อยู่แถวเดียวกันด้านล่าง */
+            .topbar {
+                flex-wrap: wrap !important;
+                padding: 12px 16px !important;
+                height: auto !important;
+                gap: 0 !important;
+                justify-content: center !important;
+            }
+            .workspace-title {
+                width: 100% !important;
+                order: 1 !important;
+                margin: 0 0 12px 0 !important;
+                font-size: 18px !important;
+                padding: 0 !important;
+                flex: none !important;
+                text-align: center !important;
+            }
+            .topbar-nav-group {
+                order: 2 !important;
+                display: flex !important;
+                flex-direction: row !important;
+                margin-right: 4px !important;
+                gap: 8px !important;
+                width: auto !important;
+                align-items: center !important;
+            }
+            .topbar-nav-group .btn-icon, #btn-drive-sync {
+                width: 30px !important; height: 30px !important;
+                padding: 0 !important; opacity: 1 !important;
+                background: var(--bg-card) !important;
+                border: 1px solid var(--border-color) !important;
+                border-radius: 8px !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+            }
+            .topbar-nav-group .svg-icon-lg, #btn-drive-sync svg { width: 15px !important; height: 15px !important; }
+            .topbar-divider { display: none !important; }
+            #drive-sync-container { order: 3 !important; margin: 0 0 0 4px !important; display: flex !important; }
+            #btn-drive-sync span { display: none !important; } /* ซ่อนข้อความ Connected เหลือแค่ไอคอน */
+
+            /* 🟢 เมื่อเปิด Sidebar: ดัน Topbar ขึ้นมาข้างบนสุด และย้ายปุ่มไปกองที่ขอบซ้าย */
+            #spacebar:not(.collapsed) ~ .workspace .topbar {
+                z-index: 11000 !important;
+                background: transparent !important;
+                backdrop-filter: none !important;
+                border: none !important;
+                box-shadow: none !important;
+            }
+            #spacebar:not(.collapsed) ~ .workspace .topbar-nav-group {
+                position: fixed !important;
+                left: 15px !important;
+                top: 70px !important;
+                flex-direction: column !important;
+                background: var(--bg-card) !important;
+                padding: 10px 6px !important;
+                border-radius: 12px !important;
+                box-shadow: 0 8px 30px rgba(0,0,0,0.3) !important;
+                border: 1px solid var(--border-color) !important;
+                gap: 12px !important;
+                animation: sf-slide-in-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            }
+            #spacebar:not(.collapsed) ~ .workspace #drive-sync-container {
+                position: fixed !important;
+                left: 15px !important;
+                top: 202px !important;
+                background: var(--bg-card) !important;
+                padding: 6px !important;
+                border-radius: 12px !important;
+                box-shadow: 0 8px 30px rgba(0,0,0,0.3) !important;
+                border: 1px solid var(--border-color) !important;
+                margin: 0 !important;
+                display: flex !important;
+                animation: sf-slide-in-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            }
+            #spacebar:not(.collapsed) ~ .workspace .workspace-title { opacity: 0 !important; pointer-events: none; } /* ซ่อนชื่อ Space เพื่อความคลีน */
+
+            /* 🟢 Done Confirmation Popup: ย้ายไปขอบขวาและเลื่อนลงมาไม่ให้บัง Topbar */
+            .sf-post-confirm-popup {
+                right: 15px !important;
+                left: auto !important;
+                top: 75px !important;
+                transform: none !important;
+                width: 140px !important;
+            }
+
+            @keyframes sf-slide-in-left { from { transform: translateX(-20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
             /* 4. ช่องกรอกงานใหม่แบบ Floating Bottom Bar (แบบ Google Tasks) */
-            .task-input-bar { 
+            .task-input-bar {
                 position: fixed; bottom: 0; left: 0; right: 0; 
-                background: var(--bg-card); padding: 12px 16px; 
-                box-shadow: 0 -4px 20px rgba(0,0,0,0.1); 
-                z-index: 1000; border-radius: 16px 16px 0 0;
+                background: var(--bg-card); padding: 16px 20px 24px 20px !important; 
+                box-shadow: 0 -10px 40px rgba(0,0,0,0.2); 
+                z-index: 1000; border-radius: 24px 24px 0 0;
                 margin: 0 !important; width: 100% !important; 
                 visibility: hidden !important; 
                 transform: translateY(100%);
-                transition: transform 0.2s ease-out, visibility 0.2s;
+                transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.3s;
+                display: grid !important;
+                grid-template-columns: 1fr auto !important;
+                grid-template-areas: 
+                    "input input"
+                    "date add"
+                    "list list" !important;
+                gap: 16px 12px !important;
+                box-sizing: border-box !important;
             }
-            .task-input-bar.is-active { visibility: visible !important; transform: translateY(0) !important; display: flex !important; }
+            .task-input-bar.is-active { visibility: visible !important; transform: translateY(0) !important; }
+            
+            #new-task-input { 
+                grid-area: input; 
+                width: 100% !important;
+                font-size: 16px !important;
+                padding: 12px 0 !important;
+                border-bottom: 1.5px solid var(--border-color) !important;
+                height: auto !important;
+                border-radius: 0 !important;
+            }
+            
+            .date-wrapper { 
+                grid-area: date; 
+                border: 1px solid var(--border-color) !important;
+                border-radius: 10px !important;
+                padding: 0 12px !important;
+                margin: 0 !important;
+                background: var(--bg-body) !important;
+                display: flex !important;
+                align-items: center !important;
+                height: 42px !important;
+            }
+            .task-date-input { width: 100% !important; font-size: 14px !important; border:none !important; }
+            
+            #btn-add-task { 
+                grid-area: add; 
+                height: 42px !important;
+                padding: 0 30px !important;
+                border-radius: 10px !important;
+                font-weight: 800 !important;
+                font-size: 14px !important;
+            }
+            
+            #google-task-controls { 
+                grid-area: list; 
+                width: 100% !important;
+                margin: 4px 0 0 0 !important;
+                padding: 10px 15px !important;
+                background: var(--bg-body) !important;
+                border-radius: 12px !important;
+                border: 1px solid var(--border-color) !important;
+                box-sizing: border-box !important;
+                display: none; /* Controlled by JS flex */
+                align-items: center !important;
+                justify-content: space-between !important;
+            }
+            #google-task-list-select {
+                flex: 1 !important;
+                max-width: none !important;
+                text-align: right !important;
+                font-size: 13px !important;
+            }
+            #btn-sync-toggle { display: none !important; }
+
+            /* 🟢 Drive Sync Menu: ปรับให้ไม่ล้นจอ */
+            .drive-sync-menu {
+                max-height: 80vh !important;
+                overflow-y: auto !important;
+                left: 50% !important;
+                transform: translateX(-50%) !important;
+            }
+
 
             /* 5. ปุ่ม Actions ต่างๆ ให้ดูสะอาดขึ้น */
             .item-action-group { opacity: 1 !important; }
@@ -164,8 +322,8 @@ export function applyAppSettings() {
                 display: inline-flex !important;
             }
 
-            /* 🟢 บังคับให้ Modal (Habit Sheet) อยู่กึ่งกลางเสมอ */
-            .modal-content {
+            /* 🟢 บังคับให้ Modal ไม่ล้นจอ และสามารถเลื่อนดูได้บนมือถือ */
+            .modal-content, #settings-modal .modal-content, #smart-flow-settings-modal .modal-content, .reward-modal-content {
                 width: 90% !important;
                 max-width: 400px !important;
                 position: fixed !important;
@@ -173,7 +331,9 @@ export function applyAppSettings() {
                 left: 50% !important;
                 transform: translate(-50%, -50%) !important;
                 margin: 0 !important;
-                max-height: 95vh !important;
+                max-height: 85vh !important;
+                overflow-y: auto !important;
+                box-sizing: border-box !important;
             }
 
             /* 🟢 ปรับเมนู Popup ให้เป็น Bottom Sheet */

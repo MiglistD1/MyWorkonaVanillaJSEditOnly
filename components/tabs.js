@@ -37,18 +37,6 @@ export function initTabs(callbacks) {
         });
     }
 
-    // Collapse/Expand Logic
-    document.getElementById('btn-collapse-tabs-inline').addEventListener('click', () => { 
-        getAppSettings().isTabsCollapsed = true; 
-        saveData(); 
-        onRender(); 
-    });
-    document.getElementById('tabs-header-collapsed').addEventListener('click', () => { 
-        getAppSettings().isTabsCollapsed = false; 
-        saveData(); 
-        onRender(); 
-    });
-
     // Clear Tabs
     document.getElementById('btn-clear-tabs').addEventListener('click', () => { 
         if (confirm("Clear all tabs?")) { 

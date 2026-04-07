@@ -155,6 +155,32 @@ export function generateTaskHTML(task, index, {
     const isFocused = focusedTask && focusedTask.spaceId === spaceId && focusedTask.createdAt === task.createdAt; // 🟢 ตรวจสอบ createdAt ที่ถูกต้อง
     const focusActiveClass = isFocused ? 'is-focus-active' : '';
 
+    // 🟢 NEW: Subtask count badge logic
+    let subtaskCountBadge = '';
+    if (!isSubtask && task.subtasks && task.subtasks.length > 0) {
+        const totalSub = task.subtasks.length;
+        const compSub = task.subtasks.filter(s => s.completed).length;
+        const isAllDone = compSub === totalSub;
+        const badgeBg = isAllDone ? '#10b981' : 'var(--primary-color)';
+        // 🟢 ปรับสไตล์ Badge ให้เด่นชัดขึ้น และเปลี่ยนเป็นสีเขียวเมื่อเสร็จครบ
+        subtaskCountBadge = `<span class="subtask-count-badge" style="font-size: 10px; color: white; font-weight: 900; background: ${badgeBg}; padding: 1px 7px; border-radius: 10px; flex-shrink: 0; line-height: 1; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: background 0.3s ease;">${compSub}/${totalSub}</span>`;
+    }
+
+    // NEW: Toggle Completed Subtasks Button HTML
+    let hideCompletedSubtaskBtnHTML = '';
+    if (!isSubtask && task.subtasks && task.subtasks.length > 0 && !isActuallyDeleted) {
+        const isHidden = task.completedSubtasksHidden || false;
+        const icon = isHidden ? '#icon-eye' : '#icon-eye-off';
+        const title = isHidden ? 'Show Completed Subtasks' : 'Hide Completed Subtasks';
+        // 🟢 ปรับสไตล์ให้เป็นสีแดงและเรืองแสงเมื่อมีการ "ซ่อน" (Active)
+        const activeStyle = isHidden ? 'color: #ef4444; opacity: 1; background: rgba(239, 68, 68, 0.1); border-radius: 4px; box-shadow: 0 0 8px rgba(239, 68, 68, 0.2);' : '';
+        hideCompletedSubtaskBtnHTML = `
+            <button class="btn-icon hide-completed-subtasks-btn" data-index="${index}" data-space-id="${spaceId}" title="${title}" style="${activeStyle}">
+                <svg class="svg-icon-sm"><use href="${icon}"></use></svg>
+            </button>
+        `;
+    }
+
     // NEW: Toggle Subtasks Button HTML
     let toggleSubtaskBtnHTML = '';
     if (!isSubtask && task.subtasks && task.subtasks.length > 0 && !isActuallyDeleted) {
@@ -163,10 +189,24 @@ export function generateTaskHTML(task, index, {
         const title = isSubtasksHidden ? 'Show Subtasks' : 'Hide Subtasks';
         const prominentClass = !isSubtasksHidden ? 'active-red-prominent' : ''; // สีแดงเมื่อแสดง Subtask (ปุ่มหมายถึงซ่อน)
         toggleSubtaskBtnHTML = `
-            <button class="btn-icon toggle-subtasks-btn ${prominentClass}" data-index="${index}" data-space-id="${spaceId}" title="${title}" style="margin-left: 8px;">
+            <button class="btn-icon toggle-subtasks-btn ${prominentClass}" data-index="${index}" data-space-id="${spaceId}" title="${title}">
                 <svg class="svg-icon-sm"><use href="${icon}"></use></svg>
             </button>
         `;
+    }
+
+    // 🟢 NEW: ชุดควบคุม Subtask แยกออกมาจากจุดไข่ปลา
+    let subtaskSpecificActionsHTML = '';
+    if (!isSubtask && task.subtasks && task.subtasks.length > 0 && !isActuallyDeleted) {
+        const isControlsOpen = task.subtaskControlsOpen || false;
+        const menuOpacity = isControlsOpen ? '1' : '0.8';
+        subtaskSpecificActionsHTML = `
+            <div class="subtask-actions-wrapper" style="display: inline-flex; align-items: center; position: relative;">
+                <button class="btn-icon toggle-subtask-controls-btn" data-index="${index}" data-space-id="${spaceId}" title="Subtask Options" style="padding: 4px; color: var(--primary-color); opacity: ${menuOpacity};"><svg class="svg-icon-sm"><use href="#icon-subtasks"></use></svg></button>
+                <div class="subtask-controls-hidden" style="display: ${isControlsOpen ? 'flex' : 'none'}; align-items: center; gap: 6px; margin-left: 4px;">
+                    ${subtaskCountBadge}${hideCompletedSubtaskBtnHTML}${toggleSubtaskBtnHTML}
+                </div>
+            </div>`;
     }
 
     const svgBreakLink = `<svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.72 6.72 3 10.44a4 4 0 0 0 5.66 5.66l1.42-1.42M13.56 13.56l1.42-1.42a4 4 0 0 0-5.66-5.66l-1.42 1.42M8 12h8M3 21l18-18"/></svg>`;
@@ -206,7 +246,13 @@ export function generateTaskHTML(task, index, {
     if (!isSubtask) {
         let subItems = '';
         if (task.subtasks && task.subtasks.length > 0) {
-            subItems = task.subtasks.map((sub, subIdx) => { 
+            subItems = task.subtasks.map((sub, subIdx) => {
+                // 🟢 ซ่อนงานย่อยที่เสร็จแล้วหากเปิดโหมดซ่อนไว้
+                if (task.completedSubtasksHidden && sub.completed) return '';
+
+                // 🟢 ซ่อนงานย่อยที่ยังไม่เสร็จหากเปิดโหมดซ่อนไว้
+                if (task.pendingSubtasksHidden && !sub.completed) return '';
+
                 return generateTaskHTML(sub, subIdx, { 
                     depth: depth + 1, parentIndex: index, isFiltered, showActions, 
                     isMasterView, spaceId, showSpaceBadge, spaceName 
@@ -353,8 +399,7 @@ export function generateTaskHTML(task, index, {
 
             <div class="item-action-group" style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-left: auto;">
                 <span class="task-date" style="font-size: 11px; opacity: ${isActuallyDeleted ? '1' : '0.6'}; white-space: nowrap; color: ${isActuallyDeleted ? '#ef4444' : dateColor};">${dateDisplay}</span>
-                ${toggleSubtaskBtnHTML}
-                ${actionButtons}
+                ${subtaskSpecificActionsHTML}${actionButtons}
             </div>
         </div>
         ${subtasksHTML}

@@ -570,6 +570,36 @@ function initMasterEvents() {
                 return;
             }
 
+            // 🔘 Toggle Subtask Specific Controls (Master View)
+            const subtaskMenuBtn = target.closest('.toggle-subtask-controls-btn');
+            if (subtaskMenuBtn) {
+                const idx = parseInt(subtaskMenuBtn.dataset.index);
+                const sid = parseInt(subtaskMenuBtn.dataset.spaceId);
+                const space = getSpaces().find(s => s.id === sid);
+                if (space && space.tasks[idx]) {
+                    space.tasks[idx].subtaskControlsOpen = !space.tasks[idx].subtaskControlsOpen;
+                    saveData();
+                    onRefresh();
+                }
+                return;
+            }
+
+            // 🔘 Toggle Hide Pending Subtasks (Master View)
+
+            // 🔘 Toggle Hide Completed Subtasks (Master View)
+            const hideCompletedBtn = target.closest('.hide-completed-subtasks-btn');
+            if (hideCompletedBtn) {
+                const idx = parseInt(hideCompletedBtn.dataset.index);
+                const sid = parseInt(hideCompletedBtn.dataset.spaceId);
+                const space = getSpaces().find(s => s.id === sid);
+                if (space && space.tasks[idx]) {
+                    space.tasks[idx].completedSubtasksHidden = !space.tasks[idx].completedSubtasksHidden;
+                    saveData();
+                    onRefresh();
+                }
+                return;
+            }
+
             // 🔘 2. Break into Main Task
             const breakBtn = target.closest('.convert-to-main-btn');
             if (breakBtn) {

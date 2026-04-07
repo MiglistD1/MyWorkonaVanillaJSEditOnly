@@ -44,6 +44,7 @@ let appSettings = {
   hideCompletedHabits: false,
   showHabitActions: false,
   taskSectionOrder: 'todo-first', // 'todo-first' or 'note-first'
+  quickNoteLocation: 'tasks', // 'tasks' or 'tabs'
   folderIcons: {},
   folderThemes: {}, // Stores { folderName: { color, fontSize } }
   lockedFolders: [], // Stores folder names that should stay expanded on refresh

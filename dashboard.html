@@ -39,6 +39,7 @@
     <symbol id="icon-dock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"></path><path d="M10 14L21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></symbol>
     <symbol id="icon-chevron-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></symbol>
     <symbol id="icon-chevron-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></symbol>
+    <symbol id="icon-chevron-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></symbol>
     <symbol id="icon-chevrons-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 11 12 6 7 11"></polyline><polyline points="17 18 12 13 7 18"></polyline></symbol>
     <symbol id="icon-chevrons-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 13 12 18 17 13"></polyline><polyline points="7 6 12 11 17 6"></polyline></symbol>
     <symbol id="icon-chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></symbol>
@@ -67,6 +68,7 @@
     <symbol id="icon-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="17" x2="12" y2="22"></line><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.79-.9A.5.5 0 0 1 16 12.1V8a4 4 0 0 0-8 0v4.1a.5.5 0 0 1-.1.3l-1.79.9A2 2 0 0 0 5 15.24Z"></path></symbol>
     <symbol id="icon-star" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></symbol>
     <symbol id="icon-package" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"></line><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></symbol>
+    <symbol id="icon-subtasks" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M7 12h14M11 18h10"/></symbol>
   </svg>
 
   <div class="spacebar" id="spacebar">
@@ -111,26 +113,22 @@
 
   <div class="workspace">
 <div class="topbar">
-      <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-right: 5px;">
+      <div class="topbar-nav-group">
         <button class="btn-icon btn-cc-trigger" id="btn-command-center-topbar" title="Master Command Center"><svg class="svg-icon-lg" style="width: 20px; height: 20px;"><use href="#icon-layers"></use></svg></button>
         <button class="btn-icon" id="btn-toggle-spacebar" title="Toggle Spacebar"><svg class="svg-icon-lg"><use href="#icon-sidebar-toggle"></use></svg></button>
         <button class="btn-icon" id="btn-open-rewards-topbar" title="Quest Loot & Rewards" style="color: #f59e0b;"><svg class="svg-icon-lg"><use href="#icon-sparkles"></use></svg></button>
-        <div style="width: 1px; height: 20px; background: var(--border-color); margin: 0 4px; opacity: 0.5;"></div>
+        <div class="topbar-divider"></div>
       </div>
 
       <h1 class="workspace-title" id="current-space-title">Loading...</h1>
-      <button class="btn-icon" id="btn-collapse-launchers" title="Toggle Shortcuts" style="margin-right: 10px;">
-        <svg class="svg-icon-sm" style="transition: transform 0.2s;"><use href="#icon-chevron-up"></use></svg>
-      </button>
       <div id="global-launchers-bar" class="launchers-bar"></div>
+      <!-- Drive Sync Button (Positioned for proper Desktop/Mobile layout) -->
+      <div id="drive-sync-container" style="display: flex; align-items: center; gap: 10px;">
+        <button id="btn-drive-sync" class="btn-icon" title="Sync with Google Drive"></button>
+      </div>
       <div id="utility-group" class="utility-group">
         <div class="search-container"><svg class="svg-icon-sm" style="color:var(--text-muted);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg><input type="text" id="quick-search-input" placeholder="Search..."></div>
         <div class="utility-actions-row">
-        <button id="btn-drive-sync" class="btn-icon" title="Sync with Google Drive">
-    <svg class="svg-icon" viewBox="0 0 24 24">
-        <path d="M12 3C7.58 3 4 6.58 4 11c0 .34.03.67.09 1C2.33 12.33 1 13.99 1 16c0 2.21 1.79 4 4 4h14c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96C18.67 6.59 15.64 3 12 3zm1 10v3h-2v-3H8l4-4 4 4h-3z"/>
-    </svg>
-</button>
           <button id="toggle-tools-btn" class="btn btn-outline" style="font-size: 12px; padding: 5px 10px; font-weight: 600;"><svg class="svg-icon-sm" style="margin-right:4px; vertical-align: -2px;"><use href="#icon-tool"></use></svg> Toggle Tools</button>
           <button class="btn-icon" id="btn-global-refresh" title="Refresh Data" style="display: flex; align-items: center;">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 20px; height: 20px;">
@@ -173,7 +171,6 @@
             <button class="btn btn-outline" id="btn-save-tabs" style="padding: 2px 8px; font-size:12px;">Save</button>
           </div>
         </div>
-        <div class="card-header-vertical" id="tabs-header-collapsed" title="Expand Tabs"><span style="font-size: 20px;">📁</span><span class="vertical-text" id="vertical-tabs-text">Tabs</span></div>
         <div class="card-body" id="tabs-card-body">
           <button class="btn btn-outline" id="btn-move-to-resource" style="width:100%; margin-bottom: 10px; justify-content:center; background:var(--hover-bg);">Move Selected <svg class="svg-icon-sm" style="margin-left:4px;"><use href="#icon-chevron-down"></use></svg></button>
           <ul class="item-list" id="tab-list"></ul>
@@ -203,7 +200,6 @@
             </div>
           </div>
         </div>
-        <div class="card-header-vertical" id="resources-header-collapsed" title="Expand Resources"><span style="font-size: 20px;">🗂️</span><span class="vertical-text" id="vertical-res-text">Resources</span></div>
         <div class="card-body" id="resources-card-body" style="padding-top: 0;">
           <p class="section-label" style="color: #db2777;">🤖 AI Links</p>
           <ul class="item-list drag-container" id="resource-ai-list"></ul>
@@ -274,7 +270,6 @@
              </div>
           </div>
         </div>
-        <div class="card-header-vertical" id="tasks-header-collapsed" title="Expand Tasks & Notes"><span style="font-size: 20px;">✅</span><span class="vertical-text" id="vertical-tasks-text">Tasks & Notes</span></div>
         <div class="card-body" id="tasks-card-body" style="padding-top: 0;">
           
           <div id="todo-list-section-wrapper" style="display: flex; flex-direction: column; order: 1;">
@@ -289,10 +284,6 @@
                 <button id="btn-collapse-all-subtasks" class="btn-icon" title="Collapse All Subtasks" style="padding: 2px; opacity: 0.6;"><svg class="svg-icon-sm"><use href="#icon-chevrons-up"></use></svg></button>
                 <button id="btn-todo-templates" class="btn btn-outline" style="font-size: 11px; padding: 2px 8px; margin-left: 5px;">📑 Templates</button>
               </div>
-              <div id="google-task-controls" class="google-task-menu" style="display:none;">
-                 <button id="btn-toggle-specific-list" class="btn-icon" title="Space-Specific List" style="margin-right: 4px; padding: 2px;"><svg class="svg-icon-sm"><use href="#icon-lock-minimal"></use></svg></button>
-                 <select id="google-task-list-select" style="background:transparent; border:none; color:var(--text-main); font-size:12px; font-weight:700; outline:none; cursor:pointer; max-width: 120px; text-overflow: ellipsis;" title="Select List"></select>
-              </div>
             </div>
             
             <div class="task-input-bar">
@@ -302,6 +293,10 @@
                  <input type="date" id="new-task-date" class="task-date-input" title="Set Due Date">
               </div>
               <button class="btn btn-primary" id="btn-add-task" style="padding: 5px 12px; flex-shrink: 0; font-size: 13px; margin-left: 4px;">Add</button>
+              <div id="google-task-controls" class="google-task-menu" style="display:none;">
+                 <button id="btn-toggle-specific-list" class="btn-icon" title="Space-Specific List" style="margin-right: 4px; padding: 2px;"><svg class="svg-icon-sm"><use href="#icon-lock-minimal"></use></svg></button>
+                 <select id="google-task-list-select" style="background:transparent; border:none; color:var(--text-main); font-size:12px; font-weight:700; outline:none; cursor:pointer; max-width: 120px; text-overflow: ellipsis;" title="Select List"></select>
+              </div>
             </div>
 
             <ul class="task-list drag-container" id="task-list"></ul>
@@ -323,6 +318,7 @@
                     <div style="display: flex; gap: 2px;">
                         <button id="btn-order-note-up" class="btn-icon" title="Quick Notes on Top" style="padding: 2px; width: 18px; height: 18px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="width:12px; height:12px;"><polyline points="18 15 12 9 6 15"></polyline></svg></button>
                         <button id="btn-order-todo-up" class="btn-icon" title="To-Do List on Top" style="padding: 2px; width: 18px; height: 18px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="width:12px; height:12px;"><polyline points="6 9 12 15 18 9"></polyline></svg></button>
+                        <button id="btn-move-note-location" class="btn-icon" title="Move to Tabs Column" style="padding: 2px; width: 18px; height: 18px;"><svg class="svg-icon-sm" style="width:12px; height:12px;"><use href="#icon-chevron-left"></use></svg></button>
                     </div>
                 </div>
                 <div class="note-controls" style="display:flex; gap:4px;">

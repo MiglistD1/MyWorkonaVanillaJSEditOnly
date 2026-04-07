@@ -139,6 +139,16 @@
 }
 .collapsible-actions { transition: opacity 0.3s ease; }
 
+/* 🟢 Animation for Subtask Controls Menu (Smooth slide and fade) */
+@keyframes sf-subtask-slide {
+    from { opacity: 0; transform: translateX(-15px) scale(0.95); }
+    to { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+.subtask-controls-hidden[style*="display: flex"] {
+    animation: sf-subtask-slide 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
 .btn-add-mini-tag {
     background: transparent; border: 1px solid #999; color: var(--text-main); font-size: 12px; padding: 3px 8px; border-radius: 4px; 
     cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 4px; white-space: nowrap; line-height: 1;
@@ -165,6 +175,13 @@
 
 .task-input-bar { display: flex; align-items: center; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 4px 6px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.03); transition: border-color 0.2s;}
 .task-input-bar:focus-within { border-color: var(--primary-color); }
+
+.task-input-bar #google-task-controls {
+    margin-left: auto;
+    background: transparent;
+    border: none;
+    padding: 0 8px;
+}
 
 .btn-sync-toggle, .subtask-sync-toggle-btn, .main-task-sync-toggle-btn {
     background: transparent; border: none; padding: 6px; cursor: pointer; display: flex;

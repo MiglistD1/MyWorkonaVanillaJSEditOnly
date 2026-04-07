@@ -110,28 +110,23 @@
         padding: 0 30px 30px;
         transition: grid-template-columns 0.35s cubic-bezier(0.4, 0, 0.2, 1);
     }
-    .content-grid.tabs-collapsed { grid-template-columns: 60px minmax(0, 1fr) minmax(0, 1.3fr); }
-    .content-grid.resources-collapsed { grid-template-columns: minmax(0, 1fr) 60px minmax(0, 1.3fr); }
-    .content-grid.tasks-collapsed { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 60px; }
-    .content-grid.tabs-collapsed.resources-collapsed { grid-template-columns: 60px 60px minmax(0, 1.3fr); }
-    .content-grid.tabs-collapsed.tasks-collapsed { grid-template-columns: 60px minmax(0, 1fr) 60px; }
-    .content-grid.resources-collapsed.tasks-collapsed { grid-template-columns: minmax(0, 1fr) 60px 60px; }
-    .content-grid.tabs-collapsed.resources-collapsed.tasks-collapsed { grid-template-columns: 60px 60px 60px; }
+    .content-grid.tabs-collapsed { grid-template-columns: 1fr 1.3fr; gap: 20px; }
+    .content-grid.resources-collapsed { grid-template-columns: 1fr 1.3fr; gap: 20px; }
+    .content-grid.tasks-collapsed { grid-template-columns: 1fr 1fr; gap: 20px; }
+    .content-grid.tabs-collapsed.resources-collapsed { grid-template-columns: 1.3fr; }
+    .content-grid.tabs-collapsed.tasks-collapsed { grid-template-columns: 1fr; }
+    .content-grid.resources-collapsed.tasks-collapsed { grid-template-columns: 1fr; }
+    .content-grid.tabs-collapsed.resources-collapsed.tasks-collapsed { grid-template-columns: 1fr; }
 
     .content-grid.tabs-collapsed #tabs-card #tabs-header-normal,
     .content-grid.tabs-collapsed #tabs-card #tabs-card-body,
-    .content-grid.resources-collapsed #resources-card #resources-header-normal,
-    .content-grid.resources-collapsed #resources-card #resources-card-body,
-    .content-grid.tasks-collapsed #tasks-card #tasks-header-normal,
-    .content-grid.tasks-collapsed #tasks-card #tasks-card-body {
+    .content-grid.tabs-collapsed #tabs-card {
         display: none;
     }
-
-    .content-grid.tabs-collapsed #tabs-card #tabs-header-collapsed,
-    .content-grid.resources-collapsed #resources-card #resources-header-collapsed,
-    .content-grid.tasks-collapsed #tasks-card #tasks-header-collapsed {
-        display: flex;
-        animation: fadeIn 0.4s ease;
+    
+    .content-grid.resources-collapsed #resources-card,
+    .content-grid.tasks-collapsed #tasks-card {
+        display: none;
     }
 }
 

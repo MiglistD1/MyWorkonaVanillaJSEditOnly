@@ -1,5 +1,5 @@
 // components/tagBar.js
-import { saveData, getCurrentSpace } from '../core/storage.js';
+import { saveData, getCurrentSpace, getAppSettings } from '../core/storage.js';
 import Sortable from '../sortable.esm.js';
 import { svgPencil, svgTrashRed } from '../core/icons.js';
 
@@ -12,12 +12,158 @@ export function renderTagBar(space, currentFilterTags, currentFilterMode, callba
     const tagBarContainer = document.getElementById('tag-bar-container');
     if (!tagBarContainer || !space) return;
     const isLocked = !!space.isTagModeLocked;
+    const settings = getAppSettings();
 
     // 🟢 ดึงสถานะ Single/Multi จาก Space โดยตรง
     const isSingle = !!space.isSingleSelectMode;
 
     // 1. ล้างข้อมูล
     tagBarContainer.innerHTML = '';
+
+    // 🟢 NEW: เพิ่มปุ่ม Expand Tabs ไว้ด้านหน้าสุด (เฉพาะเมื่อถูกซ่อน)
+    if (settings.isTabsCollapsed) {
+        const expandBtn = document.createElement('button');
+        expandBtn.className = 'btn-icon collapsed-tabs-btn';
+        expandBtn.id = 'btn-tabs-collapsed-indicator';
+        expandBtn.title = "Expand Tabs";
+        const baseColorTabs = '#2f80ed';
+        const baseBgTabs = 'rgba(47, 128, 237, 0.1)';
+        const baseBorderTabs = 'rgba(47, 128, 237, 0.3)';
+
+        expandBtn.style.cssText = `
+            margin-right: 10px;
+            color: ${baseColorTabs};
+            background: ${baseBgTabs};
+            border: 1px solid ${baseBorderTabs};
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            opacity: 1;
+            transition: all 0.2s ease; /* Add transition for smooth effect */
+        `;
+        expandBtn.innerHTML = '<svg class="svg-icon-sm" style="width:16px; height:16px;"><use href="#icon-browser"></use></svg>';
+        expandBtn.onclick = (e) => {
+            e.stopPropagation();
+            settings.isTabsCollapsed = false;
+            saveData();
+            onRenderMain(); // สั่งวาดหน้าจอใหม่ทั้งหมดเพื่อกาง Tabs
+        };
+
+        expandBtn.onmouseenter = () => {
+            expandBtn.style.cssText += isDarkMode ? neumorphismHoverStyleDark(baseBgTabs) : neumorphismHoverStyle(baseBgTabs);
+        };
+        expandBtn.onmouseleave = () => {
+            expandBtn.style.cssText = `
+                margin-right: 10px;
+                color: ${baseColorTabs};
+                background: ${baseBgTabs};
+                border: 1px solid ${baseBorderTabs};
+                width: 28px;
+                height: 28px;
+                border-radius: 50%;
+                opacity: 1;
+                transition: all 0.2s ease;
+            `;
+        };
+
+        tagBarContainer.appendChild(expandBtn);
+    }
+
+    // 🟢 NEW: เพิ่มปุ่ม Expand Resources ไว้ด้านหน้า (เฉพาะเมื่อถูกซ่อน)
+    if (settings.isResourcesCollapsed) {
+        const expandResBtn = document.createElement('button');
+        expandResBtn.className = 'btn-icon collapsed-res-btn';
+        expandResBtn.title = "Expand Resources";
+        const baseColorRes = '#db2777';
+        const baseBgRes = 'rgba(219, 39, 119, 0.1)';
+        const baseBorderRes = 'rgba(219, 39, 119, 0.3)';
+
+        expandResBtn.style.cssText = `
+            margin-right: 10px;
+            color: ${baseColorRes};
+            background: ${baseBgRes};
+            border: 1px solid ${baseBorderRes};
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            opacity: 1;
+            transition: all 0.2s ease;
+        `;
+        expandResBtn.innerHTML = '<svg class="svg-icon-sm" style="width:16px; height:16px;"><use href="#icon-layers"></use></svg>';
+        expandResBtn.onclick = (e) => {
+            e.stopPropagation();
+            settings.isResourcesCollapsed = false;
+            saveData();
+            onRenderMain();
+        };
+
+        expandResBtn.onmouseenter = () => {
+            expandResBtn.style.cssText += isDarkMode ? neumorphismHoverStyleDark(baseBgRes) : neumorphismHoverStyle(baseBgRes);
+        };
+        expandResBtn.onmouseleave = () => {
+            expandResBtn.style.cssText = `
+                margin-right: 10px;
+                color: ${baseColorRes};
+                background: ${baseBgRes};
+                border: 1px solid ${baseBorderRes};
+                width: 28px;
+                height: 28px;
+                border-radius: 50%;
+                opacity: 1;
+                transition: all 0.2s ease;
+            `;
+        };
+
+        tagBarContainer.appendChild(expandResBtn);
+    }
+
+    // 🟢 NEW: เพิ่มปุ่ม Expand Tasks ไว้ด้านหน้า (เฉพาะเมื่อถูกซ่อน)
+    if (settings.isTasksCollapsed) {
+        const expandTasksBtn = document.createElement('button');
+        expandTasksBtn.className = 'btn-icon collapsed-tasks-btn';
+        expandTasksBtn.title = "Expand Tasks & Notes";
+        const baseColorTasks = '#16a34a';
+        const baseBgTasks = 'rgba(22, 163, 74, 0.1)';
+        const baseBorderTasks = 'rgba(22, 163, 74, 0.3)';
+
+        expandTasksBtn.style.cssText = `
+            margin-right: 10px;
+            color: ${baseColorTasks};
+            background: ${baseBgTasks};
+            border: 1px solid ${baseBorderTasks};
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            opacity: 1;
+            transition: all 0.2s ease;
+        `;
+        expandTasksBtn.innerHTML = '<svg class="svg-icon-sm" style="width:16px; height:16px;"><use href="#icon-check-square"></use></svg>';
+        expandTasksBtn.onclick = (e) => {
+            e.stopPropagation();
+            settings.isTasksCollapsed = false;
+            saveData();
+            onRenderMain();
+        };
+
+        expandTasksBtn.onmouseenter = () => {
+            expandTasksBtn.style.cssText += isDarkMode ? neumorphismHoverStyleDark(baseBgTasks) : neumorphismHoverStyle(baseBgTasks);
+        };
+        expandTasksBtn.onmouseleave = () => {
+            expandTasksBtn.style.cssText = `
+                margin-right: 10px;
+                color: ${baseColorTasks};
+                background: ${baseBgTasks};
+                border: 1px solid ${baseBorderTasks};
+                width: 28px;
+                height: 28px;
+                border-radius: 50%;
+                opacity: 1;
+                transition: all 0.2s ease;
+            `;
+        };
+
+        tagBarContainer.appendChild(expandTasksBtn);
+    }
 
     // 2. ใส่ไอคอน Tag (แบบสร้าง Element เพื่อไม่ให้ไปทับอันอื่น)
     const iconSpan = document.createElement('span');
