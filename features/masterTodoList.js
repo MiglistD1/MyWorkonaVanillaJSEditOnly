@@ -257,6 +257,7 @@ function renderProgressSection(allSpaces, totalTasks) {
 }
 
 function renderTaskGroups(allSpaces) {
+    const isMobile = window.matchMedia("(max-width: 768px)").matches;
     return allSpaces.map(space => {
         const isHidden = masterTodoListState.activeSpaceFilters.has(space.id);
         const tasks = space.tasks || [];
@@ -300,7 +301,8 @@ function renderTaskGroups(allSpaces) {
                             isProminentHidden: isSpaceProminentHidden,
                             showActions: masterTodoListState.showMasterTaskActions,
                             addingSubtaskToIndex: (masterTodoListState.addingSubtaskToSpace === space.id) ? masterTodoListState.addingSubtaskToIndex : null,
-                            // isTrash: task.isDeleted // Removed, using task.isDeleted directly
+                            isFiltered: false, // บังคับให้ปุ่มลากแสดงผลในหน้า Master View
+                            isMobile,
                         });
                     }).join('')}
                 </ul>
@@ -879,6 +881,8 @@ function initMasterEvents() {
                 animation: 150,
                 disabled: !isManual,
                 handle: '.drag-handle',
+                delay: 150,
+                delayOnTouchOnly: true,
                 draggable: '.task-item',
                 ghostClass: 'sortable-ghost',
                 onEnd: (evt) => {

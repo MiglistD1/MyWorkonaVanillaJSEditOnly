@@ -213,7 +213,7 @@ export function generateTaskHTML(task, index, {
     
     const prominentClass = task.isProminent ? 'prominent' : '';
     const draggableClass = (isFiltered || isSubtask) ? '' : 'draggable-item';
-    const handleHTML = isFiltered ? '' : `<div class="drag-handle" style="display: flex; align-items: center; cursor: grab; opacity: 0.4; flex-shrink: 0;">${dragHandleSvg}</div>`;
+    const handleHTML = isFiltered ? '' : dragHandleSvg;
 
     // Conditional logic for Checkboxes and Data attributes based on depth
     const checkboxClass = isSubtask ? 'subtask-check-box' : (isMasterView ? 'master-task-checkbox' : 'task-check-box');
@@ -255,7 +255,8 @@ export function generateTaskHTML(task, index, {
 
                 return generateTaskHTML(sub, subIdx, { 
                     depth: depth + 1, parentIndex: index, isFiltered, showActions, 
-                    isMasterView, spaceId, showSpaceBadge, spaceName 
+                    isMasterView, spaceId, showSpaceBadge, spaceName,
+                    isProminentHidden
                 });
             }).join('');
         }
@@ -375,7 +376,7 @@ export function generateTaskHTML(task, index, {
     <li class="${isSubtask ? 'subtask-item' : 'task-item'} ${draggableClass} ${prominentClass} ${focusActiveClass} ${templateClass}" data-index="${index}" data-type="${itemType}" ${isMasterView ? `data-space-id="${spaceId}"` : ''} style="list-style: none; width: 100%; margin-bottom: 0px; border-bottom: 1px solid transparent; opacity: ${isActuallyDeleted ? '0.7' : '1'};">
         <div class="item-main-row" style="display: flex; align-items: center; gap: 6px; padding: 2px 0; width: 100%; min-height: 28px;">
             ${handleHTML}
-            <div class="focus-trigger-container">
+            <div class="focus-trigger-container" style="${(isProminentHidden && !focusBtnHTML) ? 'display: none;' : ''}">
                 <button class="btn-icon btn-prominent-task ${task.isProminent ? 'active' : ''}" data-index="${index}" ${isSubtask ? `data-parent-index="${parentIndex}"` : ''} ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="Mark as Next Up" style="margin: 0; padding: 2px; flex-shrink: 0; color: ${task.isProminent ? 'var(--primary-color)' : 'var(--text-muted)'}; display: ${isProminentHidden ? 'none' : 'inline-flex'};">
                     <svg class="svg-icon-sm"><use href="#icon-flag"></use></svg>
                 </button>

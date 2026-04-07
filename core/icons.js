@@ -3,7 +3,7 @@
 export const googleTasksIcon = `<svg class="svg-icon-sm" style="width:18px;height:18px;"><use href="#icon-gtask"></use></svg>`;
 export const svgEdit = `<svg class="svg-icon-sm"><use href="#icon-edit"></use></svg>`;
 export const svgTrashRed = `<svg class="svg-icon-sm delete-btn-red"><use href="#icon-trash"></use></svg>`;
-export const dragHandleSvg = `<div class="drag-handle" style="display:inline-block; cursor:grab; margin-right:8px;"><svg class="svg-icon-sm" style="opacity:0.5;"><use href="#icon-drag"></use></svg></div>`;
+export const dragHandleSvg = `<div class="drag-handle" style="display: flex; align-items: center; cursor: grab; opacity: 0.4; flex-shrink: 0;"><svg class="svg-icon-sm"><use href="#icon-drag"></use></svg></div>`;
 export const svgCustomize = `<svg class="svg-icon-sm" style="margin-right:8px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"></circle></svg>`;
 export const svgShare = `<svg class="svg-icon-sm" style="margin-right:8px;"><use href="#icon-share"></use></svg>`;
 export const svgArchive = `<svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"></polyline><rect x="1" y="3" width="22" height="5"></rect><line x1="10" y1="12" x2="14" y2="12"></line></svg>`;

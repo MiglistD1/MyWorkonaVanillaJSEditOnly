@@ -224,6 +224,21 @@ export function initTodoManager(callbacks) {
             to { opacity: 1; transform: translateY(0) scale(1); }
         }
         .task-item { animation: taskEntry 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+        /* ปรับปรุงความชัดเจนและพื้นที่สัมผัสของปุ่มลากบนมือถือ */
+        @media (max-width: 768px) {
+            .drag-handle { 
+                display: flex !important; 
+                opacity: 1 !important; 
+                visibility: visible !important;
+                min-width: 32px !important; 
+                justify-content: center; 
+                align-items: center;
+                color: var(--primary-color) !important;
+                cursor: grab;
+            }
+            .drag-handle svg { width: 16px; height: 16px; }
+        }
     `;
     document.head.appendChild(style);
 
@@ -2274,7 +2289,8 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
             isFiltered: isFiltered, // This is for drag-handle visibility
             showActions: space.showTaskActions, // Pass the new state
             isTrash: task.isDeleted, 
-            addingSubtaskToIndex            
+            addingSubtaskToIndex,
+            isMobile
         });
         
         if (task.isDeleted) { trashHTML += liContent; }
@@ -2409,6 +2425,8 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
             animation: 150,
             fallbackOnBody: true,
             swapThreshold: 0.65,
+            delay: 150,
+            delayOnTouchOnly: true,
             draggable: ".subtask-item:not(.subtask-add-row)",
             ghostClass: 'sortable-ghost',
             onUpdate: function (evt) { // ใช้ onUpdate สำหรับการสลับที่ภายในตัวเอง
