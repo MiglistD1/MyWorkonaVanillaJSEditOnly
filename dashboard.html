@@ -14,6 +14,33 @@
     <link rel="stylesheet" href="css/components.css">
     <link rel="stylesheet" href="css/features.css">
     <link rel="stylesheet" href="css/responsive.css">
+    <style>
+        /* 🔄 Repeat Day Pills Styling */
+        .repeat-day-pill {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid var(--border-color);
+            border-radius: 50%;
+            cursor: pointer;
+            color: var(--text-muted);
+            background: var(--bg-body);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            user-select: none;
+            font-weight: 600;
+        }
+        .repeat-day-pill:hover {
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+            background: rgba(47, 128, 237, 0.05);
+        }
+        .repeat-day-pill.active {
+            background: var(--primary-color) !important;
+            color: white !important;
+            border-color: var(--primary-color) !important;
+            box-shadow: 0 2px 8px rgba(47, 128, 237, 0.3);
+        }
+    </style>
 </head>
 <body>
 
@@ -69,6 +96,7 @@
     <symbol id="icon-star" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></symbol>
     <symbol id="icon-package" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"></line><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></symbol>
     <symbol id="icon-subtasks" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M7 12h14M11 18h10"/></symbol>
+    <symbol id="icon-repeat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></symbol>
   </svg>
 
   <div class="spacebar" id="spacebar">
@@ -275,9 +303,12 @@
           <div id="todo-list-section-wrapper" style="display: flex; flex-direction: column; order: 1;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-top:15px; margin-bottom:10px;">
               <div style="display:flex; align-items:center; gap:8px;">
-                <span class="section-label" style="margin:0; border:none; padding:0;">To-Do List</span>
+                <span class="section-label" style="margin:0; border:none; padding:0;">To-Do List <span id="todo-count-label" style="opacity:0.5; font-weight:400; margin-left:4px;"></span></span>
                 <button id="btn-toggle-task-actions" class="btn-icon" title="Toggle Task Actions Visibility" style="padding: 2px; opacity: 0.6;">
                   <svg class="svg-icon-sm"><use href="#icon-eye"></use></svg>
+                </button>
+                <button id="btn-toggle-extra-sections" class="btn-icon" title="Toggle Extra Sections (Archive/Trash/Repeat)" style="padding: 2px; opacity: 0.6;">
+                  <svg class="svg-icon-sm"><use href="#icon-package"></use></svg>
                 </button>
                 <button id="btn-toggle-prominent-tasks" class="btn-icon" title="Toggle Next Up Visibility" style="padding: 2px; opacity: 0.6;"><svg class="svg-icon-sm"><use href="#icon-flag"></use></svg></button>
                 <button id="btn-expand-all-subtasks" class="btn-icon" title="Expand All Subtasks" style="padding: 2px; opacity: 0.6;"><svg class="svg-icon-sm"><use href="#icon-chevrons-down"></use></svg></button>
@@ -292,6 +323,7 @@
               <div class="date-wrapper">
                  <input type="date" id="new-task-date" class="task-date-input" title="Set Due Date">
               </div>
+              <button id="btn-task-repeat" class="btn-icon" title="Set Repeat" style="padding: 2px; margin-left: 2px;"><svg class="svg-icon-sm"><use href="#icon-repeat"></use></svg></button>
               <button class="btn btn-primary" id="btn-add-task" style="padding: 5px 12px; flex-shrink: 0; font-size: 13px; margin-left: 4px;">Add</button>
               <div id="google-task-controls" class="google-task-menu" style="display:none;">
                  <button id="btn-toggle-specific-list" class="btn-icon" title="Space-Specific List" style="margin-right: 4px; padding: 2px;"><svg class="svg-icon-sm"><use href="#icon-lock-minimal"></use></svg></button>
@@ -301,12 +333,17 @@
 
             <ul class="task-list drag-container" id="task-list"></ul>
             
+            <details id="repeating-tasks-details" style="margin-top:10px; margin-bottom:15px;">
+              <summary class="section-label details-summary" style="margin:0; padding:5px 0; border:none; cursor:pointer; color:var(--primary-color);"><svg class="svg-icon-sm summary-chevron"><use href="#icon-chevron-right"></use></svg><span>Completed Recurring Tasks <span id="repeating-count-label" style="opacity:0.5; font-weight:400; margin-left:4px;"></span></span><span id="btn-clear-repeating-history" style="color:#dc2626; font-size:12px; cursor:pointer; margin-left: auto;">(Clear <svg class="svg-icon-sm" style="vertical-align: -2px;"><use href="#icon-trash"></use></svg>)</span></summary>
+              <ul class="task-list" id="repeating-waiting-list"></ul>
+            </details>
+
             <details id="archived-tasks-details" style="margin-top:10px; margin-bottom:15px;">
-              <summary class="section-label details-summary" style="margin:0; padding:5px 0; border:none; cursor:pointer;"><svg class="svg-icon-sm summary-chevron"><use href="#icon-chevron-right"></use></svg><span>Archived Tasks</span><span id="btn-clear-archive" style="color:#dc2626; font-size:12px; cursor:pointer; margin-left: auto;">(Clear <svg class="svg-icon-sm" style="vertical-align: -2px;"><use href="#icon-trash"></use></svg>)</span></summary>
+              <summary class="section-label details-summary" style="margin:0; padding:5px 0; border:none; cursor:pointer;"><svg class="svg-icon-sm summary-chevron"><use href="#icon-chevron-right"></use></svg><span>Archived Tasks <span id="archive-count-label" style="opacity:0.5; font-weight:400; margin-left:4px;"></span></span><span id="btn-clear-archive" style="color:#dc2626; font-size:12px; cursor:pointer; margin-left: auto;">(Clear <svg class="svg-icon-sm" style="vertical-align: -2px;"><use href="#icon-trash"></use></svg>)</span></summary>
               <ul class="task-list" id="archive-list"></ul>
             </details>
-            <details id="trash-tasks-details" style="margin-top:5px; display: none;">
-              <summary class="section-label details-summary" style="margin:0; padding:5px 0; border:none; cursor:pointer; color:#dc2626;"><svg class="svg-icon-sm summary-chevron"><use href="#icon-chevron-right"></use></svg><span>Trash Tasks</span><span id="btn-empty-tasks-trash" style="color:#dc2626; font-size:12px; cursor:pointer; margin-left: auto;">(Empty <svg class="svg-icon-sm" style="vertical-align: -2px;"><use href="#icon-trash"></use></svg>)</span></summary>
+            <details id="trash-tasks-details" style="margin-top:5px;">
+              <summary class="section-label details-summary" style="margin:0; padding:5px 0; border:none; cursor:pointer; color:#dc2626;"><svg class="svg-icon-sm summary-chevron"><use href="#icon-chevron-right"></use></svg><span>Trash Tasks <span id="trash-count-label" style="opacity:0.5; font-weight:400; margin-left:4px;"></span></span><span id="btn-empty-tasks-trash" style="color:#dc2626; font-size:12px; cursor:pointer; margin-left: auto;">(Empty <svg class="svg-icon-sm" style="vertical-align: -2px;"><use href="#icon-trash"></use></svg>)</span></summary>
               <ul class="task-list" id="trash-task-list"></ul>
             </details>
           </div>
@@ -446,7 +483,12 @@
   <div class="modal-overlay" id="task-edit-modal"><div class="modal-content" style="width: 320px;">
     <h3 style="font-size:16px;">✏️ Edit Task</h3>
     <div class="settings-group"><label>Task Name:</label><input type="text" id="edit-task-name-input" class="settings-input" style="font-family:var(--note-font),sans-serif;"></div>
-    <div class="settings-group"><label>Due Date:</label><input type="date" id="edit-task-date-input" class="settings-input"></div>
+    <div class="settings-group"><label>Due Date:</label>
+        <div style="display:flex; gap:8px;">
+            <input type="date" id="edit-task-date-input" class="settings-input" style="flex:1;">
+            <button id="btn-edit-task-repeat" class="btn-icon" title="Repeat Settings"><svg class="svg-icon-sm"><use href="#icon-repeat"></use></svg></button>
+        </div>
+    </div>
 
     <div class="settings-group" id="task-sync-row" style="display:flex; align-items:center; gap:8px; margin-top:20px; background:var(--hover-bg); padding:10px; border-radius:6px; cursor:pointer;">
         <label class="google-task-checkbox">
@@ -459,6 +501,106 @@
         <svg style="width:18px;height:18px;"><use href="#icon-gtask"></use></svg>
     </div>
     <div class="modal-actions" style="margin-top: 20px; text-align:right;"><button class="btn btn-outline" id="btn-close-task-edit">Cancel</button> <button class="btn btn-primary" id="btn-save-task-edit">Save</button></div>
+  </div></div>
+
+  <div class="modal-overlay" id="repeat-settings-modal" style="z-index: 13000;"><div class="modal-content" style="width: 300px;">
+    <h3 style="font-size:16px;">🔄 Repeat Settings</h3>
+    <div class="settings-group">
+        <label class="google-task-checkbox" style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+            <input type="checkbox" id="repeat-enabled">
+            <div class="checkmark-circle"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg></div>
+            <span style="font-weight: 600;">Enable Repeating</span>
+        </label>
+    </div>
+    <div id="repeat-options" style="display:none;">
+        <div class="settings-group">
+            <label>Frequency:</label>
+            <select id="repeat-frequency" class="settings-input">
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+                <option value="yearly">Yearly</option>
+            </select>
+        </div>
+        <div class="settings-group">
+            <label>Every:</label>
+            <div style="display:flex; align-items:center; gap:8px;">
+                <input type="number" id="repeat-interval" class="settings-input" value="1" min="1" style="width: 60px;">
+                <span style="font-size: 13px; color: var(--text-muted);">time(s)</span>
+            </div>
+        </div>
+        <!-- 📅 Weekly Specific Options -->
+        <div id="repeat-weekly-options" style="display:none; margin-top:15px;">
+            <label style="font-size:12px; font-weight:700; color:var(--text-muted); display:block; margin-bottom:8px;">REPEAT ON:</label>
+            <div id="repeat-days-container" style="display:flex; gap:4px; justify-content:space-between;">
+                <div class="sf-day-pill repeat-day-pill" data-day="0" style="width:30px; height:30px; font-size:11px; flex:1;">S</div>
+                <div class="sf-day-pill repeat-day-pill" data-day="1" style="width:30px; height:30px; font-size:11px; flex:1;">M</div>
+                <div class="sf-day-pill repeat-day-pill" data-day="2" style="width:30px; height:30px; font-size:11px; flex:1;">T</div>
+                <div class="sf-day-pill repeat-day-pill" data-day="3" style="width:30px; height:30px; font-size:11px; flex:1;">W</div>
+                <div class="sf-day-pill repeat-day-pill" data-day="4" style="width:30px; height:30px; font-size:11px; flex:1;">T</div>
+                <div class="sf-day-pill repeat-day-pill" data-day="5" style="width:30px; height:30px; font-size:11px; flex:1;">F</div>
+                <div class="sf-day-pill repeat-day-pill" data-day="6" style="width:30px; height:30px; font-size:11px; flex:1;">S</div>
+            </div>
+        </div>
+        <!-- 📆 Monthly Specific Options -->
+        <div id="repeat-monthly-options" style="display:none; margin-top:15px;">
+            <div class="settings-group">
+                <label>On day of month:</label>
+                <select id="repeat-day-of-month" class="settings-input">
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                    <option value="6">6</option>
+                    <option value="7">7</option>
+                    <option value="8">8</option>
+                    <option value="9">9</option>
+                    <option value="10">10</option>
+                    <option value="11">11</option>
+                    <option value="12">12</option>
+                    <option value="13">13</option>
+                    <option value="14">14</option>
+                    <option value="15">15</option>
+                    <option value="16">16</option>
+                    <option value="17">17</option>
+                    <option value="18">18</option>
+                    <option value="19">19</option>
+                    <option value="20">20</option>
+                    <option value="21">21</option>
+                    <option value="22">22</option>
+                    <option value="23">23</option>
+                    <option value="24">24</option>
+                    <option value="25">25</option>
+                    <option value="26">26</option>
+                    <option value="27">27</option>
+                    <option value="28">28</option>
+                    <option value="29">29</option>
+                    <option value="30">30</option>
+                    <option value="31">31</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- 🏁 Ends On Options -->
+        <div class="settings-group" style="margin-top:15px; border-top:1px solid var(--border-color); padding-top:15px;">
+            <label style="font-weight:700; font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">Ends On:</label>
+            <div style="display:flex; flex-direction:column; gap:10px; margin-top:10px;">
+                <label style="display:flex; align-items:center; gap:8px; font-size:13px; cursor:pointer;">
+                    <input type="radio" name="repeat-end" value="never" checked style="cursor:pointer;"> <span>Never</span>
+                </label>
+                <label style="display:flex; align-items:center; gap:8px; font-size:13px; cursor:pointer;">
+                    <input type="radio" name="repeat-end" value="on_date" style="cursor:pointer;"> <span>On</span>
+                    <input type="date" id="repeat-end-date" class="settings-input" style="padding:2px 6px; font-size:12px; width:auto; height:28px;">
+                </label>
+                <label style="display:flex; align-items:center; gap:8px; font-size:13px; cursor:pointer;">
+                    <input type="radio" name="repeat-end" value="after_count" style="cursor:pointer;"> <span>After</span>
+                    <input type="number" id="repeat-end-count" class="settings-input" style="padding:2px 6px; font-size:12px; width:50px; height:28px;" min="1" value="1"> <span>times</span>
+                </label>
+            </div>
+        </div>
+    </div>
+    <div class="modal-actions" style="margin-top: 20px; text-align:right;"><button class="btn btn-outline" id="btn-close-repeat-modal">Cancel</button> <button class="btn btn-primary" id="btn-save-repeat-settings">Apply</button></div>
   </div></div>
 
   <div class="modal-overlay" id="task-link-modal"><div class="modal-content" style="width: 320px;">

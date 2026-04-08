@@ -1,6 +1,6 @@
 import Sortable from '../sortable.esm.js';
-import { svgEdit, svgTrashRed, googleTasksIcon } from '../core/icons.js';
-import { getCurrentSpace, saveData, getShortDate, getAppSettings, setCurrentSpaceId, getSpaces, getFilterTags, loadData, getGlobalLaunchers, getLauncherTags, getCurrentSpaceId } from '../core/storage.js';
+import { svgEdit, svgTrashRed, googleTasksIcon, svgRepeat } from '../core/icons.js';
+import { getCurrentSpace, saveData, getShortDate, getAppSettings, setCurrentSpaceId, getSpaces, getFilterTags, loadData, getGlobalLaunchers, getLauncherTags, getCurrentSpaceId, getFilterMode } from '../core/storage.js';
 import { generateMiniTagsBtn, generateTaskHTML, attachSubtaskEventListeners, attachTaskInlineEditListeners, handleTagAutocomplete, applySyntaxHighlighting } from '../core/ui-helpers.js';
 
 import { saveToDrive, getAuthToken } from '../core/driveSync.js';
@@ -62,6 +62,92 @@ async function triggerCloudSave() {
     }, 5000);
 }
 
+/** 🔄 Helper: Calculate next due date with End Conditions */
+export function calculateNextDate(currentDateStr, repeatConfig, currentTask = {}) {
+    if (!currentDateStr || !repeatConfig || !repeatConfig.isRepeating) return null;
+
+    // 1. ตรวจสอบเงื่อนไขสิ้นสุดแบบ "ทำครบ X ครั้ง" (Occurrences)
+    if (repeatConfig.endType === 'after_count') {
+        const currentCount = currentTask.occurrenceCount || 1;
+        if (currentCount >= repeatConfig.endCount) return null;
+    }
+    
+    let date = new Date(currentDateStr);
+    const today = new Date();
+    const interval = parseInt(repeatConfig.interval) || 1;
+    
+    switch (repeatConfig.frequency) {
+        case 'daily':
+            date.setDate(date.getDate() + interval);
+            break;
+        case 'weekly':
+            // เลือกวันในสัปดาห์ (0-6) ถ้าไม่ได้เลือกไว้ ให้ใช้ค่าวันปัจจุบัน
+            const targetDays = (repeatConfig.daysOfWeek && repeatConfig.daysOfWeek.length > 0) 
+                ? repeatConfig.daysOfWeek 
+                : [date.getDay()];
+            
+            let found = false;
+            let checkDate = new Date(date);
+            // วนลูปหาใน 7 วันข้างหน้า
+            for (let i = 1; i <= 7; i++) {
+                checkDate.setDate(date.getDate() + i);
+                if (targetDays.includes(checkDate.getDay())) {
+                    // ถ้าวนกลับมาขึ้นสัปดาห์ใหม่ และมี Interval > 1 ให้บวกสัปดาห์เพิ่ม
+                    if (checkDate.getDay() <= date.getDay() && interval > 1) {
+                        checkDate.setDate(checkDate.getDate() + (interval - 1) * 7);
+                    }
+                    date = checkDate;
+                    found = true;
+                    break;
+                }
+            }
+            // Fallback ถ้าหาไม่เจอจริงๆ (ไม่ควรเกิดขึ้น) ให้บวกไปตามจำนวนสัปดาห์ปกติ
+            if (!found) date.setDate(date.getDate() + (interval * 7));
+            break;
+        case 'monthly':
+            const targetDay = parseInt(repeatConfig.dayOfMonth) || date.getDate();
+            date.setMonth(date.getMonth() + interval);
+            // ปรับวันที่ให้ตรงกับที่ระบุ (JS จะจัดการเรื่องเดือนที่มี 28/30/31 วันให้โดยอัตโนมัติ)
+            date.setDate(targetDay);
+            break;
+        case 'yearly':
+            date.setFullYear(date.getFullYear() + interval);
+            break;
+    }
+    
+    const nextDateStr = date.toISOString().split('T')[0];
+
+    // 2. ตรวจสอบเงื่อนไขสิ้นสุดแบบ "ตามวันที่" (On Date)
+    if (repeatConfig.endType === 'on_date' && repeatConfig.endDate) {
+        if (nextDateStr > repeatConfig.endDate) return null;
+    }
+    
+    return nextDateStr;
+}
+
+// Function to toggle task focus
+export function toggleTaskFocus(spaceId, taskIndex, isSubtask, parentIndex = null) {
+    const settings = getAppSettings();
+    const targetSpace = getSpaces().find(s => s.id === spaceId);
+    if (!targetSpace) return;
+
+    let task;
+    if (isSubtask) {
+        task = targetSpace.tasks[parentIndex]?.subtasks?.[taskIndex];
+    } else {
+        task = targetSpace.tasks[taskIndex];
+    }
+
+    if (task) {
+        const isCurrentlyFocused = settings.focusedTask &&
+                                   settings.focusedTask.spaceId === spaceId &&
+                                   settings.focusedTask.createdAt === task.createdAt;
+
+        settings.focusedTask = isCurrentlyFocused ? null : { spaceId: spaceId, createdAt: task.createdAt };
+        saveData();
+        onRenderCallback();
+    }
+}
 let fetchGoogleAPI = null;
 let getGoogleAuthToken = null;
 let getCurrentGoogleListId = null;
@@ -78,6 +164,8 @@ let editingLinkTaskIdx = null;
 let editingLinkSubIdx = null;
 let editingLinkSpaceId = null;
 let addingSubtaskToIndex = null; // เก็บ Index ของงานหลักที่กำลังจะเพิ่มงานย่อย
+let currentTaskRepeatConfig = { isRepeating: false, frequency: 'daily', interval: 1 };
+let editingTaskRepeatConfig = { isRepeating: false, frequency: 'daily', interval: 1 };
 let editingTemplateIndex = null; // 🟢 สำหรับจำว่ากำลังแก้ไข Template ไหนอยู่
 let currentTemplateTasks = []; // ตัวแปรชั่วคราวขณะสร้าง Template
 
@@ -389,6 +477,96 @@ export function initTodoManager(callbacks) {
     // 🟢 Template System Initialization
     initTodoTemplateSystem();
 
+    // 🔄 Repeating Tasks Modal Logic
+    const repeatModal = document.getElementById('repeat-settings-modal');
+    const repeatEnabled = document.getElementById('repeat-enabled');
+    const repeatOptions = document.getElementById('repeat-options');
+    const weeklyOptions = document.getElementById('repeat-weekly-options');
+    const monthlyOptions = document.getElementById('repeat-monthly-options');
+    const freqSelect = document.getElementById('repeat-frequency');
+    
+    if (repeatEnabled) {
+        repeatEnabled.onchange = () => { repeatOptions.style.display = repeatEnabled.checked ? 'block' : 'none'; };
+    }
+
+    if (freqSelect) {
+        freqSelect.onchange = () => {
+            weeklyOptions.style.display = freqSelect.value === 'weekly' ? 'block' : 'none';
+            monthlyOptions.style.display = freqSelect.value === 'monthly' ? 'block' : 'none';
+        };
+    }
+
+    // Day pill selection logic
+    document.getElementById('repeat-days-container').onclick = (e) => {
+        const pill = e.target.closest('.repeat-day-pill');
+        if (pill) pill.classList.toggle('active');
+    };
+
+    const syncRepeatUI = (config) => {
+        repeatEnabled.checked = config.isRepeating;
+        freqSelect.value = config.frequency;
+        document.getElementById('repeat-interval').value = config.interval;
+        document.getElementById('repeat-day-of-month').value = config.dayOfMonth || 1;
+        
+        // Ends On UI
+        const endType = config.endType || 'never';
+        document.querySelector(`input[name="repeat-end"][value="${endType}"]`).checked = true;
+        document.getElementById('repeat-end-date').value = config.endDate || "";
+        document.getElementById('repeat-end-count').value = config.endCount || 1;
+        
+        // Reset and set day pills
+        document.querySelectorAll('.repeat-day-pill').forEach((p, i) => {
+            p.classList.toggle('active', config.daysOfWeek?.includes(i));
+        });
+
+        repeatOptions.style.display = config.isRepeating ? 'block' : 'none';
+        weeklyOptions.style.display = config.frequency === 'weekly' ? 'block' : 'none';
+        monthlyOptions.style.display = config.frequency === 'monthly' ? 'block' : 'none';
+    };
+
+    document.getElementById('btn-task-repeat').onclick = () => {
+        syncRepeatUI(currentTaskRepeatConfig);
+        repeatModal.dataset.mode = 'add';
+        repeatModal.style.display = 'flex';
+    };
+
+    document.getElementById('btn-edit-task-repeat').onclick = () => {
+        syncRepeatUI(editingTaskRepeatConfig);
+        repeatModal.dataset.mode = 'edit';
+        repeatModal.style.display = 'flex';
+    };
+
+    document.getElementById('btn-save-repeat-settings').onclick = () => {
+        const selectedDays = Array.from(document.querySelectorAll('.repeat-day-pill.active')).map(p => parseInt(p.dataset.day));
+        const endType = document.querySelector('input[name="repeat-end"]:checked').value;
+        const config = { 
+            isRepeating: repeatEnabled.checked, 
+            frequency: freqSelect.value, 
+            interval: parseInt(document.getElementById('repeat-interval').value) || 1,
+            daysOfWeek: selectedDays,
+            dayOfMonth: parseInt(document.getElementById('repeat-day-of-month').value) || 1,
+            endType: endType,
+            endDate: document.getElementById('repeat-end-date').value,
+            endCount: parseInt(document.getElementById('repeat-end-count').value) || 1
+        };
+        if (repeatModal.dataset.mode === 'add') { currentTaskRepeatConfig = config; document.getElementById('btn-task-repeat').style.color = config.isRepeating ? 'var(--primary-color)' : 'inherit'; }
+        else { editingTaskRepeatConfig = config; document.getElementById('btn-edit-task-repeat').style.color = config.isRepeating ? 'var(--primary-color)' : 'inherit'; }
+        repeatModal.style.display = 'none';
+    };
+
+    document.getElementById('btn-close-repeat-modal').onclick = () => repeatModal.style.display = 'none';
+
+    // 🟢 Toggle Extra Sections (Archive/Trash/Repeat)
+    const btnToggleExtra = document.getElementById('btn-toggle-extra-sections');
+    if (btnToggleExtra) {
+        btnToggleExtra.onclick = () => {
+            const settings = getAppSettings();
+            settings.showExtraTaskSections = !settings.showExtraTaskSections;
+            saveData();
+            onRenderCallback();
+        };
+    }
+
     // Toggle Global Prominent Visibility
     const toggleProminentBtn = document.getElementById('btn-toggle-prominent-tasks'); //
     if (toggleProminentBtn) {
@@ -692,6 +870,21 @@ export function initTodoManager(callbacks) {
         });
     }
 
+    // 🔄 Clear Repeating History Button
+    const btnClearRepeating = document.getElementById('btn-clear-repeating-history');
+    if (btnClearRepeating) {
+        btnClearRepeating.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const space = getCurrentSpace();
+            if (space && confirm("Clear all repeating task history? This won't affect pending tasks.")) {
+                space.tasks = space.tasks.filter(t => !(t && (t.completed || t.isDeleted) && t.repeatConfig?.isRepeating));
+                saveData();
+                onRenderCallback();
+            }
+        });
+    }
+
     // 🟢 Empty Trash Tasks Button
     const btnEmptyTrash = document.getElementById('btn-empty-tasks-trash');
     if (btnEmptyTrash) {
@@ -718,28 +911,6 @@ export function initTodoManager(callbacks) {
         const space = getCurrentSpace();
         if (!space) return;
         
-        // 🔘 0. Focus Task Button Logic (Correct Location)
-        const focusBtn = e.target.closest('.btn-focus-task');
-        if (focusBtn) {
-            const idx = parseInt(focusBtn.getAttribute('data-index'));
-            const sid = parseInt(focusBtn.getAttribute('data-space-id'));
-            const settings = getAppSettings();
-            const targetSpace = (sid === space.id) ? space : getSpaces().find(s => s.id === sid);
-            const task = targetSpace?.tasks[idx];
-
-            if (task) {
-                const isCurrentlyFocused = settings.focusedTask && 
-                                           settings.focusedTask.spaceId === sid && 
-                                           settings.focusedTask.createdAt === task.createdAt;
-
-                // 🟢 สลับการโฟกัสทันทีอย่างอิสระ
-                settings.focusedTask = isCurrentlyFocused ? null : { spaceId: sid, createdAt: task.createdAt };
-                saveData();
-                onRenderCallback();
-            }
-            return;
-        }
-
         // 🔘 Toggle Hide Pending Subtasks
         const hidePendingBtn = e.target.closest('.hide-pending-subtasks-btn');
         if (hidePendingBtn) {
@@ -1109,6 +1280,89 @@ export function initTodoManager(callbacks) {
     };
 
     const handleTaskContextMenu = (e) => {
+        const flagBtn = e.target.closest('.btn-prominent-task[data-focus-trigger="true"]');
+        if (flagBtn) {
+            e.preventDefault(); // Prevent default browser context menu
+            e.stopPropagation();
+
+            closeFocusContextMenu(); // Close any existing custom menu
+
+            const taskItemEl = flagBtn.closest('.task-item');
+            if (!taskItemEl) return;
+
+            const space = getCurrentSpace();
+            const spaceId = parseInt(taskItemEl.dataset.spaceId || space.id);
+            const taskIndex = parseInt(taskItemEl.dataset.index);
+            const isSubtask = taskItemEl.classList.contains('subtask-item');
+            const parentIndex = isSubtask ? parseInt(taskItemEl.dataset.parentIndex) : null;
+
+            let task;
+            if (isSubtask) {
+                task = space.tasks[parentIndex]?.subtasks?.[taskIndex];
+            } else {
+                task = space.tasks[taskIndex];
+            }
+            if (!task) return;
+
+            const settings = getAppSettings();
+            const isFocused = settings.focusedTask &&
+                              settings.focusedTask.spaceId === spaceId &&
+                              settings.focusedTask.createdAt === task.createdAt;
+
+            const menu = document.createElement('div');
+            menu.id = 'task-focus-context-menu';
+            menu.className = 'sf-sub-popup'; // Reusing existing popup style
+            menu.style.cssText = `
+                position: fixed;
+                top: ${e.clientY}px;
+                left: ${e.clientX}px;
+                min-width: 150px;
+                padding: 4px;
+                z-index: 9999;
+                display: flex;
+                flex-direction: column;
+            `;
+
+            menu.innerHTML = `
+                <button class="menu-item" id="ctx-toggle-focus" style="display:flex; align-items:center; width:100%; padding:6px 10px; border:none; background:transparent; cursor:pointer; font-size:13px; color:var(--text-main); text-align:left; border-radius:4px;">
+                    <svg class="svg-icon-sm" style="margin-right:8px;"><use href="#icon-${isFocused ? 'eye-off' : 'target'}"></use></svg> ${isFocused ? 'Stop Focusing' : 'Focus this task'}
+                </button>
+            `;
+
+            document.body.appendChild(menu);
+
+            // Position adjustment to keep it in viewport
+            const menuRect = menu.getBoundingClientRect();
+            if (menuRect.right > window.innerWidth) {
+                menu.style.left = `${e.clientX - menuRect.width}px`;
+            }
+            if (menuRect.bottom > window.innerHeight) {
+                menu.style.top = `${e.clientY - menuRect.height}px`;
+            }
+
+            // Hover effects
+            menu.querySelectorAll('.menu-item').forEach(b => {
+                b.addEventListener('mouseenter', () => b.style.backgroundColor = 'var(--hover-bg, #f1f1ef)');
+                b.addEventListener('mouseleave', () => b.style.background = 'transparent');
+            });
+
+            // Action
+            document.getElementById('ctx-toggle-focus').addEventListener('click', () => {
+                toggleTaskFocus(spaceId, taskIndex, isSubtask, parentIndex);
+                closeFocusContextMenu();
+            });
+
+            // Close on outside click
+            const closeHandler = (clickEvent) => {
+                if (!menu.contains(clickEvent.target)) {
+                    closeFocusContextMenu();
+                }
+            };
+            document.addEventListener('click', closeHandler);
+            menu._closeHandler = closeHandler; // Store handler to remove later
+            return; // Stop further contextmenu processing
+        }
+
         const linkBtn = e.target.closest('.task-link-btn');
         if (linkBtn) {
             e.preventDefault();
@@ -1118,6 +1372,16 @@ export function initTodoManager(callbacks) {
             const sid = linkBtn.getAttribute('data-space-id');
             
             openTaskLinkModal(idx, pIdx !== null, pIdx, sid ? parseInt(sid) : null);
+        }
+    };
+
+    function closeFocusContextMenu() {
+        const existing = document.getElementById('task-focus-context-menu');
+        if (existing) {
+            if (existing._closeHandler) {
+                document.removeEventListener('click', existing._closeHandler);
+            }
+            existing.remove();
         }
     };
 
@@ -1155,29 +1419,43 @@ export function initTodoManager(callbacks) {
             const task = space?.tasks[index];
             if (!task) return;
 
-            if (isChecked) {
-                const settings = getAppSettings();
-                if (settings.focusedTask && settings.focusedTask.spaceId === space.id && settings.focusedTask.createdAt === task.createdAt) {
-                    settings.focusedTask = null;
+            if (task.repeatConfig && task.repeatConfig.isRepeating) {
+                // For repeating tasks, mark as completed, not deleted
+                task.completed = isChecked;
+                task.completedAt = isChecked ? Date.now() : null;
+                task.isProminent = false; // Repeating tasks should not be prominent when completed
+                // Do not touch isDeleted, deletedAt, expiryAt for repeating tasks here
+
+                if (task.subtasks) {
+                    task.subtasks.forEach(sub => {
+                        sub.completed = isChecked;
+                        // Subtasks of repeating tasks should also not be marked as deleted
+                    });
                 }
-                task.isDeleted = true;
-                task.deletedAt = Date.now();
-                const days = settings.autoDeleteDays || 30;
-                task.expiryAt = task.deletedAt + (days * 24 * 60 * 60 * 1000);
-                task.completed = false;
-                task.isProminent = false;
-                if (task.subtasks) task.subtasks.forEach(sub => { sub.isDeleted = true; sub.deletedAt = task.deletedAt; sub.expiryAt = task.expiryAt; sub.completed = false; });
             } else {
-                task.completed = false;
-                task.completedAt = null;
-                task.isDeleted = false;
-                task.deletedAt = null;
-                task.expiryAt = null;
-                if (task.subtasks) task.subtasks.forEach(sub => { sub.isDeleted = false; sub.completed = false; });
-                
-                // 🟢 ย้ายงานที่กู้คืนกลับไปไว้บนสุดเพื่อให้เห็นชัดเจน
-                const [restoredTask] = space.tasks.splice(index, 1);
-                space.tasks.unshift(restoredTask);
+                // For non-repeating tasks, use the existing logic (mark as deleted when checked)
+                if (isChecked) {
+                    const settings = getAppSettings();
+                    if (settings.focusedTask && settings.focusedTask.spaceId === space.id && settings.focusedTask.createdAt === task.createdAt) {
+                        settings.focusedTask = null;
+                    }
+                    task.isDeleted = true;
+                    task.deletedAt = Date.now();
+                    const days = settings.autoDeleteDays || 30;
+                    task.expiryAt = task.deletedAt + (days * 24 * 60 * 60 * 1000);
+                    task.completed = false; // Mark as false for deleted tasks
+                    task.isProminent = false;
+                    if (task.subtasks) task.subtasks.forEach(sub => { sub.isDeleted = true; sub.deletedAt = task.deletedAt; sub.expiryAt = task.expiryAt; sub.completed = false; });
+                } else {
+                    task.completed = false;
+                    task.completedAt = null;
+                    task.isDeleted = false;
+                    task.deletedAt = null;
+                    task.expiryAt = null;
+                    if (task.subtasks) task.subtasks.forEach(sub => { sub.isDeleted = false; sub.completed = false; });
+                    const [restoredTask] = space.tasks.splice(index, 1);
+                    space.tasks.unshift(restoredTask);
+                }
             }
 
             // ☁️ Sync with Google Tasks (ใช้ targetListId ที่ถูกต้อง)
@@ -1196,6 +1474,35 @@ export function initTodoManager(callbacks) {
                         fetchGoogleAPI(`/lists/${targetListId}/tasks/${sub.googleTaskId}`, 'PATCH', { status: isChecked ? 'completed' : 'needsAction' });
                     }
                 });
+            }
+
+            // 🔄 Repeating Task Logic: Regenerate task on completion
+            if (isChecked && task.repeatConfig && task.repeatConfig.isRepeating && task.dueDate) {
+                const nextDate = calculateNextDate(task.dueDate, task.repeatConfig, task);
+                
+                if (nextDate) {
+                    const clonedTask = JSON.parse(JSON.stringify(task));
+                    clonedTask.completed = false;
+                    clonedTask.completedAt = null;
+                    clonedTask.isDeleted = false;
+                    clonedTask.deletedAt = null;
+                    clonedTask.expiryAt = null;
+                    clonedTask.createdAt = Date.now();
+                    clonedTask.dueDate = nextDate;
+                    clonedTask.occurrenceCount = (task.occurrenceCount || 1) + 1; // 🟢 เพิ่มตัวนับครั้งที่ทำ
+                    clonedTask.googleTaskId = null;
+                    
+                    space.tasks.push(clonedTask);
+                    
+                    // Create on Google Tasks if sync is active
+                    if (isGoogleSyncEnabled() && getGoogleAuthToken()) {
+                        const listId = getTargetListId(space);
+                        const gTitle = `${clonedTask.text} (S: ${space.name})`;
+                        createGoogleTask(listId, { title: gTitle, due: new Date(nextDate).toISOString() }).then(gTask => {
+                            if (gTask && gTask.id) { clonedTask.googleTaskId = gTask.id; saveData(true); }
+                        });
+                    }
+                }
             }
 
             saveData(true); // บันทึกทันที
@@ -1263,6 +1570,7 @@ export function initTodoManager(callbacks) {
         taskListEl.addEventListener('click', handleTaskClick);
         taskListEl.addEventListener('click', handleProminentTaskClick); // Add listener for prominent button
         taskListEl.addEventListener('contextmenu', handleTaskContextMenu);
+        document.addEventListener('click', closeFocusContextMenu); // Global click to close menu
         // The main task checkbox change is handled here
         taskListEl.addEventListener('change', handleTaskChange); 
 
@@ -1271,6 +1579,8 @@ export function initTodoManager(callbacks) {
         taskListEl.addEventListener('focusout', handleSubtaskBlur);
 
         // Add Inline Editing for Main and Subtasks
+        // ... (existing attachTaskInlineEditListeners code)
+
         attachTaskInlineEditListeners(taskListEl, () => getCurrentSpace(), {
             fetchGoogleAPI,
             getGoogleAuthToken,
@@ -1337,11 +1647,13 @@ export function initTodoManager(callbacks) {
     }
     if (trashListEl) {
         trashListEl.addEventListener('click', handleTaskClick);
+        trashListEl.addEventListener('click', handleProminentTaskClick);
         trashListEl.addEventListener('contextmenu', handleTaskContextMenu);
         trashListEl.addEventListener('change', handleTaskChange);
     }
     if (archiveListEl) {
         archiveListEl.addEventListener('click', handleTaskClick);
+        archiveListEl.addEventListener('click', handleProminentTaskClick);
         archiveListEl.addEventListener('contextmenu', handleTaskContextMenu);
         archiveListEl.addEventListener('change', handleTaskChange);
         archiveListEl.addEventListener('keydown', (e) => {
@@ -1767,7 +2079,7 @@ async function addTask() {
         }
 
         // Initialize new task with isProminent: false
-        let newTask = { text: text, completed: false, tags: tags, dueDate: dateInput.value || null, createdAt: Date.now(), googleTaskId: null, isProminent: false, subtasks: [], subtasksHidden: false }; 
+        let newTask = { text: text, completed: false, tags: tags, dueDate: dateInput.value || null, createdAt: Date.now(), googleTaskId: null, isProminent: false, subtasks: [], subtasksHidden: false, repeatConfig: { ...currentTaskRepeatConfig } }; 
 
         if (isGoogleSyncEnabled() && getGoogleAuthToken()) {
             input.placeholder = "Syncing... ☁️";
@@ -1779,6 +2091,8 @@ async function addTask() {
             if (gTask && gTask.id) { newTask.googleTaskId = gTask.id; } 
         }
         space.tasks.push(newTask); 
+        currentTaskRepeatConfig = { isRepeating: false, frequency: 'daily', interval: 1 }; // Reset UI and state after add
+        document.getElementById('btn-task-repeat').style.color = 'inherit';
         if (space.taskSortOrder && space.taskSortOrder !== 'manual') sortSpaceTasks(space);
         playTaskAddedSound();
         input.value = ''; input.disabled = false; input.placeholder = "Type a task..."; input.focus();
@@ -1806,6 +2120,8 @@ export function openTaskEditModal(idx, fromCommandCenter = false, subId = null) 
 
     document.getElementById('edit-task-name-input').value = task.text;
     document.getElementById('edit-task-date-input').value = task.dueDate || "";
+    editingTaskRepeatConfig = task.repeatConfig || { isRepeating: false, frequency: 'daily', interval: 1 };
+    document.getElementById('btn-edit-task-repeat').style.color = editingTaskRepeatConfig.isRepeating ? 'var(--primary-color)' : 'inherit';
     document.getElementById('edit-task-sync-check').checked = task.googleTaskId ? true : false;
     document.getElementById('task-edit-modal').style.display = 'flex';
 }
@@ -1865,6 +2181,7 @@ async function saveEditedTask() {
 
     task.text = newName;
     task.dueDate = newDate || null;
+    task.repeatConfig = { ...editingTaskRepeatConfig };
     if (space.taskSortOrder && space.taskSortOrder !== 'manual') sortSpaceTasks(space);
     document.getElementById('task-edit-modal').style.display = 'none';
     btnSave.innerText = "Save"; btnSave.disabled = false;
@@ -1976,8 +2293,11 @@ async function saveTaskLink() {
 export function renderTasks(space, currentFilterTags, currentFilterMode, currentSearchQuery) {
     const taskListUI = document.getElementById('task-list'); 
     const archiveListUI = document.getElementById('archive-list');
+    const repeatingWaitingListUI = document.getElementById('repeating-waiting-list');
+    const repeatingContainer = document.getElementById('repeating-tasks-details');
     const trashListUI = document.getElementById('trash-task-list');
     const trashContainer = document.getElementById('trash-tasks-details');
+    const archiveContainer = document.getElementById('archived-tasks-details');
 
     // 🟢 1. จัดการตัวแปรและสถานะ Mobile
     const isMobile = window.matchMedia("(max-width: 768px)").matches;
@@ -2253,7 +2573,13 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
     // 🟢 สร้างตัวแปรเก็บ HTML ไว้ก่อนวาดทีเดียวเพื่อประสิทธิภาพสูงสุด
     let todoHTML = '';
     let archiveHTML = '';
+    let repeatingHTML = '';
     let trashHTML = '';
+
+    let todoCount = 0;
+    let archiveCount = 0;
+    let repeatingCount = 0;
+    let trashCount = 0;
 
     // 🟢 ตรวจสอบและจัดเรียงก่อนเริ่มลูปแสดงผล
     if (space.taskSortOrder && space.taskSortOrder !== 'manual') sortSpaceTasks(space);
@@ -2293,14 +2619,43 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
             isMobile
         });
         
-        if (task.isDeleted) { trashHTML += liContent; }
-        else if (task.completed) { archiveHTML += liContent; } 
-        else { todoHTML += liContent; }
+        // NEW: Check for completed repeating tasks first
+        if (task.completed && task.repeatConfig && task.repeatConfig.isRepeating) {
+            repeatingCount++;
+            repeatingHTML += liContent;
+        }
+        else if (task.isDeleted) { 
+            trashCount++; 
+            trashHTML += liContent; 
+        }
+        else if (task.completed) { 
+            archiveCount++; 
+            archiveHTML += liContent; 
+        }
+        else { 
+            todoCount++; 
+            todoHTML += liContent; 
+        }
     });
+
+    // 🟢 อัปเดตจำนวนงานที่หัวข้อส่วนต่างๆ (Summary labels)
+    const repeatingSummary = repeatingContainer?.querySelector('summary span');
+    if (repeatingSummary) {
+        repeatingSummary.innerText = `Repeating Tasks (${repeatingCount})`;
+    }
+    const archiveSummary = archiveContainer?.querySelector('summary span');
+    if (archiveSummary) {
+        archiveSummary.innerText = `Archived Tasks (${archiveCount})`;
+    }
+    const trashSummary = trashContainer?.querySelector('summary span');
+    if (trashSummary) {
+        trashSummary.innerText = `Tasks Trash (${trashCount})`;
+    }
 
     // 🟢 วาด HTML ลงใน Container ต่างๆ เพียงครั้งเดียว (ลดอาการชื่อหายและกระพริบ)
     if (taskListUI) taskListUI.innerHTML = todoHTML;
     if (archiveListUI) archiveListUI.innerHTML = archiveHTML;
+    if (repeatingWaitingListUI) repeatingWaitingListUI.innerHTML = repeatingHTML;
     if (trashListUI) trashListUI.innerHTML = trashHTML;
 
     // 🟢 NEW: Apply syntax highlighting to all rendered tasks after insertion
@@ -2320,7 +2675,30 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
         });
     }
 
-    trashContainer.style.display = trashListUI.children.length > 0 ? 'block' : 'none';
+    // 🟢 Show/Hide sections based on user toggle
+    const showExtra = getAppSettings().showExtraTaskSections !== false; // Default to true
+    const extraDisplay = showExtra ? 'block' : 'none';
+    
+    if (repeatingContainer) {
+        repeatingContainer.style.setProperty('display', extraDisplay, 'important');
+        repeatingContainer.style.marginTop = '2px'; // ลดระยะห่างให้เหลือนิดเดียว
+    }
+    if (archiveContainer) {
+        archiveContainer.style.setProperty('display', extraDisplay, 'important');
+        archiveContainer.style.marginTop = '2px'; // ลดระยะห่างให้เหลือนิดเดียว
+    }
+    if (trashContainer) {
+        trashContainer.style.setProperty('display', extraDisplay, 'important');
+        trashContainer.style.marginTop = '2px'; // ลดระยะห่างให้เหลือนิดเดียว
+    }
+
+    const btnToggleExtra = document.getElementById('btn-toggle-extra-sections');
+    if (btnToggleExtra) {
+        btnToggleExtra.style.opacity = showExtra ? '1' : '0.6';
+        btnToggleExtra.style.color = showExtra ? 'var(--primary-color)' : 'inherit';
+        btnToggleExtra.style.background = showExtra ? 'var(--hover-bg)' : 'transparent';
+        btnToggleExtra.innerHTML = `<svg class="svg-icon-sm"><use href="#icon-${showExtra ? 'eye' : 'eye-off'}"></use></svg>`;
+    }
 
     // 🟢 อัปเดตข้อมูลใน Habit Modal ทันที (ถ้ามันเปิดอยู่) เพื่อแก้บัค Tag ไม่อัปเดตล่าสุด
     const habitModal = document.getElementById('habit-modal');

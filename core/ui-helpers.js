@@ -1,4 +1,4 @@
-import { svgTag, dragHandleSvg, googleTasksIcon, svgEdit, svgTrashRed, svgPencil, svgRestore, svgArchive } from './icons.js';
+import { svgTag, dragHandleSvg, googleTasksIcon, svgEdit, svgTrashRed, svgPencil, svgRestore, svgArchive, svgRepeat } from './icons.js';
 import { getShortDate, getAppSettings, getUnitCharFromThai, getFilterTags } from './storage.js';
 
 export function generateMiniTagsBtn(itemTags, type, index) {
@@ -241,6 +241,8 @@ export function generateTaskHTML(task, index, {
         dateDisplay = 'Done';
     }
 
+    const repeatIcon = (task.repeatConfig && task.repeatConfig.isRepeating) ? `<span style="margin-left:4px; opacity:0.6; color:var(--primary-color);" title="Repeating: ${task.repeatConfig.frequency}">${svgRepeat}</span>` : '';
+
     // Recursively render Sub-tasks
     let subtasksHTML = '';
     if (!isSubtask) {
@@ -365,22 +367,15 @@ export function generateTaskHTML(task, index, {
         actionButtons += `<div class="collapsible-actions" style="display: none; align-items: center; gap: 6px;">${collapsibleActionsContent}</div>`;
     }
 
-    const focusBtnHTML = (task.isProminent && !isSubtask && !isActuallyDeleted && !task.completed) ? `
-        <button class="btn-focus-task ${isFocused ? 'active' : ''}" data-index="${index}" data-space-id="${spaceId}" title="${isFocused ? 'Stop Focusing' : 'Focus this task'}">
-            <svg class="svg-icon-sm" style="width:12px;height:12px;"><use href="#icon-${isFocused ? 'eye-off' : 'target'}"></use></svg>
-        </button>
-    ` : '';
-
     const itemType = isSubtask ? 'subtask' : 'task';
     return ` 
     <li class="${isSubtask ? 'subtask-item' : 'task-item'} ${draggableClass} ${prominentClass} ${focusActiveClass} ${templateClass}" data-index="${index}" data-type="${itemType}" ${isMasterView ? `data-space-id="${spaceId}"` : ''} style="list-style: none; width: 100%; margin-bottom: 0px; border-bottom: 1px solid transparent; opacity: ${isActuallyDeleted ? '0.7' : '1'};">
         <div class="item-main-row" style="display: flex; align-items: center; gap: 6px; padding: 2px 0; width: 100%; min-height: 28px;">
             ${handleHTML}
-            <div class="focus-trigger-container" style="${(isProminentHidden && !focusBtnHTML) ? 'display: none;' : ''}">
-                <button class="btn-icon btn-prominent-task ${task.isProminent ? 'active' : ''}" data-index="${index}" ${isSubtask ? `data-parent-index="${parentIndex}"` : ''} ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="Mark as Next Up" style="margin: 0; padding: 2px; flex-shrink: 0; color: ${task.isProminent ? 'var(--primary-color)' : 'var(--text-muted)'}; display: ${isProminentHidden ? 'none' : 'inline-flex'};">
+            <div class="focus-trigger-container" style="display: flex; align-items: center; gap: 2px; ${(isProminentHidden && !task.isProminent) ? 'display: none;' : ''}">
+                <button class="btn-icon btn-prominent-task ${task.isProminent ? 'active' : ''}" data-index="${index}" ${isSubtask ? `data-parent-index="${parentIndex}"` : ''} ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="Mark as Next Up" style="margin: 0; padding: 2px; flex-shrink: 0; color: ${task.isProminent ? 'var(--primary-color)' : 'var(--text-muted)'}; display: ${isProminentHidden ? 'none' : 'inline-flex'};" data-focus-trigger="true">
                     <svg class="svg-icon-sm"><use href="#icon-flag"></use></svg>
                 </button>
-                ${focusBtnHTML}
             </div>
 
             <label class="google-task-checkbox">
@@ -393,7 +388,7 @@ export function generateTaskHTML(task, index, {
             <div style="flex: 1; min-width: 0; display: flex; align-items: center;">
                 <div class="task-text-container" style="display: flex; align-items: center; font-size: 13.5px; width: 100%;">
                     ${cloudIndicator}
-                    <span class="task-actual-text" contenteditable="true" style="${textStyle}">${task.text}</span>
+                    <span class="task-actual-text" contenteditable="true" style="${textStyle}">${task.text}</span>${repeatIcon}
                     ${showSpaceBadge ? `<span class="space-tag" style="margin-left: 8px; flex-shrink: 0;">${spaceName}</span>` : ''}
                 </div>
             </div>

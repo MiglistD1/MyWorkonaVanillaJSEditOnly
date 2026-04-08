@@ -16,6 +16,7 @@ export const svgGoogleDrive = `<svg class="svg-icon-sm" viewBox="0 0 24 24" fill
 export const svgCloudOff = `<svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22.61 10.23A8.49 8.49 0 0 0 16 4h-2.48"></path><path d="M11.23 2.06A7.995 7.995 0 0 0 3 9.44c0 1.63.54 3.1 1.46 4.31"></path><path d="M19.34 19.34c.09-.32.16-.65.16-1A7 7 0 0 0 12 11h-1.23"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
 export const svgCloudUp = `<svg class="svg-icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M5 10l7-7 7 7"/></svg>`;
 export const svgCloudDown = `<svg class="svg-icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V3M5 14l7 7 7-7"/></svg>`;
+export const svgRepeat = `<svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>`;
 
 // ไอคอนอื่น ๆ ที่อาจจะใช้ในอนาคต
 export const svgKeep = `<svg class="svg-icon-sm"><use href="#icon-keep"></use></svg>`;

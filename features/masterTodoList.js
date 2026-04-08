@@ -1,8 +1,8 @@
 import { getSpaces, saveData, getAppSettings, setCurrentSpaceId, getFilterTags, loadData } from '../core/storage.js';
 import Sortable from '../sortable.esm.js';
-import { googleTasksIcon, svgRefresh } from '../core/icons.js'; // 🟢 NEW: Import svgRefresh for the refresh button
+import { googleTasksIcon, svgRefresh } from '../core/icons.js';
 import { getGoogleStatus, fetchGoogleAPI, fetchGoogleLists, getGoogleAuthToken, getCurrentGoogleListId, getIsGoogleSyncEnabled, createGoogleTask, syncAllGoogleTasks, getTargetListId } from './googleTasks.js';
-import { openTaskEditModal, openTaskLinkModal, isAnyEditableElementFocused } from './todoManager.js'; // 🟢 Merged imports
+import { openTaskEditModal, openTaskLinkModal, isAnyEditableElementFocused, toggleTaskFocus } from './todoManager.js'; // 🟢 Merged imports
 import { handleMiniTagClick } from '../components/modals.js';
 import { generateTaskHTML, attachSubtaskEventListeners, attachTaskInlineEditListeners, handleTagAutocomplete, applySyntaxHighlighting } from '../core/ui-helpers.js';
 
@@ -237,7 +237,7 @@ function renderProgressSection(allSpaces, totalTasks) {
                     </div>
                     <select id="google-task-list-select-master" class="master-space-select" style="display: none; height: 20px; font-size: 10px; margin-left: 4px; padding: 0 4px; border-radius: 4px; max-width: 100px; text-overflow: ellipsis;"></select>
                 </div>
-                <span id="progress-text" style="font-weight: 700; color: var(--primary-color);"> ${masterTodoListState.showOnlyFlagged ? 'Flagged' : ''} Tasks Remaining</span>
+                <span id="progress-text" style="font-weight: 700; color: var(--primary-color);">${totalTasks} ${masterTodoListState.showOnlyFlagged ? 'Flagged' : ''} Tasks Remaining</span>
             </div>
             <div style="height: 1px; background: var(--border-color); margin-top: 4px; opacity: 0.5;"></div>
         </div>
@@ -733,28 +733,6 @@ function initMasterEvents() {
                 return;
             }
 
-            // 🔘 9. Focus Task Button Logic (Command Center)
-            const focusBtn = target.closest('.btn-focus-task');
-            if (focusBtn) {
-                const idx = parseInt(focusBtn.getAttribute('data-index'));
-                const sid = parseInt(focusBtn.getAttribute('data-space-id'));
-                const settings = getAppSettings();
-                const targetSpace = getSpaces().find(s => s.id === sid);
-                const task = targetSpace?.tasks[idx];
-
-                if (task) {
-                    const isCurrentlyFocused = settings.focusedTask && 
-                                               settings.focusedTask.spaceId === sid && 
-                                               settings.focusedTask.createdAt === task.createdAt;
-
-                    // 🟢 สลับการโฟกัสทันทีโดยไม่ต้อง Alert
-                    settings.focusedTask = isCurrentlyFocused ? null : { spaceId: sid, createdAt: task.createdAt };
-                    saveData();
-                    onRefresh();
-                }
-                return;
-            }
-
             // 🔘 5. Add Subtask Button
             if (target.closest('.add-subtask-btn')) {
                 const idx = parseInt(target.closest('.add-subtask-btn').dataset.index);
@@ -836,6 +814,65 @@ function initMasterEvents() {
                 saveData(); onRefresh(); return;
             }
             
+            // 🟢 NEW: Context Menu for Focus (Right-click on Flag) in Master View
+            const flagBtn = target.closest('.btn-prominent-task[data-focus-trigger="true"]');
+            if (flagBtn) {
+                e.preventDefault(); // Prevent default browser context menu
+                e.stopPropagation();
+
+                // Close any existing custom menu
+                const existingMenu = document.getElementById('task-focus-context-menu');
+                if (existingMenu) existingMenu.remove();
+
+                const taskItemEl = flagBtn.closest('.task-item');
+                if (!taskItemEl) return;
+
+                const spaceId = parseInt(taskItemEl.dataset.spaceId);
+                const taskIndex = parseInt(taskItemEl.dataset.index);
+
+                const space = getSpaces().find(s => s.id === spaceId);
+                const task = space.tasks[taskIndex];
+                if (!task) return;
+
+                const settings = getAppSettings();
+                const isFocused = settings.focusedTask &&
+                                  settings.focusedTask.spaceId === spaceId &&
+                                  settings.focusedTask.createdAt === task.createdAt;
+
+                const menu = document.createElement('div');
+                menu.id = 'task-focus-context-menu';
+                menu.className = 'sf-sub-popup'; // Reusing existing popup style
+                menu.style.cssText = `
+                    position: fixed;
+                    top: ${e.clientY}px;
+                    left: ${e.clientX}px;
+                    min-width: 150px;
+                    padding: 4px;
+                    z-index: 9999;
+                    display: flex;
+                    flex-direction: column;
+                `;
+
+                menu.innerHTML = `
+                    <button class="menu-item" id="ctx-toggle-focus" style="display:flex; align-items:center; width:100%; padding:6px 10px; border:none; background:transparent; cursor:pointer; font-size:13px; color:var(--text-main); text-align:left; border-radius:4px;">
+                        <svg class="svg-icon-sm" style="margin-right:8px;"><use href="#icon-${isFocused ? 'eye-off' : 'target'}"></use></svg> ${isFocused ? 'Stop Focusing' : 'Focus this task'}
+                    </button>
+                `;
+
+                document.body.appendChild(menu);
+
+                // Position adjustment to keep it in viewport
+                const menuRect = menu.getBoundingClientRect();
+                if (menuRect.right > window.innerWidth) menu.style.left = `${e.clientX - menuRect.width}px`;
+                if (menuRect.bottom > window.innerHeight) menu.style.top = `${e.clientY - menuRect.height}px`;
+
+                document.getElementById('ctx-toggle-focus').addEventListener('click', () => {
+                    toggleTaskFocus(spaceId, taskIndex, false, null); // Call the shared function
+                    menu.remove();
+                });
+                document.addEventListener('click', () => menu.remove(), { once: true }); // Close on outside click
+                return; // Stop further click processing
+            }
             // 🟢 แก้ไข: จัดการปุ่มแก้ไขและลบให้ครอบคลุมถึง Subtask
             const editSubBtn = target.closest('.edit-subtask-btn');
             const delSubBtn = target.closest('.delete-subtask-btn');
