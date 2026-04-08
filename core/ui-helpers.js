@@ -248,6 +248,7 @@ export function generateTaskHTML(task, index, {
     }
 
     const repeatIcon = (task.repeatConfig && task.repeatConfig.isRepeating) ? `<span style="margin-left:4px; opacity:0.6; color:var(--primary-color);" title="Repeating: ${task.repeatConfig.frequency}">${svgRepeat}</span>` : '';
+    const calendarIcon = task.calendarEventId ? `<span style="margin-left:4px; color:#4285f4;" title="Synced with Google Calendar"><svg class="svg-icon-sm" style="width:12px; height:12px;"><use href="#icon-calendar"></use></svg></span>` : '';
 
     // Recursively render Sub-tasks
     let subtasksHTML = '';
@@ -341,6 +342,7 @@ export function generateTaskHTML(task, index, {
             ${!hasTags ? tagBtnHTML : ''}
             ${(!hasLink || isSubtask) ? linkBtnHTML : ''}
             ${isSubtask ? `<button class="btn-icon convert-to-main-btn" data-parent-index="${parentIndex}" data-sub-index="${index}" title="Break into Main Task">${svgBreakLink}</button>` : `<button class="btn-icon add-subtask-btn" data-index="${index}" title="Add Sub-task" style="margin: 0;"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>`}
+            <button class="btn-icon toggle-calendar-sync-btn" data-index="${index}" ${isSubtask ? `data-parent-index="${parentIndex}"` : ''} ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="${task.calendarEventId ? 'Remove from Calendar' : 'Sync to Calendar'}" style="color: ${task.calendarEventId ? '#4285f4' : 'inherit'}"><svg class="svg-icon-sm"><use href="#icon-calendar"></use></svg></button>
             ${!isCompletedOrDeleted && !isActuallyDeleted ? `<button class="btn-icon ${isSubtask ? 'archive-subtask-btn' : 'archive-task-btn'}" data-index="${index}" ${isSubtask ? `data-parent-index="${parentIndex}"` : ''} ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="Archive (Complete)">${svgArchive}</button>` : ''}
             ${isSubtask ? `
                 <button class="btn-icon edit-subtask-btn" data-parent-index="${parentIndex}" data-sub-index="${index}" data-id="${task.id}" title="Edit Sub-task">${svgEdit}</button>
@@ -395,7 +397,7 @@ export function generateTaskHTML(task, index, {
 
             <div style="flex: 1; min-width: 0; display: flex; align-items: center;">
                 <div class="task-text-container" style="display: flex; align-items: center; font-size: 13.5px; width: 100%;">
-                    <span class="task-actual-text" contenteditable="true" style="${textStyle}">${task.text}</span>${repeatIcon}
+                    <span class="task-actual-text" contenteditable="true" style="${textStyle}">${task.text}</span>${repeatIcon}${calendarIcon}
                     ${showSpaceBadge ? `<span class="space-tag" style="margin-left: 8px; flex-shrink: 0;">${spaceName}</span>` : ''}
                 </div>
             </div>

@@ -6,7 +6,7 @@ import {
 } from './storage.js';
 
 // 🔴 [PLACE YOUR NEW CLIENT ID HERE]
-const CLIENT_ID = '586837492075-e2cf86u76n2c9dil0equ98trbraqnngh.apps.googleusercontent.com';
+const CLIENT_ID = '586837492075-10190s3r8iqqhccc90vsuvvb5jqml05a.apps.googleusercontent.com';
 
 const SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar.events';
 const FILE_NAME = 'myworkona_todos.json';
@@ -183,11 +183,10 @@ function showSyncPathSettings() {
  * Hybrid Auth: Supports chrome.identity (Extension) or Manual Redirect (Web)
  */
 async function getAuthToken(interactive = true) {
-    if (accessToken) return accessToken;
-
     // 1. Check for Chrome Extension Identity API
     if (typeof chrome !== 'undefined' && chrome.identity && chrome.identity.getAuthToken) {
         return new Promise((resolve) => {
+            // ปล่อยให้ Chrome Identity จัดการ Cache และ Refresh Token เองเพื่อป้องกัน Token หมดอายุ
             chrome.identity.getAuthToken({ interactive }, (token) => {
                 if (chrome.runtime.lastError || !token) {
                     resolve(null);
@@ -199,6 +198,8 @@ async function getAuthToken(interactive = true) {
             });
         });
     }
+
+    if (accessToken) return accessToken;
 
     // 2. Check for Token in URL Hash (Web Redirect Callback)
     const hashParams = new URLSearchParams(window.location.hash.substring(1));

@@ -1,3 +1,4 @@
+// core/calendarSync.js
 import { clearAuthToken } from './driveSync.js';
 
 const CALENDAR_API_BASE = 'https://www.googleapis.com/calendar/v3/calendars/primary/events';
@@ -16,10 +17,15 @@ async function calendarFetch(url, token, options = {}) {
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
             console.error(`Google Calendar API Error (${response.status}):`, errorData);
-            if (response.status === 401) await clearAuthToken(token);
+            
+            // 403 Forbidden มักหมายถึงสิทธิ์ไม่พอ (ขาด Scope) การล้าง Token จะช่วยให้เราขอสิทธิ์ใหม่ได้ถูกต้องในครั้งถัดไป
+            if (response.status === 401 || response.status === 403) {
+                await clearAuthToken(token);
+            }
             return null;
         }
-        return response.json();
+        // จัดการกรณีลบ (204 No Content) ซึ่งไม่มี JSON ให้ Parse
+        return response.status === 204 ? true : response.json();
     } catch (err) {
         console.error("Google Calendar Network Error:", err);
         return null;
@@ -29,11 +35,12 @@ async function calendarFetch(url, token, options = {}) {
 export async function createCalendarEvent(task, token) {
     if (!task.dueDate) return null;
     
-    // For all-day events, the end date is exclusive (next day)
-    const startStr = task.dueDate; // format 'YYYY-MM-DD'
-    const d = new Date(startStr);
-    d.setDate(d.getDate() + 1);
-    const endStr = d.toISOString().split('T')[0];
+    // 📅 การจัดการวันที่แบบ ISO 8601 สำหรับ All-day events
+    // กำหนดวันที่เริ่มต้น (Start Date) และวันสิ้นสุด (End Date - ต้องเป็นวันถัดไป)
+    const startStr = task.dueDate; // รูปแบบ 'YYYY-MM-DD'
+    const startDate = new Date(startStr + 'T00:00:00Z'); // ใช้ UTC เพื่อป้องกันวันเคลื่อน
+    const endDate = new Date(startDate.getTime() + 24 * 60 * 60 * 1000);
+    const endStr = endDate.toISOString().split('T')[0];
     
     const body = {
         summary: task.completed ? `[Done] ${task.text}` : task.text,
@@ -50,10 +57,10 @@ export async function createCalendarEvent(task, token) {
 export async function updateCalendarEvent(eventId, task, token) {
     if (!eventId || !task.dueDate) return null;
     
-    const startStr = task.dueDate;
-    const d = new Date(startStr);
-    d.setDate(d.getDate() + 1);
-    const endStr = d.toISOString().split('T')[0];
+    const startStr = task.dueDate; 
+    const startDate = new Date(startStr + 'T00:00:00Z');
+    const endDate = new Date(startDate.getTime() + 24 * 60 * 60 * 1000);
+    const endStr = endDate.toISOString().split('T')[0];
 
     const body = {
         summary: task.completed ? `[Done] ${task.text}` : task.text,
@@ -68,9 +75,7 @@ export async function updateCalendarEvent(eventId, task, token) {
 
 export async function deleteCalendarEvent(eventId, token) {
     if (!eventId) return null;
-    const response = await fetch(`${CALENDAR_API_BASE}/${eventId}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
+    return await calendarFetch(`${CALENDAR_API_BASE}/${eventId}`, token, {
+        method: 'DELETE'
     });
-    return response.ok;
 }

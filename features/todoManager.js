@@ -1160,6 +1160,39 @@ export function initTodoManager(callbacks) {
             return;
         }
 
+        // 🔘 Toggle Calendar Sync
+        const calBtn = e.target.closest('.toggle-calendar-sync-btn');
+        if (calBtn) {
+            const idx = parseInt(calBtn.dataset.index);
+            const pIdxAttr = calBtn.dataset.parentIndex;
+            const pIdx = pIdxAttr !== undefined ? parseInt(pIdxAttr) : null;
+            const task = (pIdx !== null) ? space.tasks[pIdx].subtasks[idx] : space.tasks[idx];
+
+            if (task.calendarEventId) {
+                const token = await getAuthToken(false);
+                if (token) {
+                    await deleteCalendarEvent(task.calendarEventId, token);
+                    delete task.calendarEventId;
+                    saveData(); onRenderCallback();
+                }
+            } else {
+                if (!task.dueDate) {
+                    alert("โปรดตั้ง 'กำหนดส่ง' (Due Date) ก่อนซิงค์กับ Google Calendar ครับ");
+                    return;
+                }
+                const token = await getAuthToken(true);
+                if (token) {
+                    const event = await createCalendarEvent(task, token);
+                    if (event && event.id) {
+                        task.calendarEventId = event.id;
+                        saveData(); onRenderCallback();
+                    }
+                }
+            }
+            return;
+        }
+
+
         // 🔘 Toggle Subtask Specific Controls
         const subtaskMenuBtn = e.target.closest('.toggle-subtask-controls-btn');
         if (subtaskMenuBtn) {

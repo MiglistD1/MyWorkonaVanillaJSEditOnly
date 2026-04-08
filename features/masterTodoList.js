@@ -7,6 +7,8 @@ import { generateTaskHTML, attachSubtaskEventListeners, attachTaskInlineEditList
 
 import { renderSidebar } from '../components/sidebar.js';
 import { updateKeepTagButtonState } from './googleKeep.js';
+import { createCalendarEvent, deleteCalendarEvent } from '../core/calendarSync.js';
+import { getAuthToken } from '../core/driveSync.js';
 
 /** 🟢 Helper: จัดลำดับงานตามเงื่อนไขที่เลือก (เฉพาะ Main Tasks) */
 function sortSpaceTasks(space) {
@@ -536,6 +538,40 @@ export function initMasterEvents() {
                     const isHidden = container.style.display === 'none';
                     container.style.display = isHidden ? 'flex' : 'none';
                     toggleBtn.classList.toggle('expanded');
+                }
+                return;
+            }
+
+            // 🔘 Toggle Calendar Sync (Master View)
+            const calBtn = target.closest('.toggle-calendar-sync-btn');
+            if (calBtn) {
+                const idx = parseInt(calBtn.dataset.index);
+                const pIdxAttr = calBtn.dataset.parentIndex;
+                const pIdx = pIdxAttr !== undefined ? parseInt(pIdxAttr) : null;
+                const sid = parseInt(calBtn.closest('li').dataset.spaceId);
+                const space = getSpaces().find(s => s.id === sid);
+                const task = (pIdx !== null) ? space.tasks[pIdx].subtasks[idx] : space.tasks[idx];
+
+                if (task.calendarEventId) {
+                    const token = await getAuthToken(false);
+                    if (token) {
+                        await deleteCalendarEvent(task.calendarEventId, token);
+                        delete task.calendarEventId;
+                        saveData(); onRefresh();
+                    }
+                } else {
+                    if (!task.dueDate) {
+                        alert("โปรดตั้ง 'กำหนดส่ง' (Due Date) ก่อนซิงค์กับ Google Calendar ครับ");
+                        return;
+                    }
+                    const token = await getAuthToken(true);
+                    if (token) {
+                        const event = await createCalendarEvent(task, token);
+                        if (event && event.id) {
+                            task.calendarEventId = event.id;
+                            saveData(); onRefresh();
+                        }
+                    }
                 }
                 return;
             }
