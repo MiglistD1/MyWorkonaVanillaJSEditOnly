@@ -35,6 +35,18 @@ function handleSpaceChange(newId, isNewSpace) {
     saveData();
     renderAll();
     updateArchivedStateUI();
+
+    // 🟢 Mobile UI: Auto-close Sidebar after selecting a space
+    const isMobile = window.innerWidth <= 768;
+    if (isMobile) {
+        const spacebar = document.getElementById('spacebar');
+        if (spacebar && !spacebar.classList.contains('collapsed')) {
+            spacebar.classList.add('collapsed');
+            // อัปเดตสถานะปุ่ม Toggle ให้สอดคล้องกัน (อ้างอิงตาม Logic ใน contentManager.js)
+            document.getElementById('btn-toggle-spacebar')?.classList.add('sidebar-hidden');
+            document.getElementById('btn-command-center-topbar')?.classList.add('sidebar-hidden');
+        }
+    }
 }
 
 // Global Error Handler for Images

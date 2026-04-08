@@ -1,13 +1,15 @@
 import { svgTag, dragHandleSvg, googleTasksIcon, svgEdit, svgTrashRed, svgPencil, svgRestore, svgArchive, svgRepeat } from './icons.js';
 import { getShortDate, getAppSettings, getUnitCharFromThai, getFilterTags } from './storage.js';
 
-export function generateMiniTagsBtn(itemTags, type, index) {
+export function generateMiniTagsBtn(itemTags, type, index, parentIndex = null, spaceId = null) {
   const count = itemTags ? itemTags.length : 0;
   const isMobile = window.innerWidth <= 768;
   // บนมือถือ: ถ้ายังไม่มี Tag ให้เหลือแค่เครื่องหมาย +
   const btnText = count > 0 ? `${svgTag} ${count}` : (isMobile ? '+' : '+ Tag');
   const activeClass = count > 0 ? 'has-tags' : '';
-  return `<button class="btn-add-mini-tag btn-edit-tags ${activeClass}" data-type="${type}" data-index="${index}">${btnText}</button>`;
+  const pIdxAttr = parentIndex !== null ? `data-parent-index="${parentIndex}"` : '';
+  const sIdAttr = spaceId !== null ? `data-space-id="${spaceId}"` : '';
+  return `<button class="btn-add-mini-tag btn-edit-tags ${activeClass}" data-type="${type}" data-index="${index}" ${pIdxAttr} ${sIdAttr}>${btnText}</button>`;
 }
 
 /**
@@ -141,6 +143,7 @@ export function generateTaskHTML(task, index, {
     showActions = false, // New parameter to control visibility of collapsible actions
     isTrash = false, // New parameter for Trash view
     addingSubtaskToIndex = null,
+    nextDueDate = null, // New: Next date for repeating tasks
 } = {}) {
     if (!task) return '';
 
@@ -225,19 +228,23 @@ export function generateTaskHTML(task, index, {
     const cloudIndicator = (task.googleTaskId) ? `<span style="width: 6px; height: 6px; background: #2684fc; border-radius: 50%; display: inline-block; margin-right: 6px; flex-shrink: 0;" title="Synced with Google Tasks"></span>` : '';
     
     const isDateOverdue = task.dueDate && !isCompletedOrDeleted && !isActuallyDeleted && new Date(task.dueDate).setHours(0,0,0,0) < new Date().setHours(0,0,0,0);
-    const dateColor = isDateOverdue ? '#ef4444' : (isSubtask ? 'var(--primary-color)' : 'var(--text-muted)');
     const textStyle = (isCompletedOrDeleted || isActuallyDeleted) 
         ? "flex: 1; word-break: break-word; white-space: normal; line-height: 1.4; color: var(--text-muted); text-decoration: line-through; opacity: 0.7;" 
         : `flex: 1; word-break: break-word; white-space: normal; line-height: 1.4; color: ${task.isProminent ? 'var(--primary-color)' : 'var(--text-main)'}; ${task.isProminent ? 'font-weight: 700;' : ''}`;
 
     // 🟢 ย่อวันที่ให้สั้นลงสำหรับมือถือ
     const formatDateMinimal = (d) => {
-        const m = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-        return `${d.getDate()} ${m[d.getMonth()]}`;
+        const m = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+        const yearBE = d.getFullYear() + 543;
+        return `${String(d.getDate()).padStart(2, '0')} ${m[d.getMonth()]} ${String(yearBE).slice(-2)}`;
     };
 
+    let dateColor = isDateOverdue ? '#ef4444' : (isSubtask ? 'var(--primary-color)' : 'var(--text-muted)');
     let dateDisplay = task.dueDate ? formatDateMinimal(new Date(task.dueDate)) : '';
-    if (task.completed && task.createdAt && task.completedAt) {
+    if (nextDueDate) {
+        dateDisplay = `Next: ${formatDateMinimal(new Date(nextDueDate))}`;
+        dateColor = '#10b981'; // 🟢 Green color for future schedule
+    } else if (task.completed && task.createdAt && task.completedAt) {
         dateDisplay = 'Done';
     }
 
@@ -298,7 +305,7 @@ export function generateTaskHTML(task, index, {
     if (isTrash) {
         const countdown = getTrashCountdownText(task, getAppSettings().autoDeleteDays);
         return `<li class="task-item" data-index="${index}" data-type="task" ${isMasterView ? `data-space-id="${spaceId}"` : ''} style="list-style: none; width: 100%; opacity: 0.7;">
-            <div class="item-main-row" style="display: flex; align-items: center; gap: 6px; padding: 2px 0; width: 100%; min-height: 28px;">
+            <div class="item-main-row" style="display: flex; align-items: center; gap: 2px; padding: 2px 0; width: 100%; min-height: 28px;">
                 <label class="google-task-checkbox">
                     <input type="checkbox" class="${checkboxClass}" ${checkboxDataAttrs} checked>
                     <div class="checkmark-circle">
@@ -308,8 +315,8 @@ export function generateTaskHTML(task, index, {
                 <div style="flex: 1; min-width: 0; display: flex; align-items: center;">
                     <span class="task-actual-text" contenteditable="true" style="${textStyle}">${task.text}</span>
                 </div>
-                <div class="item-action-group" style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-left: auto;">
-                    <span style="color:#ef4444; font-size:11px; font-weight:700; margin-right:8px;">${countdown}</span>
+                <div class="item-action-group" style="flex-shrink: 0; margin-left: auto;">
+                    <span style="color:#ef4444; font-size:11px; font-weight:700; margin-right:4px;">${countdown}</span>
                     <button class="btn-icon restore-task-btn" data-index="${index}" ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="Restore Task">${svgRestore}</button>
                     <button class="btn-icon delete-task-perm-btn" data-index="${index}" ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="Delete Permanently">${svgTrashRed}</button>
                 </div>
@@ -321,27 +328,32 @@ export function generateTaskHTML(task, index, {
     const subtaskSyncBtn = isSubtask ? `<button class="btn-icon subtask-sync-toggle-btn ${task.googleTaskId ? 'active' : ''}" data-parent-index="${parentIndex}" data-sub-index="${index}" ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="Toggle Google Tasks Sync" style="padding: 2px;">${googleTasksIcon}</button>` : '';
     const maintaskSyncBtn = !isSubtask ? `<button class="btn-icon main-task-sync-toggle-btn ${task.googleTaskId ? 'active' : ''}" data-index="${index}" ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="Toggle Google Tasks Sync" style="padding: 2px;">${googleTasksIcon}</button>` : '';
 
-    // Actions that are always visible (tags, prominent button, link button if it has a link)
-    actionButtons += isSubtask ? `
-        ${generateMiniTagsBtn(task.tags, 'subtask', index)}
-    ` : `
-        ${generateMiniTagsBtn(task.tags, 'task', index)}
-        ${hasLink ? linkBtnHTML : ''}
-    `;
+    const hasTags = task.tags && task.tags.length > 0;
+    const tagBtnHTML = isSubtask ? generateMiniTagsBtn(task.tags, 'subtask', index, parentIndex, spaceId) : generateMiniTagsBtn(task.tags, 'task', index, null, spaceId);
+
+    // Actions that are always visible: Tags only if they exist, link button if it has a link
+    if (hasTags) {
+        actionButtons += tagBtnHTML;
+    }
+    if (!isSubtask && hasLink) {
+        actionButtons += linkBtnHTML;
+    }
 
     // Content of the collapsible actions (add subtask, edit, delete, link button if no link)
     let collapsibleActionsContent = ` 
+            ${!hasTags ? tagBtnHTML : ''}
             ${(!hasLink || isSubtask) ? linkBtnHTML : ''}
-            ${isSubtask ? `<button class="btn-icon convert-to-main-btn" data-parent-index="${parentIndex}" data-sub-index="${index}" title="Break into Main Task">${svgBreakLink}</button>` : `<button class="btn-icon add-subtask-btn" data-index="${index}" title="Add Sub-task" style="margin: 0; padding: 2px;"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>`}
+            ${isSubtask ? `<button class="btn-icon convert-to-main-btn" data-parent-index="${parentIndex}" data-sub-index="${index}" title="Break into Main Task">${svgBreakLink}</button>` : `<button class="btn-icon add-subtask-btn" data-index="${index}" title="Add Sub-task" style="margin: 0;"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>`}
             ${!isCompletedOrDeleted && !isActuallyDeleted ? `<button class="btn-icon ${isSubtask ? 'archive-subtask-btn' : 'archive-task-btn'}" data-index="${index}" ${isSubtask ? `data-parent-index="${parentIndex}"` : ''} ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="Archive (Complete)">${svgArchive}</button>` : ''}
             ${isSubtask ? subtaskSyncBtn : maintaskSyncBtn}
             ${isSubtask ? `
                 <button class="btn-icon edit-subtask-btn" data-parent-index="${parentIndex}" data-sub-index="${index}" data-id="${task.id}" title="Edit Sub-task">${svgEdit}</button>
                 <button class="btn-icon delete-subtask-btn" data-parent-index="${parentIndex}" data-sub-index="${index}" data-id="${task.id}" title="Delete Sub-task">${svgTrashRed}</button>
             ` : `
-                <button class="btn-icon ${editBtnClass}" data-index="${index}" ${isMasterView ? `data-space-id="${spaceId}"` : ''} style="margin: 0; padding: 2px;">${svgEdit}</button>
-                <button class="btn-icon delete-task-btn" data-index="${index}" ${isMasterView ? `data-space-id="${spaceId}"` : ''} style="margin: 0; padding: 2px;">${svgTrashRed}</button>
+                <button class="btn-icon ${editBtnClass}" data-index="${index}" ${isMasterView ? `data-space-id="${spaceId}"` : ''} style="margin: 0;">${svgEdit}</button>
+                <button class="btn-icon delete-task-btn" data-index="${index}" ${isMasterView ? `data-space-id="${spaceId}"` : ''} style="margin: 0;">${svgTrashRed}</button>
             `}
+            <button class="btn-icon close-actions-btn" title="Close" style="margin-left: 4px; border-left: 1px solid var(--border-color); padding-left: 6px; color: var(--text-muted);">✕</button>
     `;
 
     // 🟢 NEW: Override collapsibleActionsContent for Deleted Tasks (Trash View)
@@ -369,8 +381,8 @@ export function generateTaskHTML(task, index, {
 
     const itemType = isSubtask ? 'subtask' : 'task';
     return ` 
-    <li class="${isSubtask ? 'subtask-item' : 'task-item'} ${draggableClass} ${prominentClass} ${focusActiveClass} ${templateClass}" data-index="${index}" data-type="${itemType}" ${isMasterView ? `data-space-id="${spaceId}"` : ''} style="list-style: none; width: 100%; margin-bottom: 0px; border-bottom: 1px solid transparent; opacity: ${isActuallyDeleted ? '0.7' : '1'};">
-        <div class="item-main-row" style="display: flex; align-items: center; gap: 6px; padding: 2px 0; width: 100%; min-height: 28px;">
+    <li class="${isSubtask ? 'subtask-item' : 'task-item'} ${draggableClass} ${prominentClass} ${focusActiveClass} ${templateClass}" data-index="${index}" data-type="${itemType}" data-space-id="${spaceId || ''}" style="list-style: none; width: 100%; margin-bottom: 0px; border-bottom: 1px solid transparent; opacity: ${isActuallyDeleted ? '0.7' : '1'};">
+        <div class="item-main-row" style="display: flex; align-items: center; gap: 2px; padding: 2px 0; width: 100%; min-height: 28px;">
             ${handleHTML}
             <div class="focus-trigger-container" style="display: flex; align-items: center; gap: 2px; ${(isProminentHidden && !task.isProminent) ? 'display: none;' : ''}">
                 <button class="btn-icon btn-prominent-task ${task.isProminent ? 'active' : ''}" data-index="${index}" ${isSubtask ? `data-parent-index="${parentIndex}"` : ''} ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="Mark as Next Up" style="margin: 0; padding: 2px; flex-shrink: 0; color: ${task.isProminent ? 'var(--primary-color)' : 'var(--text-muted)'}; display: ${isProminentHidden ? 'none' : 'inline-flex'};" data-focus-trigger="true">
@@ -393,8 +405,8 @@ export function generateTaskHTML(task, index, {
                 </div>
             </div>
 
-            <div class="item-action-group" style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-left: auto;">
-                <span class="task-date" style="font-size: 11px; opacity: ${isActuallyDeleted ? '1' : '0.6'}; white-space: nowrap; color: ${isActuallyDeleted ? '#ef4444' : dateColor};">${dateDisplay}</span>
+            <div class="item-action-group" style="flex-shrink: 0; margin-left: auto;">
+                <span class="task-date" style="font-size: 11px; opacity: ${isActuallyDeleted ? '1' : '0.8'}; white-space: nowrap; color: ${isActuallyDeleted ? '#ef4444' : dateColor}; font-weight: ${nextDueDate ? '700' : 'normal'};">${dateDisplay}</span>
                 ${subtaskSpecificActionsHTML}${actionButtons}
             </div>
         </div>
@@ -511,7 +523,7 @@ export function attachTaskInlineEditListeners(container, getSpaceFn, callbacks =
             const space = getSpaceFn(li);
             if (!space) return;
 
-            let newText = e.target.innerText.trim();
+            let newText = e.target.textContent.trim();
             let taskObj = null;
 
             if (type === 'task') {
@@ -633,9 +645,12 @@ export function applySyntaxHighlighting(el) {
     const highlighted = escaped
         .replace(/(@รางวัล([\d.]+)(บาท|นาที|อัน)_([^\s]+))/gi, (match, p1, p2, p3, p4) => {
             const unitChar = getUnitCharFromThai(p3);
-            return `<span class="hl-reward" data-type="${unitChar}">${p1}</span>`;
+            const shortUnit = p3 === 'บาท' ? 'บ.' : (p3 === 'นาที' ? 'น.' : 'ชิ้น');
+            return `<span class="hl-reward" data-type="${unitChar}"><span class="sf-reward-syntax">@รางวัล</span>${p2}<span class="sf-reward-unit" data-short="${shortUnit}">${p3}</span><span class="sf-reward-cat">_${p4}</span></span>`;
         })
-        .replace(/(@รางวัล_([^\s]+))/gi, '<span class="hl-reward" data-type="big">$1</span>')
+        .replace(/(@รางวัล_([^\s]+))/gi, (match, p1, p2) => {
+            return `<span class="hl-reward" data-type="big"><span class="sf-reward-syntax">@รางวัล_</span>${p2}</span>`;
+        })
         .replace(/(^|\s)(#[^\s#]+)/g, '$1<span class="hl-tag">$2</span>');
 
     if (el.innerHTML !== highlighted) {
@@ -680,7 +695,7 @@ export function applySyntaxHighlighting(el) {
 export function handleTagAutocomplete(e, getTagsFn) {
     const input = e.target;
     const isContentEditable = input.isContentEditable;
-    const value = isContentEditable ? input.innerText : input.value;
+    const value = isContentEditable ? input.textContent : input.value;
     
     // 🟢 เก็บฟังก์ชันดึง Tag ไว้สำหรับใช้ในกรณี Chained Autocomplete (บาท_ -> Category)
     window._lastAutocompleteGetTagsFn = getTagsFn;
@@ -780,7 +795,7 @@ function insertAutocompleteText(input, before, selected, after, isContentEditabl
     const newPos = (before + selected + suffix).length;
 
     if (isContentEditable) {
-        input.innerText = newVal;
+        input.textContent = newVal;
         input.focus();
         const range = document.createRange();
         const sel = window.getSelection();

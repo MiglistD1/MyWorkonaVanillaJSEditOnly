@@ -283,6 +283,23 @@ function playTrashSound() {
     } catch (e) {}
 }
 
+/** 📅 Helper: จัดรูปแบบวันที่ภาษาไทยสำหรับ Input Display */
+function updateDateInputLabel(inputEl) {
+    const label = inputEl.parentElement.querySelector('.date-display-label');
+    if (!label) return;
+    
+    if (inputEl.value) {
+        const d = new Date(inputEl.value);
+        const m = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+        const yearBE = d.getFullYear() + 543;
+        label.innerText = `${String(d.getDate()).padStart(2, '0')} ${m[d.getMonth()]} ${String(yearBE).slice(-2)}`;
+        label.style.color = 'var(--primary-color)';
+    } else {
+        label.innerText = inputEl.placeholder || 'Set Date';
+        label.style.color = 'var(--text-muted)';
+    }
+}
+
 export function initTodoManager(callbacks) {
     fetchGoogleAPI = callbacks.fetchGoogleAPI;
     getGoogleAuthToken = callbacks.getGoogleAuthToken;
@@ -303,6 +320,22 @@ export function initTodoManager(callbacks) {
             }
         });
     }
+
+    // 📅 ผูกเหตุการณ์อัปเดตวันที่ไทยให้กับทุกช่อง Input วันที่
+    const dateInputs = ['new-task-date', 'edit-task-date-input', 'repeat-modal-due-date', 'repeat-end-date'];
+    dateInputs.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('change', () => updateDateInputLabel(el));
+            // 🟢 บังคับให้ Picker แสดงผลเมื่อคลิกที่กรอบ หรือไอคอน
+            const wrapper = el.closest('.date-wrapper');
+            if (wrapper) {
+                wrapper.addEventListener('click', () => {
+                    try { el.showPicker(); } catch (err) { el.focus(); el.click(); }
+                });
+            }
+        }
+    });
 
     // 🟢 Inject CSS สำหรับ Task Entry Animation
     const style = document.createElement('style');
@@ -377,6 +410,24 @@ export function initTodoManager(callbacks) {
         }
 
         const taskInputBar = document.getElementById('new-task-input').closest('.task-input-bar'); // 🟢 หา Element โดยใช้ ID ที่แน่นอนกว่า
+
+        // 🟢 เพิ่มปุ่มปิดและหัวข้อให้กับ Popup (Bottom Sheet) เพื่อความสะดวกในการใช้งาน
+        if (taskInputBar && !taskInputBar.querySelector('.sf-input-bar-header')) {
+            const header = document.createElement('div');
+            header.className = 'sf-input-bar-header';
+            header.innerHTML = `
+                <span style="font-size: 10px; font-weight: 900; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; display:flex; align-items:center; gap:4px;">✨ New Task</span>
+                <button class="btn-icon sf-btn-close-input" style="padding: 4px 8px; opacity: 0.8; font-size: 18px; color: var(--text-main); font-weight: bold;">✕</button>
+            `;
+            taskInputBar.prepend(header);
+            
+            header.querySelector('.sf-btn-close-input').onclick = (e) => {
+                e.stopPropagation();
+                taskInputBar.classList.remove('is-active');
+                if (fab) fab.classList.remove('is-hidden');
+            };
+        }
+
         // 🟢 สร้าง Mobile FAB Menu
         let fabMenu = document.getElementById('sf-mobile-fab-menu');
         if (!fabMenu) {
@@ -508,6 +559,14 @@ export function initTodoManager(callbacks) {
         document.getElementById('repeat-interval').value = config.interval;
         document.getElementById('repeat-day-of-month').value = config.dayOfMonth || 1;
         
+        // 📅 Sync Date from external input to Modal
+        const mode = repeatModal.dataset.mode;
+        const externalDate = (mode === 'add') 
+            ? document.getElementById('new-task-date').value 
+            : document.getElementById('edit-task-date-input').value;
+        document.getElementById('repeat-modal-due-date').value = externalDate;
+        updateDateInputLabel(document.getElementById('repeat-modal-due-date'));
+
         // Ends On UI
         const endType = config.endType || 'never';
         document.querySelector(`input[name="repeat-end"][value="${endType}"]`).checked = true;
@@ -537,6 +596,24 @@ export function initTodoManager(callbacks) {
     };
 
     document.getElementById('btn-save-repeat-settings').onclick = () => {
+        const mode = repeatModal.dataset.mode;
+        const modalDate = document.getElementById('repeat-modal-due-date').value;
+
+        // 🔴 Validation: บังคับให้ตั้งวันที่หากมีการใช้ Repeat
+        if (repeatEnabled.checked) {
+            if (!modalDate) {
+                alert("⚠️ โปรดตั้งค่า 'กำหนดส่ง' (Due Date) ก่อนเปิดใช้งานการทำซ้ำ (Repeat)\nระบบต้องการวันที่เริ่มต้นเพื่อคำนวณรอบถัดไปครับ");
+                return;
+            }
+        }
+
+        // 📅 Sync Date back to external input
+        if (mode === 'add') {
+            document.getElementById('new-task-date').value = modalDate;
+        } else {
+            document.getElementById('edit-task-date-input').value = modalDate;
+        }
+
         const selectedDays = Array.from(document.querySelectorAll('.repeat-day-pill.active')).map(p => parseInt(p.dataset.day));
         const endType = document.querySelector('input[name="repeat-end"]:checked').value;
         const config = { 
@@ -958,6 +1035,17 @@ export function initTodoManager(callbacks) {
                 collapsibleActions.style.display = isHidden ? 'flex' : 'none';
                 toggleBtn.classList.toggle('expanded');
             }
+        }
+
+        // 🔘 Close Actions Button
+        const closeActionsBtn = e.target.closest('.close-actions-btn');
+        if (closeActionsBtn) {
+            const group = closeActionsBtn.closest('.item-action-group');
+            const menu = group?.querySelector('.collapsible-actions');
+            const toggle = group?.querySelector('.toggle-actions-btn');
+            if (menu) menu.style.display = 'none';
+            if (toggle) toggle.classList.remove('expanded');
+            return;
         }
 
         // 🔘 Toggle Subtask Specific Controls
@@ -1477,10 +1565,11 @@ export function initTodoManager(callbacks) {
             }
 
             // 🔄 Repeating Task Logic: Regenerate task on completion
-            if (isChecked && task.repeatConfig && task.repeatConfig.isRepeating && task.dueDate) {
+            if (isChecked && task.repeatConfig && task.repeatConfig.isRepeating && task.dueDate && !task.wasRegenerated) {
                 const nextDate = calculateNextDate(task.dueDate, task.repeatConfig, task);
                 
                 if (nextDate) {
+                    task.wasRegenerated = true; // 🟢 มาร์คว่าสร้างงานใหม่ไปแล้ว ป้องกันการงอกซ้ำ
                     const clonedTask = JSON.parse(JSON.stringify(task));
                     clonedTask.completed = false;
                     clonedTask.completedAt = null;
@@ -1488,6 +1577,7 @@ export function initTodoManager(callbacks) {
                     clonedTask.deletedAt = null;
                     clonedTask.expiryAt = null;
                     clonedTask.createdAt = Date.now();
+                    clonedTask.wasRegenerated = false; // งานตัวใหม่ต้องพร้อมสำหรับการทำซ้ำรอบถัดไป
                     clonedTask.dueDate = nextDate;
                     clonedTask.occurrenceCount = (task.occurrenceCount || 1) + 1; // 🟢 เพิ่มตัวนับครั้งที่ทำ
                     clonedTask.googleTaskId = null;
@@ -2053,6 +2143,12 @@ async function addTask() {
     const dateInput = document.getElementById('new-task-date');
     let text = input.value.trim();
     if (text !== '') {
+        // 🔴 ป้องกันการเพิ่มงาน Repeat ที่ไม่มีวันที่ (กรณีผู้ใช้ลบวันที่ออกหลังตั้งค่า Repeat)
+        if (currentTaskRepeatConfig.isRepeating && !dateInput.value) {
+            alert("⚠️ งานที่ตั้งค่าทำซ้ำ (Repeat) จำเป็นต้องมีกำหนดส่งครับ");
+            return;
+        }
+
         input.disabled = true; 
         const space = getCurrentSpace();
 
@@ -2096,6 +2192,7 @@ async function addTask() {
         if (space.taskSortOrder && space.taskSortOrder !== 'manual') sortSpaceTasks(space);
         playTaskAddedSound();
         input.value = ''; input.disabled = false; input.placeholder = "Type a task..."; input.focus();
+        dateInput.value = ''; updateDateInputLabel(dateInput);
         saveData(); 
         triggerCloudSave(); // ☁️ ซิงค์ไปที่ Cloud หลังเพิ่มงานใหม่
         onRenderCallback(); 
@@ -2120,6 +2217,7 @@ export function openTaskEditModal(idx, fromCommandCenter = false, subId = null) 
 
     document.getElementById('edit-task-name-input').value = task.text;
     document.getElementById('edit-task-date-input').value = task.dueDate || "";
+    updateDateInputLabel(document.getElementById('edit-task-date-input'));
     editingTaskRepeatConfig = task.repeatConfig || { isRepeating: false, frequency: 'daily', interval: 1 };
     document.getElementById('btn-edit-task-repeat').style.color = editingTaskRepeatConfig.isRepeating ? 'var(--primary-color)' : 'inherit';
     document.getElementById('edit-task-sync-check').checked = task.googleTaskId ? true : false;
@@ -2148,6 +2246,14 @@ async function saveEditedTask() {
     if(newName === "") return;
     
     const btnSave = document.getElementById('btn-save-task-edit');
+
+    // 🔴 ตรวจสอบเงื่อนไขวันที่สำหรับงาน Repeat ขณะแก้ไข
+    if (editingTaskRepeatConfig.isRepeating && !newDate) {
+        alert("⚠️ งานที่ตั้งค่าทำซ้ำ (Repeat) จำเป็นต้องมีกำหนดส่งครับ");
+        btnSave.innerText = "Save"; btnSave.disabled = false;
+        return;
+    }
+
     btnSave.innerText = "Saving..."; btnSave.disabled = true;
     
     const gTitle = `${newName} (S: ${space.name})`;
@@ -2424,31 +2530,71 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
 
         mobileToolsBtn.onclick = (e) => {
                 e.stopPropagation();
-                // 🟢 อัปเดตเนื้อหาเมนูตามสถานะปัจจุบันก่อนแสดงผล
-                menuPopup.innerHTML = `
-                    <button data-action="1">👁️ ${space.showTaskActions ? 'Hide' : 'Show'} Quick Actions</button>
-                    <button data-action="2">🚩 ${space.hideProminentTasks ? 'Show' : 'Hide'} Flags</button>
-                    <div style="height:1px; background:var(--border-color); margin:4px 0; opacity:0.5;"></div>
-                    <button data-action="3">📂 Expand All Subtasks</button>
-                    <button data-action="4">📁 Collapse All Subtasks</button>
-                    <div style="height:1px; background:var(--border-color); margin:4px 0; opacity:0.5;"></div>
-                    <button data-action="5">📑 Templates</button>
-                `;
+                
+                const updateContent = () => {
+                    const settings = getAppSettings();
+                    const showExtra = settings.showExtraTaskSections !== false;
+                    const spaceRef = getCurrentSpace(); // ดึงข้อมูลล่าสุด
+                    
+                    const activeStyle = 'background: rgba(47, 128, 237, 0.15) !important; color: var(--primary-color) !important; border: 1.5px solid var(--primary-color) !important;';
+                    const inactiveStyle = 'background: var(--bg-body) !important; opacity: 0.5; border: 1.5px solid var(--border-color) !important;';
+                    
+                    menuPopup.innerHTML = `
+                        <div class="sf-input-bar-header" style="padding: 4px 4px 12px 4px; border-bottom: 1px solid var(--border-color); margin-bottom: 12px;">
+                            <span style="font-size: 11px; font-weight: 900; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; display:flex; align-items:center; gap:4px;">✨ Todo Tools</span>
+                            <button class="btn-icon sf-btn-close-tools" style="padding: 4px 8px; opacity: 0.8; font-size: 18px; color: var(--text-main); font-weight: bold;">✕</button>
+                        </div>
+                        
+                        <!-- Row 1: Status Toggles (Icons Only) -->
+                        <div class="sf-mobile-toggle-row" style="display: flex; gap: 8px; margin-bottom: 12px;">
+                            <button data-action="1" style="flex:1; justify-content:center; ${spaceRef.showTaskActions ? activeStyle : inactiveStyle}" title="Quick Actions">
+                                <span class="toggle-actions-btn circle-icon ${spaceRef.showTaskActions ? 'expanded' : ''}" style="margin:0; pointer-events:none; border-color: currentColor;"></span>
+                            </button>
+                            <button data-action="2" style="flex:1; justify-content:center; ${!spaceRef.hideProminentTasks ? activeStyle : inactiveStyle}" title="Flags">
+                                <svg class="svg-icon-sm" style="width:18px; height:18px;"><use href="#icon-flag"></use></svg>
+                            </button>
+                            <button data-action="6" style="flex:1; justify-content:center; ${showExtra ? activeStyle : inactiveStyle}" title="Archive/Trash">
+                                <svg class="svg-icon-sm" style="width:18px; height:18px;"><use href="#icon-${showExtra ? 'eye' : 'eye-off'}"></use></svg>
+                            </button>
+                        </div>
+
+                        <!-- Row 2: Subtask Actions -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+                            <button data-action="3" style="font-size: 13px; padding: 12px !important; justify-content: center; background: var(--bg-body) !important; border: 1px solid var(--border-color) !important;"><svg class="svg-icon-sm" style="margin-right:6px;"><use href="#icon-chevron-down"></use></svg> Expand All</button>
+                            <button data-action="4" style="font-size: 13px; padding: 12px !important; justify-content: center; background: var(--bg-body) !important; border: 1px solid var(--border-color) !important;"><svg class="svg-icon-sm" style="margin-right:6px;"><use href="#icon-chevron-up"></use></svg> Collapse</button>
+                        </div>
+
+                        <!-- Row 3: Templates -->
+                        <button data-action="5" style="width: 100%; justify-content: center; padding: 14px !important; background: var(--bg-body) !important; border: 1px solid var(--border-color) !important; font-size: 14px;">
+                            <svg class="svg-icon-sm" style="margin-right:8px;"><use href="#icon-layers"></use></svg> Templates Manager
+                        </button>
+                    `;
+
+                    menuPopup.querySelector('.sf-btn-close-tools').onclick = (ev) => {
+                        ev.stopPropagation();
+                        menuPopup.style.display = 'none';
+                    };
+                };
+
+                updateContent();
                 const isVisible = menuPopup.style.display === 'flex';
                 menuPopup.style.display = isVisible ? 'none' : 'flex';
-            };
 
-            menuPopup.onclick = (e) => {
-                const action = e.target.closest('button')?.dataset.action;
-                if (action === '1') btnToggleActions.click();
-                if (action === '2') btnToggleProminent.click();
-                if (action === '3') btnExpand.click();
-                // 🟢 เพิ่มปุ่ม Templates เข้าไปใน Mobile Menu ด้วย
-                if (action === '5') {
-                    document.getElementById('btn-todo-templates')?.click();
-                }
-                if (action === '4') btnCollapse.click();
-                menuPopup.style.display = 'none';
+                menuPopup.onclick = (me) => {
+                    const btn = me.target.closest('button');
+                    if (!btn || btn.classList.contains('sf-btn-close-tools')) return;
+                    const action = btn.dataset.action;
+                    if (!action) return;
+                    me.stopPropagation();
+                    if (action === '1') btnToggleActions?.click();
+                    if (action === '2') btnToggleProminent?.click();
+                    if (action === '3') btnExpand?.click();
+                    if (action === '4') btnCollapse?.click();
+                    if (action === '5') btnTemplates?.click();
+                    if (action === '6') document.getElementById('btn-toggle-extra-sections')?.click();
+                    // สั่งอัปเดตเนื้อหาใน Popup ทันทีเพื่อให้ไอคอน/ข้อความเปลี่ยนตามสถานะใหม่
+                    setTimeout(updateContent, 50);
+                };
             };
 
         mobileToolsBtn.style.display = 'inline-flex';
@@ -2497,8 +2643,8 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
         // Update task actions toggle button UI
     const toggleTaskActionsBtn = document.getElementById('btn-toggle-task-actions');
     if (toggleTaskActionsBtn) {
-        toggleTaskActionsBtn.style.opacity = space.showTaskActions ? '1' : '0.6';
-        toggleTaskActionsBtn.innerHTML = `<svg class="svg-icon-sm"><use href="#icon-${space.showTaskActions ? 'eye' : 'eye-off'}"></use></svg>`;
+        toggleTaskActionsBtn.style.opacity = '1';
+        toggleTaskActionsBtn.innerHTML = `<span class="toggle-actions-btn circle-icon ${space.showTaskActions ? 'expanded' : ''}" style="margin: 0; pointer-events: none;"></span>`;
     }
 
 
@@ -2607,7 +2753,15 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
         if (!hasMatchTag) return;
         if (currentSearchQuery && !task.text.toLowerCase().includes(currentSearchQuery)) return;
 
-        const liContent = generateTaskHTML(task, index, {
+        // 🛡️ Filter: ซ่อนงานในอนาคต (ที่ยังไม่ถึงกำหนด) ออกจากรายการ To-Do ปกติ
+        const today = new Date().setHours(0,0,0,0);
+        const taskDue = task.dueDate ? new Date(task.dueDate).setHours(0,0,0,0) : null;
+        if (!task.completed && !task.isDeleted && taskDue && taskDue > today && !task.isProminent) return;
+
+        const isRepeatingComplete = task.completed && task.repeatConfig && task.repeatConfig.isRepeating;
+        const nextDate = isRepeatingComplete ? calculateNextDate(task.dueDate, task.repeatConfig, task) : null;
+
+        const liContent = generateTaskHTML(task, index, { //
             showSpaceBadge: false,
             isMasterView: false,
             spaceId: space.id,
@@ -2616,11 +2770,12 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
             showActions: space.showTaskActions, // Pass the new state
             isTrash: task.isDeleted, 
             addingSubtaskToIndex,
-            isMobile
+            isMobile, //
+            nextDueDate: nextDate // 🟢 ส่งวันที่รอบถัดไปให้ UI แสดงผล
         });
         
         // NEW: Check for completed repeating tasks first
-        if (task.completed && task.repeatConfig && task.repeatConfig.isRepeating) {
+        if (isRepeatingComplete) {
             repeatingCount++;
             repeatingHTML += liContent;
         }
@@ -2715,6 +2870,7 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
             disabled: space.isArchived || !isManual,
             handle: '.drag-handle', // ล็อคให้ลากได้เฉพาะที่ไอคอน 6 จุด
             ghostClass: 'sortable-ghost', 
+            onStart: () => { document.body.classList.add('is-sorting-tasks'); window.getSelection().removeAllRanges(); },
             onMove: function (evt) {
                 const draggedIsProminent = evt.dragged.classList.contains('prominent');
                 const relatedIsProminent = evt.related.classList.contains('prominent');
@@ -2725,6 +2881,7 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
                 return draggedIsProminent === relatedIsProminent;
             },
             onEnd: function (evt) { 
+                document.body.classList.remove('is-sorting-tasks');
                 // 1. หาตำแหน่งจริงใน Array จาก attribute ที่เราฝังไว้
                 const oldIdxInArray = parseInt(evt.item.getAttribute('data-index'));
                 const movedItem = space.tasks.splice(oldIdxInArray, 1)[0];
@@ -2753,15 +2910,15 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
             },
             // เมื่อลากจาก Sub-task กลับมาเป็นงานหลัก
             onAdd: function (evt) {
+                document.body.classList.remove('is-sorting-tasks');
                 const space = getCurrentSpace();
                 const fromSubList = evt.from;
                 const oldParentIdx = parseInt(fromSubList.getAttribute('data-parent-index'));
-                const oldSubIdx = evt.oldIndex;
-                const newMainIdx = evt.newIndex;
+                const actualOldSubIdx = parseInt(evt.item.getAttribute('data-index'));
 
                 // 1. ดึงข้อมูลออกจาก Sub-tasks เดิม
                 if (space.tasks[oldParentIdx] && space.tasks[oldParentIdx].subtasks) {
-                    const movedSubtask = space.tasks[oldParentIdx].subtasks.splice(oldSubIdx, 1)[0];
+                    const movedSubtask = space.tasks[oldParentIdx].subtasks.splice(actualOldSubIdx, 1)[0];
                     
                     // 2. แปลงโครงสร้างให้เป็น Main Task โดยรักษา Metadata ทั้งหมดไว้
                     const newMainTask = { ...movedSubtask };
@@ -2769,7 +2926,13 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
                     if (!newMainTask.createdAt) newMainTask.createdAt = Date.now();
 
                     // 3. แทรกเข้าไปในรายการหลัก
-                    space.tasks.splice(newMainIdx, 0, newMainTask);
+                    const nextEl = evt.item.nextElementSibling;
+                    if (nextEl && nextEl.hasAttribute('data-index')) {
+                        const nextIdx = parseInt(nextEl.getAttribute('data-index'));
+                        space.tasks.splice(nextIdx, 0, newMainTask);
+                    } else {
+                        space.tasks.push(newMainTask);
+                    }
                     
                     saveData();
                     triggerCloudSave(); // ☁️ ซิงค์ไปที่ Cloud
@@ -2807,27 +2970,37 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
             delayOnTouchOnly: true,
             draggable: ".subtask-item:not(.subtask-add-row)",
             ghostClass: 'sortable-ghost',
-            onUpdate: function (evt) { // ใช้ onUpdate สำหรับการสลับที่ภายในตัวเอง
+            onStart: () => { document.body.classList.add('is-sorting-tasks'); window.getSelection().removeAllRanges(); },
+            onEnd: function (evt) { 
+                document.body.classList.remove('is-sorting-tasks');
+                if (evt.from !== evt.to) return; 
                 const space = getCurrentSpace();
                 if (!space.tasks[pIdx] || !space.tasks[pIdx].subtasks) return;
 
                 const subtasks = space.tasks[pIdx].subtasks;
-                const movedItem = subtasks.splice(evt.oldIndex, 1)[0];
-                subtasks.splice(evt.newIndex, 0, movedItem);
+                const actualOldIdx = parseInt(evt.item.getAttribute('data-index'));
+                const movedItem = subtasks.splice(actualOldIdx, 1)[0];
+
+                const nextEl = evt.item.nextElementSibling;
+                if (nextEl && nextEl.hasAttribute('data-index')) {
+                    let nextIdx = parseInt(nextEl.getAttribute('data-index'));
+                    if (nextIdx > actualOldIdx) nextIdx--;
+                    subtasks.splice(nextIdx, 0, movedItem);
+                } else {
+                    subtasks.push(movedItem);
+                }
 
                 saveData();
-                // Re-render เฉพาะส่วนอาจจะยากในโครงสร้างปัจจุบัน 
-                // จึงขอใช้ onRenderCallback() เพื่อความแม่นยำของลำดับ index
                 onRenderCallback();
             },
             // เมื่อลากจาก Main Task เข้ามาเป็น Sub-task
             onAdd: function (evt) {
+                document.body.classList.remove('is-sorting-tasks');
                 const space = getCurrentSpace();
-                const oldMainIdx = parseInt(evt.item.getAttribute('data-index'));
-                const newSubIdx = evt.newIndex;
+                const actualOldMainIdx = parseInt(evt.item.getAttribute('data-index'));
 
                 // 1. ดึงข้อมูลจาก Main Tasks ออก
-                const movedTask = space.tasks.splice(oldMainIdx, 1)[0];
+                const movedTask = space.tasks.splice(actualOldMainIdx, 1)[0];
 
                 // 2. เตรียมข้อมูลงานย่อย โดยรักษา Metadata ทั้งหมด (รวมถึง googleTaskId)
                 const newSubtask = { ...movedTask };
@@ -2835,7 +3008,14 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
 
                 // 3. ใส่เข้าไปในกลุ่ม Sub-tasks ของตัวเป้าหมาย
                 if (!space.tasks[pIdx].subtasks) space.tasks[pIdx].subtasks = [];
-                space.tasks[pIdx].subtasks.splice(newSubIdx, 0, newSubtask);
+                const subtasks = space.tasks[pIdx].subtasks;
+                const nextEl = evt.item.nextElementSibling;
+                if (nextEl && nextEl.hasAttribute('data-index')) {
+                    const nextIdx = parseInt(nextEl.getAttribute('data-index'));
+                    subtasks.splice(nextIdx, 0, newSubtask);
+                } else {
+                    subtasks.push(newSubtask);
+                }
 
                 saveData();
                 onRenderCallback();

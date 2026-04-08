@@ -42,7 +42,7 @@ export function renderMainContent() {
       if (fBar) fBar.style.display = 'none';
       if (toggleToolsBtn) toggleToolsBtn.style.display = 'none';
       if (defaultContainer) {
-          defaultContainer.style.display = 'grid'; // เปลี่ยนจาก flex เป็น grid
+          defaultContainer.style.setProperty('display', isMobile ? 'flex' : 'grid', 'important');
           defaultContainer.className = 'dashboard-grid'; // CSS จะคุมเรื่อง scroll เอง
       }
       document.getElementById('current-space-title').innerText = "Command Center";
@@ -55,7 +55,7 @@ export function renderMainContent() {
   // Show normal space content
   if (mainGrid) mainGrid.style.display = 'grid';
   if (tagBar) tagBar.style.display = 'flex';
-  if (defaultContainer) defaultContainer.style.display = 'none';
+  if (defaultContainer) defaultContainer.style.setProperty('display', 'none', 'important');
   if (toggleToolsBtn) toggleToolsBtn.style.display = 'inline-flex';
 
   // 🟢 Pure JS Approach: จัดการ Layout และซ่อน Container ผ่าน DOM Property

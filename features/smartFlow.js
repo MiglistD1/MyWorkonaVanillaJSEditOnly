@@ -1237,7 +1237,7 @@ function attachFlowEvents(listEl) {
             const id = el.dataset.id;
             const item = flowItems.find(fi => fi.id === id);
             if (item) {
-                const newText = el.innerText.trim();
+                const newText = el.textContent.trim();
                 if (el.classList.contains('smart-flow-title')) {
                     if (newText) item.title = newText;
                 } else {
@@ -1420,7 +1420,9 @@ function initSortable() {
     Sortable.create(el, {
         handle: '.drag-handle',
         animation: 150,
+        onStart: () => { document.body.classList.add('is-sorting-tasks'); window.getSelection().removeAllRanges(); },
         onEnd: (evt) => {
+            document.body.classList.remove('is-sorting-tasks');
             const movedItem = flowItems.splice(evt.oldIndex, 1)[0];
             flowItems.splice(evt.newIndex, 0, movedItem);
             saveFlow().then(renderFlowList);

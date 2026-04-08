@@ -2,7 +2,7 @@ import { getSpaces, getAppSettings, saveData, getFilterTags } from '../core/stor
 import { getGoogleStatus, fetchGoogleLists } from './googleTasks.js';
 import { updateKeepTagButtonState, openKeepWithTag } from './googleKeep.js';
 import { openGoogleTasks } from './googleTasksLauncher.js';
-import { renderMasterTodoList, renderMasterHeaderControls } from './masterTodoList.js';
+import { renderMasterTodoList, renderMasterHeaderControls, masterTodoListState as commandCenterState } from './masterTodoList.js';
 import { renderSmartFlow, initSmartFlow, flowState, showFocusPopup, formatFocusTime } from './smartFlow.js';
 import { toggleDashboardQuickNote, renderDashboardQuickNote } from './dashboardQuickNote.js';
 import Sortable from '../sortable.esm.js';
@@ -194,6 +194,7 @@ export async function renderDefaultDashboard() {
     
     // Attached to window for masterTodoList.js callbacks
     window.renderDefaultDashboard = renderDefaultDashboard;
+    initMasterEvents(); // 🟢 สั่งรัน Event Listeners หลังจากวาดหน้าจอเสร็จ
 }
 
 /**
@@ -221,7 +222,6 @@ function renderGoogleIntegrations() {
 }
 
 function initMasterEvents() {
-    // 1. Add Task Logic
     const addBtn = document.getElementById('btn-master-add-task');
     const taskInput = document.getElementById('master-task-input');
     const spaceSelect = document.getElementById('master-space-selector');
@@ -348,7 +348,6 @@ function initMasterEvents() {
                 }, 50);
             }
         } else if (e.key === 'Escape') {
-            addingSubtaskToIndex = null;
             commandCenterState.addingSubtaskToIndex = null;
             commandCenterState.addingSubtaskToSpace = null;
             renderDefaultDashboard();
@@ -672,7 +671,6 @@ function initMasterEvents() {
 
             // ตั้งค่า Space ID ชั่วคราวเพื่อให้ Modal ดึงข้อมูลป้ายกำกับของ Space นั้นๆ มาแสดง
             if (
-                target.closest('.btn-edit-tags') || 
                 target.closest('.edit-task-btn') || 
                 target.closest('.delete-task-btn') ||
                 target.closest('.edit-subtask-btn') ||
@@ -682,9 +680,7 @@ function initMasterEvents() {
                 window._isModalOpenedFromCommandCenter = true; // Set flag for modals
             }
 
-            if (target.closest('.btn-edit-tags')) {
-                handleMiniTagClick(target.closest('.btn-edit-tags'), renderDefaultDashboard); // onRender is not directly used by modal save, but for prompt fallback
-            } else if (target.closest('.edit-subtask-btn')) {
+            if (target.closest('.edit-subtask-btn')) {
                 const pIdx = parseInt(target.closest('.edit-subtask-btn').getAttribute('data-parent-index'));
                 const sId = parseInt(target.closest('.edit-subtask-btn').getAttribute('data-id'));
                 openTaskEditModal(pIdx, true, sId);
@@ -702,49 +698,52 @@ function initMasterEvents() {
                 } else { setCurrentSpaceId(0); }
             }
         });
-    }
 
-    // 3. Space Filter Pills
-    document.querySelectorAll('.space-pill').forEach(pill => {
-        if (pill.id === 'btn-master-filter-all') return; // ข้ามป้าย All เพราะมี Logic แยก
-        pill.onclick = (e) => {
-            e.stopPropagation();
-            const sid = parseInt(pill.dataset.spaceId);
-            
-            if (commandCenterState.isSingleSelectMode) {
-                const isVisible = !commandCenterState.activeSpaceFilters.has(sid);
-                const allSpaces = getSpaces().filter(s => !s.isArchived);
-                const visibleCount = allSpaces.length - commandCenterState.activeSpaceFilters.size;
+        // 3. Space Filter Pills
+        document.querySelectorAll('.space-pill').forEach(pill => {
+            if (pill.id === 'btn-master-filter-all') return; // ข้ามป้าย All เพราะมี Logic แยก
+            pill.onclick = (e) => {
+                e.stopPropagation();
+                const sid = parseInt(pill.dataset.spaceId);
+                
+                if (commandCenterState.isSingleSelectMode) {
+                    const isVisible = !commandCenterState.activeSpaceFilters.has(sid);
+                    const allSpaces = getSpaces().filter(s => !s.isArchived);
+                    const visibleCount = allSpaces.length - commandCenterState.activeSpaceFilters.size;
 
-                if (isVisible && visibleCount === 1) {
-                    // ถ้าเหลือตัวเดียวแล้วกดซ้ำ ให้กลับไปแสดงทั้งหมด (All)
-                    commandCenterState.activeSpaceFilters.clear();
+                    if (isVisible && visibleCount === 1) {
+                        // ถ้าเหลือตัวเดียวแล้วกดซ้ำ ให้กลับไปแสดงทั้งหมด (All)
+                        commandCenterState.activeSpaceFilters.clear();
+                    } else {
+                        // เลือกแสดงแค่ตัวนี้ตัวเดียว (ซ่อนตัวอื่นทั้งหมด)
+                        commandCenterState.activeSpaceFilters = new Set(allSpaces.map(s => s.id).filter(id => id !== sid));
+                    }
                 } else {
-                    // เลือกแสดงแค่ตัวนี้ตัวเดียว (ซ่อนตัวอื่นทั้งหมด)
-                    commandCenterState.activeSpaceFilters = new Set(allSpaces.map(s => s.id).filter(id => id !== sid));
+                    // โหมด Multi (ปกติ)
+                    if (commandCenterState.activeSpaceFilters.has(sid)) {
+                        commandCenterState.activeSpaceFilters.delete(sid);
+                    } else {
+                        commandCenterState.activeSpaceFilters.add(sid);
+                    }
                 }
-            } else {
-                // โหมด Multi (ปกติ)
-                if (commandCenterState.activeSpaceFilters.has(sid)) {
-                    commandCenterState.activeSpaceFilters.delete(sid);
-                } else {
-                    commandCenterState.activeSpaceFilters.add(sid);
-                }
-            }
-            renderDefaultDashboard();
-        };
-    });
+                renderDefaultDashboard();
+            };
+        });
 
-        // 4. Cross-Space Drag and Drop
-        const initNestedSortable = (el) => {
+        // 🟢 4. Cross-Space Drag and Drop overhaul for precision
+        const initListSortable = (el) => {
             Sortable.create(el, {
                 group: 'nested-tasks',
                 animation: 150,
                 handle: '.drag-handle',
                 ghostClass: 'sortable-ghost',
+                onStart: () => { document.body.classList.add('is-sorting-tasks'); window.getSelection().removeAllRanges(); },
                 onEnd: (evt) => {
-                    const { from, to, item, oldIndex, newIndex } = evt;
-                    if (from === to && oldIndex === newIndex) return;
+                    document.body.classList.remove('is-sorting-tasks');
+                    const { from, to, item } = evt;
+                    if (from === to && evt.oldIndex === evt.newIndex) return;
+
+                    const arrayIdx = parseInt(item.getAttribute('data-index'));
 
                     const fromIsSub = from.classList.contains('subtask-list');
                     const toIsSub = to.classList.contains('subtask-list');
@@ -762,37 +761,33 @@ function initMasterEvents() {
                     let movedTask;
                     if (fromIsSub) {
                         const pIdx = parseInt(from.dataset.parentIndex);
-                        movedTask = fromSpace.tasks[pIdx].subtasks.splice(oldIndex, 1)[0];
+                        movedTask = fromSpace.tasks[pIdx].subtasks.splice(arrayIdx, 1)[0];
                     } else {
-                        const actualIdx = parseInt(item.dataset.index);
-                        movedTask = fromSpace.tasks.splice(actualIdx, 1)[0];
+                        movedTask = fromSpace.tasks.splice(arrayIdx, 1)[0];
                     }
 
                     // 2. แทรกข้อมูลลงในปลายทาง (Target)
+                    const targetArray = toIsSub ? toSpace.tasks[parseInt(to.dataset.parentIndex)].subtasks : toSpace.tasks;
+                    const nextEl = item.nextElementSibling;
+                    
+                    let targetIdx;
+                    if (nextEl && nextEl.hasAttribute('data-index')) {
+                        targetIdx = parseInt(nextEl.getAttribute('data-index'));
+                        if (from === to && targetIdx > arrayIdx) targetIdx--;
+                    } else {
+                        targetIdx = toIsSub ? targetArray.length : targetArray.findIndex(t => t.completed);
+                        if (targetIdx === -1) targetIdx = targetArray.length;
+                    }
+
                     if (toIsSub) {
-                        const pIdx = parseInt(to.dataset.parentIndex);
-                        if (!toSpace.tasks[pIdx].subtasks) toSpace.tasks[pIdx].subtasks = [];
-                        
-                        const subtaskData = {
+                        targetArray.splice(targetIdx, 0, {
                             id: movedTask.id || Date.now(),
                             text: movedTask.text,
-                            completed: movedTask.completed
-                        };
-                        toSpace.tasks[pIdx].subtasks.splice(newIndex, 0, subtaskData);
+                            completed: movedTask.completed,
+                            tags: movedTask.tags || []
+                        });
                     } else {
-                        const nextEl = item.nextElementSibling;
-                        let insertIdx;
-                        if (nextEl && nextEl.dataset.index) {
-                            insertIdx = parseInt(nextEl.dataset.index);
-                            if (fromSpaceId === toSpaceId && !fromIsSub && insertIdx > parseInt(item.dataset.index)) {
-                                insertIdx--;
-                            }
-                        } else {
-                            insertIdx = toSpace.tasks.findIndex(t => t.completed);
-                            if (insertIdx === -1) insertIdx = toSpace.tasks.length;
-                        }
-
-                        toSpace.tasks.splice(insertIdx, 0, {
+                        targetArray.splice(targetIdx, 0, {
                             ...movedTask,
                             subtasks: movedTask.subtasks || [],
                             createdAt: movedTask.createdAt || Date.now()
@@ -805,6 +800,7 @@ function initMasterEvents() {
             });
         };
 
-        document.querySelectorAll('.master-group-list').forEach(initNestedSortable);
-        document.querySelectorAll('.subtask-list').forEach(initNestedSortable);
-    }
+        document.querySelectorAll('.master-group-list').forEach(initListSortable);
+        document.querySelectorAll('.subtask-list').forEach(initListSortable);
+    } // 🟢 ปิด if (groupContainer)
+} // 🟢 ปิดฟังก์ชัน initMasterEvents

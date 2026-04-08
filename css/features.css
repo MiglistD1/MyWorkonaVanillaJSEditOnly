@@ -73,9 +73,9 @@
 .subtask-list {
     list-style: none;
     padding: 0;
-    margin: 0px 0 8px 64px;
+    margin: 0px -4px 8px 10px; /* 🟢 ร้นระยะย่อหน้าให้งานย่อยขยับเข้ามาชิดซ้ายมากขึ้น */
     border-left: 1px solid var(--border-color);
-    padding-left: 16px;
+    padding-left: 12px; /* 🟢 ลดช่องไฟหลังเส้นขอบ เพื่อให้ไอคอนงานย่อยไม่ลอยห่างเกินไป */
     min-height: 8px;
 }
 .subtask-item { display: flex; align-items: center; gap: 6px; padding: 3px 0; transition: opacity 0.2s; cursor: default; }
@@ -112,24 +112,58 @@
 .convert-to-main-btn:hover { color: var(--primary-color); }
 .subtask-item.sortable-ghost { opacity: 0.3; background: var(--hover-bg); }
 
-.task-actual-text { outline: none; padding: 2px 4px; border-radius: 4px; transition: background 0.2s; }
-.task-actual-text:focus { background: var(--hover-bg); box-shadow: inset 0 0 0 1px var(--border-color); }
+.task-item, .subtask-item {
+    box-sizing: border-box !important;
+    transition: all 0.2s ease;
+    padding-right: 4px !important; /* 🟢 ลดระยะขอบขวาลงให้กระชับขึ้น */
+}
+
+/* 🟢 ป้องกันการคลุมดำข้อความขณะลากผ่าน */
+body.is-sorting-tasks .task-actual-text,
+body.is-sorting-tasks .smart-flow-title,
+body.is-sorting-tasks .smart-flow-desc {
+    user-select: none !important;
+    -webkit-user-select: none !important;
+}
+
+/* 🟢 รีดขนาดบล๊อคปุ่มให้เท่าตัวไอคอนตามคำสั่ง (ลดพื้นที่ว่างที่มองไม่เห็น) */
+.task-item .btn-icon, .subtask-item .btn-icon { padding: 1px !important; }
+.task-item .btn-add-mini-tag, .subtask-item .btn-add-mini-tag { padding: 2px 6px !important; }
+
+.task-actual-text { 
+    outline: none; padding: 2px 4px; border-radius: 4px; transition: background 0.2s;
+    white-space: normal; word-break: break-word; display: block;
+}
+.task-actual-text:focus { 
+    background: var(--hover-bg); box-shadow: inset 0 0 0 1px var(--border-color);
+}
+
+.item-action-group { 
+    position: relative; 
+    display: flex; 
+    align-items: center; 
+    gap: 6px; /* 🟢 เพิ่มช่องไฟเล็กน้อยระหว่าง วันที่ แท็ก และปุ่ม More actions ให้ดูโปร่งขึ้น */
+    justify-content: flex-end; /* บังคับให้ปุ่มชิดขวาเสมอ */
+}
 
 .toggle-actions-btn.circle-icon {
-    display: inline-flex;
+    display: block; /* เปลี่ยนเป็น block เพื่อให้คุมขนาดง่ายขึ้น */
     align-items: center;
     justify-content: center;
-    width: 10px;
-    height: 10px;
-    border: 2.5px solid var(--text-muted);
+    width: 12px; /* 🟢 ปรับขนาดให้ใหญ่ขึ้นเล็กน้อยเพื่อความกลมที่คงที่ */
+    height: 12px;
+    min-width: 12px;
+    min-height: 12px;
+    border: 2px solid var(--text-muted); /* ลดความหนาลงเล็กน้อยเพื่อให้ดูคมชัดขึ้น */
     border-radius: 50%;
     background: transparent;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     user-select: none;
     cursor: pointer;
     flex-shrink: 0;
-    margin: 0 5px;
+    margin: 0; /* 🟢 ใช้ gap ของกลุ่มเป็นตัวกำหนดระยะห่างแทนเพื่อความสม่ำเสมอ */
     box-sizing: border-box;
+    padding: 0;
 }
 .toggle-actions-btn.circle-icon.expanded {
     border-color: #ff0000 !important;
@@ -137,7 +171,26 @@
     transform: scale(1.2);
     box-shadow: 0 0 8px rgba(255, 0, 0, 0.2);
 }
-.collapsible-actions { transition: opacity 0.3s ease; }
+
+.collapsible-actions { 
+    display: none;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: absolute;
+    right: 35px; /* แสดงผลทางด้านซ้ายของปุ่ม More Actions */
+    top: 50%;
+    transform: translateY(-50%);
+    white-space: nowrap; /* ป้องกันปุ่มข้างในเมนูตกบรรทัด */
+    background: color-mix(in srgb, var(--bg-card), transparent 5%);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    padding: 2px 10px;
+    border-radius: 20px; /* ทรงแคปซูล */
+    z-index: 100;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+    align-items: center;
+    gap: 6px;
+}
 
 /* 🟢 Animation for Subtask Controls Menu (Smooth slide and fade) */
 @keyframes sf-subtask-slide {
@@ -193,6 +246,52 @@
 
 #btn-toggle-gtask-view, .gtask-switch-group, #sf-google-task-view-controls { display: none !important; }
 
+/* 📅 Custom Date Input Styling */
+.date-wrapper { 
+    position: relative; 
+    display: inline-flex; 
+    align-items: center; 
+    min-width: 125px;
+    height: 32px;
+    background: var(--bg-body);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 0 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.date-wrapper:hover { border-color: var(--primary-color); background: var(--hover-bg); }
+
+.task-date-input { 
+    position: absolute !important;
+    top: 0;
+    left: 0;
+    width: 100% !important;
+    height: 100% !important;
+    opacity: 0 !important;
+    cursor: pointer;
+    z-index: 5;
+}
+
+/* 🚫 ซ่อนองค์ประกอบภายในดั้งเดิมของเบราว์เซอร์ */
+.task-date-input::-webkit-datetime-edit,
+.task-date-input::-webkit-inner-spin-button,
+.task-date-input::-webkit-clear-button {
+    display: none !important;
+}
+
+.date-display-label {
+    position: relative;
+    margin-right: auto;
+    pointer-events: none;
+    z-index: 1;
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
 #btn-toggle-specific-list { position: relative; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); border-radius: 4px; }
 #btn-toggle-specific-list.active {
     color: #ef4444 !important; background: rgba(239, 68, 68, 0.15) !important;
@@ -225,9 +324,26 @@
 
 #archive-list .text-truncate span.task-text { color: var(--text-muted); text-decoration: line-through; }
 
-.task-item.prominent { background-color: rgba(47, 128, 237, 0.1) !important; border: 1px solid var(--primary-color) !important; }
+.task-date {
+    min-width: 0; /* 🟢 เลิกจองพื้นที่ เพื่อให้ปุ่มขยับเข้ามาชิดข้อความที่สุด */
+    text-align: right;
+    display: inline-block;
+}
+
+.task-item.prominent { 
+    background-color: rgba(47, 128, 237, 0.1) !important; 
+    border: 1.5px solid var(--primary-color) !important; 
+    padding: 4px 12px !important;
+    border-radius: 8px !important;
+}
 .task-item.prominent .task-actual-text { font-weight: 700; color: var(--primary-color); }
-.subtask-item.prominent { background-color: rgba(255, 165, 0, 0.15) !important; border: 2px solid orange !important; }
+
+.subtask-item.prominent { 
+    background-color: rgba(255, 165, 0, 0.15) !important; 
+    border: 1.5px solid orange !important; 
+    padding: 4px 12px !important;
+    border-radius: 8px !important;
+}
 .subtask-item.prominent .task-actual-text { font-weight: 700; color: orange !important; }
 
 .google-task-checkbox { display: inline-flex; align-items: center; cursor: pointer; position: relative; margin-right: 0; flex-shrink: 0; overflow: visible; }
@@ -346,6 +462,31 @@
 $.hl-reward[data-type="t"]::before { content: "⏳"; }$
 .hl-reward[data-type="i"]::before { content: "🎁"; }
 .hl-reward[data-type="big"]::before { content: "🏆"; }
+
+/* 🟢 Reward Tag Masking (แสดงแบบย่อ: ไอคอน + ตัวเลข + หน่วยย่อ) */
+.hl-reward .sf-reward-syntax, 
+.hl-reward .sf-reward-cat {
+    display: none; /* ซ่อน @รางวัล และ _หมวดหมู่ */
+}
+
+.hl-reward .sf-reward-unit {
+    font-size: 0; /* ซ่อนหน่วยเต็ม (บาท/นาที) */
+}
+
+.hl-reward .sf-reward-unit::after {
+    content: attr(data-short); /* แสดงหน่วยย่อแทน (บ./น.) */
+    font-size: 11px;
+    margin-left: 1px;
+}
+
+/* 🔍 เมื่อมีการคลิกแก้ไข (Focus) ให้แสดงตัวเต็มเพื่อให้พิมพ์แก้ได้ง่าย */
+[contenteditable="true"]:focus .hl-reward .sf-reward-syntax,
+[contenteditable="true"]:focus .hl-reward .sf-reward-cat {
+    display: inline;
+}
+[contenteditable="true"]:focus .hl-reward .sf-reward-unit { font-size: 11px; }
+[contenteditable="true"]:focus .hl-reward .sf-reward-unit::after { display: none; }
+
 
 @keyframes sf-focus-shine {
     0% { box-shadow: 0 0 10px rgba(16, 185, 129, 0.4); border-color: rgba(16, 185, 129, 0.7); }

@@ -73,7 +73,7 @@ export function applyAppSettings() {
         @media (max-width: 768px) {
             /* 1. ซ่อนส่วนที่ไม่เกี่ยวข้องกับ To-do */
             #tabs-card, #resources-card, .topbar .search-wrapper, .topbar #global-launchers-bar, .topbar #utility-group, .topbar #btn-utility-more, #schedule-mode-bar, #focus-mode-bar, #tag-bar-container,
-            #btn-toggle-task-actions, #btn-toggle-prominent-tasks, #btn-expand-all-subtasks, #btn-collapse-all-subtasks, #btn-todo-templates { display: none !important; }
+            #btn-toggle-task-actions, #btn-toggle-prominent-tasks, #btn-expand-all-subtasks, #btn-collapse-all-subtasks, #btn-todo-templates, #btn-toggle-extra-sections { display: none !important; }
             #main-grid { grid-template-columns: 1fr !important; padding: 0 !important; gap: 0 !important; }
             #tasks-card { border-radius: 0 !important; border: none !important; width: 100% !important; overflow-x: hidden !important; }
             .card-body { padding: 10px !important; }
@@ -108,24 +108,28 @@ export function applyAppSettings() {
                 order: 2 !important;
                 display: flex !important;
                 flex-direction: row !important;
-                margin-right: 4px !important;
+                margin-right: 0 !important;
                 gap: 8px !important;
                 width: auto !important;
                 align-items: center !important;
             }
             .topbar-nav-group .btn-icon, #btn-drive-sync {
                 width: 30px !important; height: 30px !important;
-                padding: 0 !important; opacity: 1 !important;
+                padding: 0 !important; 
+                opacity: 1 !important;
                 background: var(--bg-card) !important;
                 border: 1px solid var(--border-color) !important;
                 border-radius: 8px !important;
                 display: flex !important;
                 align-items: center !important;
                 justify-content: center !important;
+                overflow: hidden !important;
+                flex-shrink: 0 !important;
             }
             .topbar-nav-group .svg-icon-lg, #btn-drive-sync svg { width: 15px !important; height: 15px !important; }
             .topbar-divider { display: none !important; }
-            #drive-sync-container { order: 3 !important; margin: 0 0 0 4px !important; display: flex !important; }
+            #drive-sync-container, .drive-sync-wrapper { order: 3 !important; margin: 0 !important; display: flex !important; width: 30px !important; height: 30px !important; }
+            #drive-sync-container { margin-left: 8px !important; }
             #btn-drive-sync span { display: none !important; } /* ซ่อนข้อความ Connected เหลือแค่ไอคอน */
 
             /* 🟢 เมื่อเปิด Sidebar: ดัน Topbar ขึ้นมาข้างบนสุด และย้ายปุ่มไปกองที่ขอบซ้าย */
@@ -138,7 +142,8 @@ export function applyAppSettings() {
             }
             #spacebar:not(.collapsed) ~ .workspace .topbar-nav-group {
                 position: fixed !important;
-                left: 15px !important;
+                right: 15px !important;
+                left: auto !important;
                 top: 70px !important;
                 flex-direction: column !important;
                 background: var(--bg-card) !important;
@@ -147,11 +152,12 @@ export function applyAppSettings() {
                 box-shadow: 0 8px 30px rgba(0,0,0,0.3) !important;
                 border: 1px solid var(--border-color) !important;
                 gap: 12px !important;
-                animation: sf-slide-in-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                animation: sf-slide-in-right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             }
             #spacebar:not(.collapsed) ~ .workspace #drive-sync-container {
                 position: fixed !important;
-                left: 15px !important;
+                right: 15px !important;
+                left: auto !important;
                 top: 202px !important;
                 background: var(--bg-card) !important;
                 padding: 6px !important;
@@ -160,38 +166,39 @@ export function applyAppSettings() {
                 border: 1px solid var(--border-color) !important;
                 margin: 0 !important;
                 display: flex !important;
-                animation: sf-slide-in-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                animation: sf-slide-in-right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             }
             #spacebar:not(.collapsed) ~ .workspace .workspace-title { opacity: 0 !important; pointer-events: none; } /* ซ่อนชื่อ Space เพื่อความคลีน */
 
-            /* 🟢 Done Confirmation Popup: ย้ายไปขอบขวาและเลื่อนลงมาไม่ให้บัง Topbar */
+            /* 🟢 Done Confirmation Popup: ย้ายไปขอบซ้ายแทนเพื่อหลบกลุ่มปุ่ม Nav */
             .sf-post-confirm-popup {
-                right: 15px !important;
-                left: auto !important;
+                left: 15px !important;
+                right: auto !important;
                 top: 75px !important;
                 transform: none !important;
                 width: 140px !important;
             }
 
-            @keyframes sf-slide-in-left { from { transform: translateX(-20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+            @keyframes sf-slide-in-right { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
             /* 4. ช่องกรอกงานใหม่แบบ Floating Bottom Bar (แบบ Google Tasks) */
             .task-input-bar {
                 position: fixed; bottom: 0; left: 0; right: 0; 
-                background: var(--bg-card); padding: 16px 20px 24px 20px !important; 
+                background: var(--bg-card); padding: 8px 8px 24px 8px !important; 
                 box-shadow: 0 -10px 40px rgba(0,0,0,0.2); 
-                z-index: 1000; border-radius: 24px 24px 0 0;
+                z-index: 1000; border-radius: 20px 20px 0 0;
                 margin: 0 !important; width: 100% !important; 
                 visibility: hidden !important; 
                 transform: translateY(100%);
-                transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.3s;
+                transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.2s;
                 display: grid !important;
                 grid-template-columns: 1fr auto !important;
                 grid-template-areas: 
-                    "input input"
+                    "header header"
+                    "input repeat"
                     "date add"
                     "list list" !important;
-                gap: 16px 12px !important;
+                gap: 10px 10px !important;
                 box-sizing: border-box !important;
             }
             .task-input-bar.is-active { visibility: visible !important; transform: translateY(0) !important; }
@@ -199,11 +206,25 @@ export function applyAppSettings() {
             #new-task-input { 
                 grid-area: input; 
                 width: 100% !important;
+                min-width: 0 !important; /* 🟢 แก้ไข: ป้องกันการยืดเกิน */
                 font-size: 16px !important;
-                padding: 12px 0 !important;
-                border-bottom: 1.5px solid var(--border-color) !important;
+                padding: 10px 14px !important;
+                border: 1.5px solid var(--border-color) !important;
+                background: var(--bg-body) !important;
                 height: auto !important;
-                border-radius: 0 !important;
+                border-radius: 12px !important;
+                box-sizing: border-box !important; /* 🟢 แก้ไข: ป้องกัน Padding ดัน Element */
+                box-shadow: inset 0 1px 2px rgba(0,0,0,0.05) !important;
+            }
+
+            #btn-task-repeat {
+                grid-area: repeat;
+                display: flex !important;
+                align-items: center; justify-content: center;
+                width: 44px !important; height: 44px !important;
+                background: var(--bg-body);
+                border: 1.5px solid var(--border-color);
+                border-radius: 12px;
             }
             
             .date-wrapper { 
@@ -222,10 +243,18 @@ export function applyAppSettings() {
             #btn-add-task { 
                 grid-area: add; 
                 height: 42px !important;
-                padding: 0 30px !important;
+                padding: 0 16px !important; /* 🟢 แก้ไข: ลด Padding เพื่อไม่ให้ข้อความล้น */
                 border-radius: 10px !important;
                 font-weight: 800 !important;
                 font-size: 14px !important;
+            }
+
+            .sf-input-bar-header {
+                grid-area: header;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 4px;
             }
             
             #google-task-controls { 
@@ -338,22 +367,94 @@ export function applyAppSettings() {
 
             /* 🟢 ปรับเมนู Popup ให้เป็น Bottom Sheet */
             .mobile-tools-popup {
-                position: fixed !important; bottom: 0 !important; left: 0 !important; right: 0 !important;
-                width: 100% !important; max-width: none !important;
+                position: fixed !important; 
+                bottom: 20px !important; 
+                left: 12px !important; 
+                right: 12px !important;
+                width: auto !important; 
+                max-width: none !important;
                 background: var(--bg-card) !important;
-                border-radius: 20px 20px 0 0 !important;
-                padding: 10px 10px 30px 10px !important;
+                border-radius: 28px !important;
+                padding: 12px 12px 16px 12px !important;
                 box-shadow: 0 -10px 40px rgba(0,0,0,0.2) !important;
+                border: 1px solid var(--border-color) !important;
                 display: none; flex-direction: column; z-index: 10001;
                 animation: slideUp 0.3s ease-out;
             }
             .mobile-tools-popup button {
-                padding: 16px !important; width: 100% !important; text-align: left !important;
-                border: none !important; background: transparent !important;
-                font-size: 16px !important; font-weight: 600 !important;
-                display: flex !important; align-items: center !important; gap: 12px !important;
+                padding: 12px !important; 
+                width: 100% !important; 
+                border: none !important; 
+                background: transparent !important;
+                margin: 0 !important;
+                border-radius: 14px !important;
+                font-size: 14px !important; 
+                font-weight: 700 !important;
+                display: flex !important; 
+                align-items: center !important; 
+                justify-content: flex-start !important;
+                color: var(--text-main) !important;
             }
             @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+            /* 🟢 Command Center Specific Adjustments for Mobile */
+            #default-dashboard-container {
+                padding: 10px !important; /* เพิ่ม Padding รอบด้าน */
+                overflow-y: auto !important; /* ทำให้ Scroll ได้ในแนวตั้ง */
+                height: calc(100vh - 60px) !important; /* ปรับความสูงให้พอดีกับหน้าจอ (หัก Topbar ออก) */
+                box-sizing: border-box !important; /* รวม Padding ในการคำนวณความสูง */
+                display: flex !important; /* ใช้ Flexbox เพื่อจัดเรียง Widget */
+                flex-direction: column !important; /* เรียง Widget ลงมาในแนวตั้ง */
+                overflow-x: hidden !important; /* ป้องกันการล้นแนวนอน */
+            }
+
+            #cc-widget-grid {
+                display: flex !important; /* ใช้ Flexbox สำหรับ Widget ภายใน Grid */
+                flex-direction: column !important; /* เรียง Widget ลงมาในแนวตั้ง */
+                gap: 15px !important; /* ระยะห่างระหว่าง Widget */
+                width: 100% !important; 
+                max-width: 100% !important;
+                flex: 1 !important; /* ให้ขยายและหดได้ตามพื้นที่ */
+                box-sizing: border-box !important;
+            }
+
+            .widget-card {
+                width: 100% !important; /* ให้ Card ใช้ความกว้างเต็ม */
+                margin: 0 !important; /* ลบ Margin ภายนอกที่ไม่จำเป็น */
+                box-sizing: border-box !important; /* รวม Padding/Border ในการคำนวณความกว้าง */
+                display: flex !important; /* ใช้ Flexbox สำหรับเนื้อหาภายใน Card */
+                flex-direction: column !important; /* เรียง Header และ Body ลงมาในแนวตั้ง */
+                min-height: 0; /* อนุญาตให้ Card หดได้ */
+                overflow-x: hidden !important;
+            }
+
+            .widget-card .card-body {
+                overflow-y: auto !important; /* ทำให้เนื้อหาภายใน Card Body Scroll ได้ */
+                overflow-x: hidden !important;
+                flex: 1 !important; /* ให้ Card Body ใช้พื้นที่ที่เหลือและ Scroll ได้ */
+                min-height: 0; /* สำคัญสำหรับ Flex Item ที่มี Overflow */
+                padding: 10px !important; /* ตรวจสอบให้แน่ใจว่ามี Padding สำหรับพื้นที่ Scroll */
+            }
+
+            /* ปรับปรุงแถบ Minimized สำหรับมือถือ */
+            #cc-minimized-row {
+                padding: 10px !important;
+                flex-wrap: wrap !important;
+                justify-content: center !important;
+                gap: 8px !important;
+            }
+            #cc-minimized-row .btn-lock-widgets,
+            #cc-minimized-row .btn-dashboard-note-toggle,
+            #cc-minimized-row .reward-system-btn-group {
+                margin: 0 !important; /* ลบ Margin ส่วนเกิน */
+            }
+
+            /* 🟢 ป้องกันข้อความล้นใน Command Center บนมือถือ */
+            .smart-flow-title, .smart-flow-desc, .task-actual-text {
+                word-break: break-word !important;
+                white-space: normal !important;
+            }
+            .group-title { min-width: 0 !important; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         }
     `;
 }

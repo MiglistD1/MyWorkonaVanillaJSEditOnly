@@ -73,7 +73,7 @@ export function applyAppSettings() {
         @media (max-width: 768px) {
             /* 1. ซ่อนส่วนที่ไม่เกี่ยวข้องกับ To-do */
             #tabs-card, #resources-card, .topbar .search-wrapper, .topbar #global-launchers-bar, .topbar #utility-group, .topbar #btn-utility-more, #schedule-mode-bar, #focus-mode-bar, #tag-bar-container,
-            #btn-toggle-task-actions, #btn-toggle-prominent-tasks, #btn-expand-all-subtasks, #btn-collapse-all-subtasks, #btn-todo-templates { display: none !important; }
+            #btn-toggle-task-actions, #btn-toggle-prominent-tasks, #btn-expand-all-subtasks, #btn-collapse-all-subtasks, #btn-todo-templates, #btn-toggle-extra-sections { display: none !important; }
             #main-grid { grid-template-columns: 1fr !important; padding: 0 !important; gap: 0 !important; }
             #tasks-card { border-radius: 0 !important; border: none !important; width: 100% !important; overflow-x: hidden !important; }
             .card-body { padding: 10px !important; }
@@ -90,15 +90,59 @@ export function applyAppSettings() {
             /* 4. ช่องกรอกงานใหม่แบบ Floating Bottom Bar (แบบ Google Tasks) - แก้ไขการซ่อน */
             .task-input-bar { 
                 position: fixed; bottom: 0; left: 0; right: 0; 
-                background: var(--bg-card); padding: 12px 16px; 
-                box-shadow: 0 -4px 20px rgba(0,0,0,0.1); 
+                background: var(--bg-card); padding: 8px 8px 24px 8px !important; 
+                box-shadow: 0 -10px 40px rgba(0,0,0,0.2); 
                 z-index: 1000; border-radius: 16px 16px 0 0;
                 margin: 0 !important; width: 100% !important; 
                 visibility: hidden !important; /* เปลี่ยนจาก display: none เพื่อให้ JS หา Element เจอ */
                 transform: translateY(100%);
-                transition: transform 0.2s ease-out, visibility 0.2s ease-out;
+                transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.2s;
+                display: grid !important;
+                grid-template-columns: 1fr 48px !important; /* บังคับให้ปุ่ม Repeat มีพื้นที่ของตัวเองทางขวา */
+                grid-template-areas: 
+                    "header header"
+                    "input repeat"
+                    "date add"
+                    "list list" !important;
+                gap: 8px 8px !important;
+                box-sizing: border-box !important;
             }
-            .task-input-bar.is-active { display: flex !important; animation: slideUp 0.2s ease-out; }
+            .task-input-bar.is-active { visibility: visible !important; transform: translateY(0) !important; }
+
+            .sf-input-bar-header {
+                grid-area: header;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 2px;
+            }
+
+            #new-task-input {
+                grid-area: input; 
+                width: auto !important; /* 🟢 แก้ไข: ลบ width 100% เพื่อให้ Grid จัดการ */
+                min-width: 0 !important; /* 🟢 แก้ไข: ป้องกันการยืดเกิน */
+                padding: 12px 14px !important;
+                border: 2px solid var(--primary-color) !important;
+                background: var(--bg-body) !important;
+                border-radius: 10px !important;
+                box-sizing: border-box !important; /* 🟢 แก้ไข: ป้องกัน Padding ดัน Element */
+            }
+
+            #btn-task-repeat {
+                grid-area: repeat;
+                display: flex !important;
+                width: 48px !important; height: 48px !important;
+                background: var(--bg-body);
+                border: 2px solid var(--border-color);
+                border-radius: 10px;
+            }
+
+            #btn-add-task {
+                padding: 0 16px !important; /* 🟢 แก้ไข: ลด Padding เพื่อไม่ให้ข้อความล้น */
+            }
+            .date-wrapper {
+                margin: 0 !important; /* 🟢 แก้ไข: ลบ margin-top ที่ไม่จำเป็น */
+            }
 
             /* 5. ปุ่ม Actions ต่างๆ ให้ดูสะอาดขึ้น */
             .item-action-group { opacity: 1 !important; }

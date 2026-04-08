@@ -1,4 +1,4 @@
-import { getSpaces, setSpaces, saveData, getCurrentSpace, setCurrentSpaceId, getAppSettings, setEditingItemState, getEditingItemState, getGlobalLaunchers, setGlobalLaunchers, getLauncherTags, setLauncherTags } from '../core/storage.js';
+import { getSpaces, setSpaces, saveData, getCurrentSpace, getCurrentSpaceId, setCurrentSpaceId, getAppSettings, setEditingItemState, getEditingItemState, getGlobalLaunchers, setGlobalLaunchers, getLauncherTags, setLauncherTags } from '../core/storage.js';
 import { applyAppSettings } from '../core/settings-manager.js';
 import { renderLaunchers } from '../features/customLaunchers.js';
 import { renderDefaultDashboard } from '../features/defaultDashboard.js'; // Import renderDefaultDashboard
@@ -590,12 +590,15 @@ export function setupTagModal(onRender) {
     const saveBtn = document.getElementById('btn-save-item-tags');
     if (saveBtn) {
         saveBtn.addEventListener('click', () => {
-            const { type, index } = getEditingItemState();
+            const { type, index, parentIndex } = getEditingItemState();
             const space = getCurrentSpace();
             if (!space || type === null || index === null) return;
 
             let item = null;
-            if (type === 'resource') item = space.resources[index];
+            if (type === 'subtask' && parentIndex !== null) {
+                item = space.tasks[parentIndex]?.subtasks?.[index];
+            }
+            else if (type === 'resource') item = space.resources[index];
             else if (type === 'drive') item = space.driveFiles[index];
             else if (type === 'task') item = space.tasks[index];
             else if (type === 'tab') item = space.tabs[index];
@@ -609,6 +612,7 @@ export function setupTagModal(onRender) {
                 item.tags = selectedTags;
                 saveData();
                 if (window._isModalOpenedFromCommandCenter) {
+                    window._isModalOpenedFromCommandCenter = false;
                     setCurrentSpaceId(0); // Reset to Command Center
                     renderDefaultDashboard();
                 } else {
@@ -633,14 +637,30 @@ export function setupTagModal(onRender) {
 export function handleMiniTagClick(btn, onRender) {
     const type = btn.getAttribute('data-type');
     const index = parseInt(btn.getAttribute('data-index'));
+    // 🟢 ตั้งค่าบริบทพื้นที่ทำงานจากข้อมูลที่ฝังไว้ในปุ่ม (รองรับ Command Center)
+    const sidAttr = btn.getAttribute('data-space-id');
+    const pIdxAttr = btn.getAttribute('data-parent-index');
+
+    if (sidAttr && sidAttr !== "null") {
+        const targetSid = parseInt(sidAttr);
+        if (getCurrentSpaceId() === 0 && targetSid !== 0) {
+            setCurrentSpaceId(targetSid);
+            window._isModalOpenedFromCommandCenter = true;
+        }
+    }
+
     const space = getCurrentSpace();
 
     if (!space) return;
 
     let item;
-    if (type === 'resource') item = space.resources[index];
+    if (type === 'subtask' && pIdxAttr !== null) {
+        const pIdx = parseInt(pIdxAttr);
+        item = space.tasks[pIdx]?.subtasks?.[index];
+    } else if (type === 'task') {
+        item = space.tasks[index];
+    } else if (type === 'resource') item = space.resources[index];
     else if (type === 'drive') item = space.driveFiles[index];
-    else if (type === 'task') item = space.tasks[index];
     else if (type === 'tab') item = space.tabs[index];
     else if (type === 'habit') item = space.habits[index];
 
@@ -648,7 +668,7 @@ export function handleMiniTagClick(btn, onRender) {
     if (!item.tags) item.tags = [];
 
     // Set shared state for searchManager to use when saving
-    setEditingItemState(type, index);
+    setEditingItemState(type, index, pIdxAttr !== null ? parseInt(pIdxAttr) : null);
 
     const defaultTags = ["AI", "Half screen"];
     const customTags = space.tags ? space.tags.filter(t => !defaultTags.includes(t)) : [];
@@ -708,6 +728,7 @@ export function handleMiniTagClick(btn, onRender) {
             const newTagsArray = newTagsStr.split(',').map(t => t.trim()).filter(t => t !== "");
             item.tags = newTagsArray;
                 if (window._isModalOpenedFromCommandCenter) {
+                    window._isModalOpenedFromCommandCenter = false;
                     setCurrentSpaceId(0);
                     renderDefaultDashboard();
                 }

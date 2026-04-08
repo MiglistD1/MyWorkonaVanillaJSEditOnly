@@ -58,8 +58,8 @@ export function renderMasterHeaderControls() {
 
     return `
         <div style="display:flex; align-items:center; gap:6px; flex-shrink: 0;">
-            <button id="btn-master-toggle-task-actions" class="btn-icon" title="Toggle Task Actions Visibility" style="padding: 2px; opacity: ${masterTodoListState.showMasterTaskActions ? '1' : '0.6'};">
-                <svg class="svg-icon-sm"><use href="#icon-${masterTodoListState.showMasterTaskActions ? 'eye' : 'eye-off'}"></use></svg>
+            <button id="btn-master-toggle-task-actions" class="btn-icon" title="Toggle Task Actions Visibility" style="padding: 2px; opacity: 1;">
+                <span class="toggle-actions-btn circle-icon ${masterTodoListState.showMasterTaskActions ? 'expanded' : ''}" style="margin: 0; pointer-events: none;"></span>
             </button>
             <button id="btn-master-toggle-progress" class="btn-icon" title="${masterTodoListState.isProgressVisible ? 'Hide Space Tags' : 'Show Space Tags'}" style="padding:2px; opacity: 0.6;">
                 <svg class="svg-icon-sm" style="transform: ${masterTodoListState.isProgressVisible ? 'rotate(0deg)' : 'rotate(180deg)'}; transition: transform 0.2s;"><use href="#icon-chevron-up"></use></svg>
@@ -296,7 +296,7 @@ function renderTaskGroups(allSpaces) {
                         const originalIndex = space.tasks.indexOf(task);
                         return generateTaskHTML(task, originalIndex, {
                             showSpaceBadge: false,
-                            isMasterView: true,
+                            isMasterView: true, //
                             spaceId: space.id,
                             isProminentHidden: isSpaceProminentHidden,
                             showActions: masterTodoListState.showMasterTaskActions,
@@ -877,11 +877,10 @@ function initMasterEvents() {
             const editSubBtn = target.closest('.edit-subtask-btn');
             const delSubBtn = target.closest('.delete-subtask-btn');
 
-            if (target.closest('.btn-edit-tags') || target.closest('.edit-task-btn') || target.closest('.delete-task-btn') || editSubBtn || delSubBtn) {
+            if ( target.closest('.edit-task-btn') || target.closest('.delete-task-btn') || editSubBtn || delSubBtn) {
                 setCurrentSpaceId(spaceId); window._isModalOpenedFromCommandCenter = true;
             }
-            if (target.closest('.btn-edit-tags')) handleMiniTagClick(target.closest('.btn-edit-tags'), onRefresh);
-            else if (editSubBtn) openTaskEditModal(parseInt(editSubBtn.dataset.parentIndex), true, parseInt(editSubBtn.dataset.id));
+            if (editSubBtn) openTaskEditModal(parseInt(editSubBtn.dataset.parentIndex), true, parseInt(editSubBtn.dataset.id));
             else if (target.closest('.edit-task-btn')) openTaskEditModal(taskIndex, true);
             else if (delSubBtn) {
                 const pIdx = parseInt(delSubBtn.dataset.parentIndex);
@@ -931,6 +930,9 @@ function initMasterEvents() {
                     const fromSpaceId = getSpaceId(from);
                     const toSpaceId = getSpaceId(to);
 
+                    const fromIsSub = from.classList.contains('subtask-list');
+                    const toIsSub = to.classList.contains('subtask-list');
+
                     const spaces = getSpaces();
                     const fromSpace = spaces.find(s => s.id === fromSpaceId);
                     const toSpace = spaces.find(s => s.id === toSpaceId);
@@ -938,23 +940,34 @@ function initMasterEvents() {
 
                     // 1. ดึงข้อมูลออกจาก Array ต้นทาง (ดึงตามตำแหน่งจริงใน Array)
                     const arrayIdx = parseInt(item.getAttribute('data-index'));
-                    const [movedTask] = fromSpace.tasks.splice(arrayIdx, 1);
+                    let movedTask;
+                    if (fromIsSub) {
+                        const pIdx = parseInt(from.dataset.parentIndex);
+                        movedTask = fromSpace.tasks[pIdx].subtasks.splice(arrayIdx, 1)[0];
+                    } else {
+                        movedTask = fromSpace.tasks.splice(arrayIdx, 1)[0];
+                    }
 
                     // 2. คำนวณตำแหน่งใหม่ใน Array ปลายทาง
+                    const targetArray = toIsSub ? toSpace.tasks[parseInt(to.dataset.parentIndex)].subtasks : toSpace.tasks;
                     const nextEl = item.nextElementSibling;
-                    if (nextEl && nextEl.dataset.index) {
-                        let targetIdx = parseInt(nextEl.dataset.index);
-                        // ถ้าอยู่ Space เดียวกันและลากลงล่าง ต้องลด index ลง 1 เพราะตัวมันเองถูกดึงออกไปแล้ว
-                        if (fromSpaceId === toSpaceId && targetIdx > arrayIdx) targetIdx--;
-                        toSpace.tasks.splice(targetIdx, 0, movedTask);
+            
+            if (nextEl && nextEl.hasAttribute('data-index')) {
+                let targetIdx = parseInt(nextEl.getAttribute('data-index'));
+                // ปรับตำแหน่งถ้าเป็นการเลื่อนภายในอาเรย์เดิม
+                if (from === to && targetIdx > arrayIdx) targetIdx--;
+                targetArray.splice(targetIdx, 0, movedTask);
                     } else {
-                        // ถ้าไม่มีตัวล่าง (ลากไปวางท้ายสุดของกลุ่ม) ให้วางต่อท้ายงานที่ยังไม่เสร็จตัวสุดท้าย
-                        let lastActive = -1;
-                        for (let i = toSpace.tasks.length - 1; i >= 0; i--) {
-                            if (toSpace.tasks[i] && !toSpace.tasks[i].completed) { lastActive = i; break; }
+                if (toIsSub) {
+                    targetArray.push(movedTask);
+                } else {
+                    let lastActive = -1;
+                    for (let i = targetArray.length - 1; i >= 0; i--) {
+                        if (targetArray[i] && !targetArray[i].completed) { lastActive = i; break; }
+                    }
+                    if (lastActive === -1) targetArray.push(movedTask);
+                    else targetArray.splice(lastActive + (fromSpaceId === toSpaceId ? 0 : 1), 0, movedTask);
                         }
-                        if (lastActive === -1) toSpace.tasks.push(movedTask);
-                        else toSpace.tasks.splice(lastActive + (fromSpaceId === toSpaceId ? 0 : 1), 0, movedTask);
                     }
 
                     saveData();

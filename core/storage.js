@@ -10,7 +10,7 @@ let currentFilterMode = 'OR';
 let currentSearchQuery = "";
 
 // --- Runtime State (UI/Modals) ---
-let editingItemState = { type: null, index: null };
+let editingItemState = { type: null, index: null, parentIndex: null };
 
 // --- App Settings ---
 let appSettings = {
@@ -64,6 +64,8 @@ let appSettings = {
   lastUpdated: 0, // 🟢 เก็บเวลาล่าสุดที่มีการแก้ไขข้อมูล
   driveSyncFileName: 'myworkona_todos.json',
   driveSyncFolderName: 'MyWorkona_Backups',
+  lastDriveUpload: 0, // 🟢 เวลาที่อัปโหลดล่าสุด
+  lastDriveDownload: 0, // 🟢 เวลาที่ดาวน์โหลดล่าสุด
   focusedTask: null // 🟢 { spaceId, createdAt } เก็บงานที่กำลังโฟกัสอยู่เพียงหนึ่งเดียว
 };
 
@@ -153,7 +155,9 @@ export function setFilterMode(mode) {
     currentFilterMode = mode; 
 }
 export function setSearchQuery(query) { currentSearchQuery = query; }
-export function setEditingItemState(type, index) { editingItemState = { type, index }; }
+export function setEditingItemState(type, index, parentIndex = null) { 
+    editingItemState = { type, index, parentIndex }; 
+}
 
 // --- Core Functions ---
 let saveTimeout;
@@ -264,8 +268,9 @@ export function performAutoCleanup() {
 }
 
 export function getShortDate(d = new Date()) { 
-    const m = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    return `${d.getDate()} ${m[d.getMonth()]} ${d.getFullYear()}`;
+    const m = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+    const yearBE = d.getFullYear() + 543;
+    return `${String(d.getDate()).padStart(2, '0')} ${m[d.getMonth()]} ${String(yearBE).slice(-2)}`;
 }
 
 export function getCurrentSpace() {

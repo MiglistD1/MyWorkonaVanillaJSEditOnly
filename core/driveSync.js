@@ -12,6 +12,13 @@ const SCOPES = 'https://www.googleapis.com/auth/drive.file';
 const FILE_NAME = 'myworkona_todos.json';
 const REDIRECT_URI = window.location.origin + window.location.pathname;
 
+/** ⏱️ จัดรูปแบบเวลาสำหรับ Log (เช่น 14:30 (5/4)) */
+function formatLogTime(ts) {
+    if (!ts) return "Never";
+    const d = new Date(ts);
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " (" + d.getDate() + "/" + (d.getMonth() + 1) + ")";
+}
+
 let accessToken = null;
 import { svgGoogleDrive, svgCloudOff, svgRefresh, svgSpinner, svgCloudUp, svgCloudDown, svgEdit } from './icons.js';
 
@@ -38,7 +45,7 @@ export function renderDriveSyncUI(text = null, isLoading = false) {
     if (!menu) {
         menu = document.createElement('div');
         menu.className = 'drive-sync-menu dropdown-menu';
-        menu.style.cssText = `display:none; position:absolute; top:110%; right:0; width:145px; padding:4px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:8px; box-shadow:0 10px 25px rgba(0,0,0,0.1); z-index:1000; flex-direction:column; gap:2px;`;
+        menu.style.cssText = `display:none; position:absolute; top:115%; right:0; width:140px; padding:4px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:10px; box-shadow:0 10px 30px rgba(0,0,0,0.12); z-index:1000; flex-direction:column; gap:1px;`;
         wrapper.appendChild(menu);
     }
 
@@ -46,11 +53,14 @@ export function renderDriveSyncUI(text = null, isLoading = false) {
         btnMain.innerHTML = `${svgSpinner}`;
         btnMain.disabled = true;
     } else {
+        const isMobile = window.innerWidth <= 768;
         btnMain.disabled = false;
-        btnMain.style.padding = '4px 8px';
-        btnMain.style.borderRadius = '20px';
-        btnMain.style.height = '30px';
-        btnMain.style.minWidth = 'auto';
+        if (!isMobile) {
+            btnMain.style.padding = '4px 8px';
+            btnMain.style.borderRadius = '20px';
+            btnMain.style.height = '30px';
+            btnMain.style.minWidth = 'auto';
+        }
         
         if (accessToken) {
             btnMain.innerHTML = `${svgGoogleDrive} <span style="font-size:10px; font-weight:800; margin-left:4px;">Connected</span>`;
@@ -64,22 +74,34 @@ export function renderDriveSyncUI(text = null, isLoading = false) {
             btnMain.style.border = '1px solid var(--border-color)';
         }
 
+        const settings = getAppSettings();
+        const lastUp = formatLogTime(settings.lastDriveUpload);
+        const lastDown = formatLogTime(settings.lastDriveDownload);
+
         // ใส่เนื้อหาใน Menu
         menu.innerHTML = `
-            <button class="menu-item" id="ds-btn-auth" style="display:flex; align-items:center; gap:8px; padding:6px; border:none; background:transparent; cursor:pointer; font-size:11px; font-weight:600; color:var(--text-main); border-radius:6px; width:100%;">
+            <div style="padding: 4px 8px; font-size: 9px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Connection</div>
+            <button class="menu-item" id="ds-btn-auth" style="display:flex; align-items:center; gap:8px; padding:6px 8px; border:none; background:transparent; cursor:pointer; font-size:11px; font-weight:600; color:var(--text-main); border-radius:6px; width:100%;">
                 ${accessToken ? '🟢 Connected' : '⚪ Connect Drive'}
             </button>
-            <div style="height:1px; background:var(--border-color); margin:1px 4px;"></div>
-            <button class="menu-item" id="ds-btn-upload" style="display:flex; align-items:center; gap:8px; padding:6px; border:none; background:transparent; cursor:pointer; font-size:11px; color:var(--text-main); border-radius:6px; width:100%;">
+            <div style="height:1px; background:var(--border-color); opacity: 0.5; margin: 3px 4px;"></div>
+            <div style="padding: 4px 8px; font-size: 9px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Sync Actions</div>
+            <button class="menu-item" id="ds-btn-upload" style="display:flex; align-items:center; gap:8px; padding:6px 8px; border:none; background:transparent; cursor:pointer; font-size:11px; color:var(--text-main); border-radius:6px; width:100%;">
                 ${svgCloudUp} Overwrite (Up)
             </button>
-            <button class="menu-item" id="ds-btn-download" style="display:flex; align-items:center; gap:8px; padding:6px; border:none; background:transparent; cursor:pointer; font-size:11px; color:var(--text-main); border-radius:6px; width:100%;">
+            <button class="menu-item" id="ds-btn-download" style="display:flex; align-items:center; gap:8px; padding:6px 8px; border:none; background:transparent; cursor:pointer; font-size:11px; color:var(--text-main); border-radius:6px; width:100%;">
                 ${svgCloudDown} Import (Down)
             </button>
-            <div style="height:1px; background:var(--border-color); margin:1px 4px;"></div>
-            <button class="menu-item" id="ds-btn-settings" style="display:flex; align-items:center; gap:8px; padding:6px; border:none; background:transparent; cursor:pointer; font-size:11px; color:var(--text-muted); border-radius:6px; width:100%;">
-                <svg class="svg-icon-xs" style="width:12px;height:12px;"><use href="#icon-settings"></use></svg> Path Settings
+            <div style="height:1px; background:var(--border-color); opacity: 0.5; margin: 3px 4px;"></div>
+            <button class="menu-item" id="ds-btn-settings" style="display:flex; align-items:center; gap:8px; padding:6px 8px; border:none; background:transparent; cursor:pointer; font-size:11px; color:var(--text-muted); border-radius:6px; width:100%;">
+                <svg class="svg-icon-xs" style="width:13px;height:13px;opacity:0.6;"><use href="#icon-settings"></use></svg> Path Settings
             </button>
+            <div style="height:1px; background:var(--border-color); opacity: 0.5; margin: 3px 4px;"></div>
+            <div style="padding: 4px 8px; font-size: 9px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Sync History</div>
+            <div style="padding: 2px 8px; font-size: 10px; color: var(--text-muted); line-height: 1.4;">
+                Uploaded: ${lastUp}<br>
+                Imported: ${lastDown}
+            </div>
         `;
 
         // Bind Events ใน Menu
@@ -139,13 +161,15 @@ function showSyncPathSettings() {
                     <input type="text" id="ds-file-input" class="settings-input" value="${file}" style="font-size:13px; margin-top:4px;">
                 </div>
                 <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:20px;">
-                    <button class="btn btn-outline" style="font-size:11px; padding:4px 12px;" onclick="document.getElementById('${modalId}').remove()">Cancel</button>
+                    <button class="btn btn-outline" id="ds-btn-cancel-path" style="font-size:11px; padding:4px 12px;">Cancel</button>
                     <button class="btn btn-primary" id="ds-btn-save-path" style="font-size:11px; padding:4px 12px;">Save Changes</button>
                 </div>
             </div>
         </div>
     `;
     document.body.insertAdjacentHTML('beforeend', html);
+
+    document.getElementById('ds-btn-cancel-path').onclick = () => document.getElementById(modalId).remove();
 
     document.getElementById('ds-btn-save-path').onclick = () => {
         settings.driveSyncFolderName = document.getElementById('ds-folder-input').value.trim();
@@ -237,7 +261,7 @@ async function driveApiFetch(url, options = {}, interactive = false) {
  * ⬆️ บังคับอัปโหลดข้อมูลปัจจุบันจาก Local ไปยัง Google Drive ทันที
  */
 export async function forceUploadToDrive() {
-    if (!confirm("⚠️ Force Upload to Google Drive?\n\nการดำเนินการนี้จะเขียนทับข้อมูลทั้งหมดบน Google Drive ด้วยข้อมูลในเครื่องของคุณตอนนี้\n\nต้องการดำเนินการต่อหรือไม่?")) return;
+    if (!confirm("⚠️ บังคับอัปโหลด (Force Upload) ขึ้น Google Drive\n\nการดำเนินการนี้จะส่งข้อมูลจากเครื่องนี้ไป \"เขียนทับ\" ข้อมูลสำรองเดิมบน Google Drive\n\nคุณต้องการดำเนินการต่อหรือไม่?")) return;
 
     renderDriveSyncUI("Uploading...", true);
     try {
@@ -253,6 +277,7 @@ export async function forceUploadToDrive() {
             alert("✅ ข้อมูลถูกอัปโหลดขึ้น Google Drive เรียบร้อยแล้ว!");
             // อัปเดต timestamp ใน local เพื่อให้ตรงกับที่เพิ่งอัปโหลด
             getAppSettings().lastUpdated = Date.now();
+            getAppSettings().lastDriveUpload = Date.now();
             saveData(true); // บันทึก timestamp ที่แก้ไข
         } else {
             alert("❌ อัปโหลดล้มเหลว! โปรดตรวจสอบการเชื่อมต่ออินเทอร์เน็ตและสิทธิ์การเข้าถึง Google Drive");
@@ -269,7 +294,7 @@ export async function forceUploadToDrive() {
  * ⬇️ บังคับดาวน์โหลดข้อมูลจาก Google Drive มาทับข้อมูล Local ทันที
  */
 export async function forceDownloadFromDrive() {
-    if (!confirm("⚠️ Force Download from Google Drive?\n\nการดำเนินการนี้จะเขียนทับข้อมูลทั้งหมดในเครื่องของคุณด้วยข้อมูลจาก Google Drive\n\nต้องการดำเนินการต่อหรือไม่?")) return;
+    if (!confirm("⚠️ บังคับดาวน์โหลด (Force Download) จาก Google Drive\n\nการดำเนินการนี้จะนำข้อมูลจาก Google Drive มา \"เขียนทับ\" ข้อมูลทั้งหมดในเครื่องปัจจุบันนี้\n\nคุณต้องการดำเนินการต่อหรือไม่?")) return;
 
     renderDriveSyncUI("Downloading...", true);
     try {
@@ -430,7 +455,7 @@ export async function autoCheckCloudUpdate() {
         if (cloudTime > localTime) {
             // ☁️ ข้อมูลบน Cloud ใหม่กว่า -> ถามเพื่อโหลดลงเครื่อง
             const cloudDate = new Date(cloudTime).toLocaleString();
-            if (confirm(`☁️ Cloud Sync: พบข้อมูลที่ใหม่กว่าบน Google Drive (${cloudDate})\n\nคุณต้องการโหลดข้อมูลล่าสุดนี้มาใช้หรือไม่?`)) {
+            if (confirm(`☁️ Cloud Sync: พบข้อมูลเวอร์ชันใหม่กว่าบน Google Drive\n(เวลาที่บันทึกบน Cloud: ${cloudDate})\n\nคุณต้องการ "ดาวน์โหลด" ข้อมูลจาก Google Drive ลงมาทับข้อมูลในเครื่องนี้หรือไม่?\n\n⚠️ คำเตือน: ข้อมูลปัจจุบันในเครื่องนี้จะถูกลบและแทนที่ด้วยข้อมูลจาก Cloud ทั้งหมด`)) {
                 applyDriveData(driveData);
             }
         } else if (localTime > cloudTime) {
@@ -443,7 +468,11 @@ export async function autoCheckCloudUpdate() {
                 globalLaunchers: getGlobalLaunchers(),
                 launcherTags: getLauncherTags()
             };
-            await saveToDrive(localData);
+            const success = await saveToDrive(localData);
+            if (success) {
+                getAppSettings().lastDriveUpload = Date.now();
+                saveData(true);
+            }
         }
         renderDriveSyncUI();
     }
@@ -456,6 +485,7 @@ function applyDriveData(driveData) {
     if (driveData.globalLaunchers) setGlobalLaunchers(driveData.globalLaunchers);
     if (driveData.launcherTags) setLauncherTags(driveData.launcherTags);
 
+    getAppSettings().lastDriveDownload = Date.now();
     saveData(true);
     alert("Sync Complete! Reloading...");
     location.reload();
@@ -464,7 +494,7 @@ function applyDriveData(driveData) {
 async function syncDataAfterLogin() {
     const driveData = await loadFromDrive();
     if (driveData) {
-        if (confirm("Sync Found: Restore data from Google Drive? This will overwrite local data.")) {
+        if (confirm("☁️ ตรวจพบไฟล์สำรองข้อมูลบน Google Drive\nคุณต้องการ \"ดาวน์โหลด\" ข้อมูลจาก Cloud มาเขียนทับข้อมูลในเครื่องนี้หรือไม่?\n\n⚠️ ข้อมูลเดิมที่อยู่ในเครื่องนี้จะถูกแทนที่ด้วยข้อมูลจาก Google Drive ทั้งหมด")) {
             applyDriveData(driveData);
         }
     } else {
@@ -476,7 +506,11 @@ async function syncDataAfterLogin() {
             launcherTags: getLauncherTags()
         };
         const success = await saveToDrive(localData);
-        if (success) alert("No cloud backup found. A new one has been created from your current data.");
+        if (success) {
+            getAppSettings().lastDriveUpload = Date.now();
+            saveData(true);
+            alert("No cloud backup found. A new one has been created from your current data.");
+        }
     }
 }
 

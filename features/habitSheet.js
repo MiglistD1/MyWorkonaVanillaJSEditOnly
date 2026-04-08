@@ -464,7 +464,7 @@ export function renderHabitList(space) {
 
     const todayStr = new Date().toDateString();
     const todayObj = new Date(todayStr);
-    const monthsEn = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const monthsTh = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
 
     const hideCompleted = getAppSettings().hideCompletedHabits;
     const showActions = getAppSettings().showHabitActions;
@@ -498,13 +498,13 @@ export function renderHabitList(space) {
         if (habit.resetInterval > 1) {
             const nextDate = new Date(lastDateObj);
             nextDate.setDate(lastDateObj.getDate() + habit.resetInterval);
-            nextDueHtml = `<span style="font-size: 10px; color: #ef4444; font-weight: 700; margin-left: 4px;" title="Next scheduled date">Next: ${nextDate.getDate()} ${monthsEn[nextDate.getMonth()]}</span>`;
+            nextDueHtml = `<span style="font-size: 10px; color: #ef4444; font-weight: 700; margin-left: 4px;" title="Next Schedule">Next: ${String(nextDate.getDate()).padStart(2, '0')} ${monthsTh[nextDate.getMonth()]} ${nextDate.getFullYear() + 543}</span>`;
         }
 
         const d = lastDateObj.getDate();
-        const m = monthsEn[lastDateObj.getMonth()];
-        const y = lastDateObj.getFullYear().toString().slice(-2);
-        const formattedDate = `${d}/${m}/${y}`;
+        const m = monthsTh[lastDateObj.getMonth()];
+        const y = lastDateObj.getFullYear() + 543;
+        const formattedDate = `${String(d).padStart(2, '0')} ${m} ${y}`;
 
         const el = document.createElement('div');
         el.setAttribute('data-index', index);
@@ -619,7 +619,7 @@ export function renderHabitList(space) {
         });
 
         nameTextEl.addEventListener('blur', () => {
-            const newName = nameTextEl.innerText.trim();
+            const newName = nameTextEl.textContent.trim();
             if (newName && newName !== habit.text) {
                 habit.text = newName;
                 saveData(true);
