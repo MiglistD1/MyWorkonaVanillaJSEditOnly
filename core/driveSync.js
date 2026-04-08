@@ -187,9 +187,10 @@ async function getAuthToken(interactive = true) {
     // 1. Check for Chrome Extension Identity API
     if (typeof chrome !== 'undefined' && chrome.identity && chrome.identity.getAuthToken) {
         return new Promise((resolve) => {
-            // ปล่อยให้ Chrome Identity จัดการ Cache และ Refresh Token เองเพื่อป้องกัน Token หมดอายุ
             chrome.identity.getAuthToken({ interactive }, (token) => {
                 if (chrome.runtime.lastError || !token) {
+                    console.warn("Chrome Identity Error:", chrome.runtime.lastError);
+                    if (interactive) localStorage.removeItem('google_access_token');
                     resolve(null);
                 } else {
                     accessToken = token;

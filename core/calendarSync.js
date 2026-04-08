@@ -17,10 +17,24 @@ async function calendarFetch(url, token, options = {}) {
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
             console.error(`Google Calendar API Error (${response.status}):`, errorData);
-            
-            // 403 Forbidden มักหมายถึงสิทธิ์ไม่พอ (ขาด Scope) การล้าง Token จะช่วยให้เราขอสิทธิ์ใหม่ได้ถูกต้องในครั้งถัดไป
+
+            // 403 Forbidden มักหมายถึง API ยังไม่ถูกเปิดใช้งาน หรือขาด Scope
             if (response.status === 401 || response.status === 403) {
-                await clearAuthToken(token);
+                let reason = "Access Denied (403)";
+                if (errorData.error && errorData.error.message) {
+                    reason = errorData.error.message;
+                }
+
+                const isApiDisabled = reason.toLowerCase().includes("not enabled") || reason.toLowerCase().includes("access not configured");
+                
+                if (isApiDisabled) {
+                    alert(`❌ Google Calendar Sync ล้มเหลว (403 Forbidden)\n\nสาเหตุ: คุณยังไม่ได้เปิดใช้งาน 'Google Calendar API' ใน Google Cloud Console\n\nวิธีแก้: เข้าไปที่ Cloud Console > APIs & Services > Library > ค้นหา 'Google Calendar API' แล้วกดปุ่ม 'Enable' ครับ`);
+                } else {
+                    alert(`⚠️ Google Calendar API Error (${response.status}):\n${reason}\n\nระบบจะทำการ Reset การล็อกอิน โปรดลองกด Sync ใหม่อีกครั้งครับ`);
+                }
+
+                // ล้าง Token ทั้งหมดเพื่อป้องกัน net::ERR_FAILED ในรอบถัดไป
+                await clearAuthToken(token || localStorage.getItem('google_access_token'));
             }
             return null;
         }
