@@ -226,25 +226,47 @@ export function generateTaskHTML(task, index, {
 
     const editBtnClass = isMasterView ? 'edit-task-btn' : 'edit-task-text-btn';
     
-    const isDateOverdue = task.dueDate && !isCompletedOrDeleted && !isActuallyDeleted && new Date(task.dueDate).setHours(0,0,0,0) < new Date().setHours(0,0,0,0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dueDateObj = task.dueDate ? new Date(task.dueDate) : null;
+    if (dueDateObj) dueDateObj.setHours(0, 0, 0, 0);
+    
+    const isOverdue = dueDateObj && dueDateObj < today && !task.completed && !task.isDeleted;
+    const isToday = dueDateObj && dueDateObj.getTime() === today.getTime() && !task.completed && !task.isDeleted;
+    const isFuture = (dueDateObj && dueDateObj > today && !task.completed && !task.isDeleted) || (!!nextDueDate && !task.isDeleted);
+
     const textStyle = (isCompletedOrDeleted || isActuallyDeleted) 
         ? "flex: 1; word-break: break-word; white-space: normal; line-height: 1.4; color: var(--text-muted); text-decoration: line-through; opacity: 0.7;" 
         : `flex: 1; word-break: break-word; white-space: normal; line-height: 1.4; color: ${task.isProminent ? 'var(--primary-color)' : 'var(--text-main)'}; ${task.isProminent ? 'font-weight: 700;' : ''}`;
 
     // 🟢 ย่อวันที่ให้สั้นลงสำหรับมือถือ
     const formatDateMinimal = (d) => {
+        if (!d || isNaN(d.getTime())) return "";
         const m = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
         const yearBE = d.getFullYear() + 543;
         return `${String(d.getDate()).padStart(2, '0')} ${m[d.getMonth()]} ${String(yearBE).slice(-2)}`;
     };
 
-    let dateColor = isDateOverdue ? '#ef4444' : (isSubtask ? 'var(--primary-color)' : 'var(--text-muted)');
-    let dateDisplay = task.dueDate ? formatDateMinimal(new Date(task.dueDate)) : '';
+    let dateDisplay = task.dueDate ? formatDateMinimal(dueDateObj) : '';
     if (nextDueDate) {
         dateDisplay = `Next: ${formatDateMinimal(new Date(nextDueDate))}`;
-        dateColor = '#10b981'; // 🟢 Green color for future schedule
     } else if (task.completed && task.createdAt && task.completedAt) {
         dateDisplay = 'Done';
+    }
+
+    // กำหนด Style ของ Badge วันที่แบบใหม่ให้โดดเด่นตามสถานะ
+    let dateBadgeStyle = "font-size: 10px; padding: 2px 8px; border-radius: 6px; font-weight: 800; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; transition: all 0.2s ease;";
+    
+    if (isActuallyDeleted) {
+        dateBadgeStyle += " background: #fee2e2; color: #ef4444; border: 1px solid #fecaca;";
+    } else if (isOverdue) {
+        dateBadgeStyle += " background: #fee2e2; color: #ef4444; border: 1px solid #fecaca; box-shadow: 0 2px 6px rgba(239, 68, 68, 0.15);";
+    } else if (isToday) {
+        dateBadgeStyle += " background: var(--primary-color); color: #fff; border: 1px solid var(--primary-color); box-shadow: 0 4px 10px rgba(74, 134, 232, 0.3); transform: scale(1.05);";
+    } else if (isFuture) {
+        dateBadgeStyle += " background: #dcfce7; color: #166534; border: 1px solid #bbf7d0;";
+    } else {
+        dateBadgeStyle += " background: var(--bg-body); color: var(--text-muted); opacity: 0.6; border: 1px solid var(--border-color); font-weight: 600;";
     }
 
     const repeatIcon = (task.repeatConfig && task.repeatConfig.isRepeating) ? `<span style="margin-left:4px; opacity:0.6; color:var(--primary-color);" title="Repeating: ${task.repeatConfig.frequency}">${svgRepeat}</span>` : '';
@@ -315,8 +337,8 @@ export function generateTaskHTML(task, index, {
                 <div style="flex: 1; min-width: 0; display: flex; align-items: center;">
                     <span class="task-actual-text" contenteditable="true" style="${textStyle}">${task.text}</span>
                 </div>
-                <div class="item-action-group" style="flex-shrink: 0; margin-left: auto;">
-                    <span style="color:#ef4444; font-size:11px; font-weight:700; margin-right:4px;">${countdown}</span>
+                <div class="item-action-group" style="flex-shrink: 0; margin-left: auto; display: flex; align-items: center; gap: 8px;">
+                    <span style="${dateBadgeStyle}">${countdown}</span>
                     <button class="btn-icon restore-task-btn" data-index="${index}" ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="Restore Task">${svgRestore}</button>
                     <button class="btn-icon delete-task-perm-btn" data-index="${index}" ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="Delete Permanently">${svgTrashRed}</button>
                 </div>
@@ -358,7 +380,7 @@ export function generateTaskHTML(task, index, {
     if (isActuallyDeleted) {
         const countdown = getTrashCountdownText(task, getAppSettings().autoDeleteDays);
         collapsibleActionsContent = `
-            <span style="color:#ef4444; font-size:11px; font-weight:700; margin-right:8px;">${countdown}</span>
+            <span style="${dateBadgeStyle} margin-right: 4px;">${countdown}</span>
             <button class="btn-icon restore-task-btn" data-index="${index}" ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="Restore Task">${svgRestore}</button>
             ${isSubtask ? `
                 <button class="btn-icon delete-subtask-perm-btn" data-parent-index="${parentIndex}" data-sub-index="${index}" data-id="${task.id}" title="Delete Permanently">${svgTrashRed}</button>
@@ -402,8 +424,8 @@ export function generateTaskHTML(task, index, {
                 </div>
             </div>
 
-            <div class="item-action-group" style="flex-shrink: 0; margin-left: auto;">
-                <span class="task-date" style="font-size: 11px; opacity: ${isActuallyDeleted ? '1' : '0.8'}; white-space: nowrap; color: ${isActuallyDeleted ? '#ef4444' : dateColor}; font-weight: ${nextDueDate ? '700' : 'normal'};">${dateDisplay}</span>
+            <div class="item-action-group" style="flex-shrink: 0; margin-left: auto; display: flex; align-items: center; gap: 8px;">
+                ${dateDisplay ? `<span class="task-date" style="${dateBadgeStyle}">${dateDisplay}</span>` : ''}
                 ${subtaskSpecificActionsHTML}${actionButtons}
             </div>
         </div>
