@@ -52,7 +52,6 @@
     <symbol id="icon-tag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></symbol>
     <symbol id="icon-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></symbol>
     <symbol id="icon-undo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></symbol>
-    <symbol id="icon-gtask" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.5V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.5"></path><polyline points="9 11 12 14 22 4"></polyline></symbol>
     <symbol id="icon-share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="18" cy="5" r="3"></circle>
       <circle cx="6" cy="12" r="3"></circle>
@@ -61,7 +60,6 @@
       <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
     </symbol>
     <symbol id="icon-keep" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><line x1="10" y1="9" x2="8" y2="9"></line></symbol>
-    <symbol id="icon-tasks-launcher" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"></path><path d="M9 12l2 2 4-4"></path></symbol>
     <symbol id="icon-external-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></symbol>
     <symbol id="icon-dock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"></path><path d="M10 14L21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></symbol>
     <symbol id="icon-chevron-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></symbol>
@@ -255,23 +253,13 @@
           <div style="display:flex; align-items:center; gap:6px;">
             <button class="btn-icon" id="btn-collapse-tasks-inline" title="Collapse Tasks & Notes" style="padding:2px; opacity:0.7;"><svg xmlns="http://www.w3.org/2000/svg" class="svg-icon-sm" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
             <span>✅ <span id="header-tasks-text">Tasks & Notes</span></span>
+            <button id="btn-mobile-todo-tools" class="btn-icon mobile-only" style="display: none; margin-left: 8px; font-weight: 900; font-size: 18px;">⋮</button>
           </div>
           <div style="display:flex; align-items:center; gap:10px;">
             <!-- 🟢 Mobile Tag Button -->
             <button class="btn-icon mobile-only" id="btn-open-mobile-tag-modal" title="Manage Tags" style="display:none; padding: 6px;">
                 <svg class="svg-icon-lg"><use href="#icon-tag"></use></svg>
             </button>
-             <div id="gtask-switch-wrapper" class="gtask-switch-group">
-                <div id="sf-google-task-view-controls" style="display: none; align-items:center; gap:4px;">
-                    <button id="btn-sf-open-tasks" class="btn-icon app-btn" title="Open Google Tasks" style="color:#2684fc; padding: 4px;">
-                        <svg viewBox="0 0 24 24" fill="currentColor" style="width:18px;height:18px;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"></path></svg>
-                    </button>
-                    <button id="btn-sf-tasks-side-view" class="btn-icon app-btn side-view-toggle" title="Toggle Side View" style="padding: 4px;">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="15" y1="3" x2="15" y2="21"></line></svg>
-                    </button>
-                </div>
-                <button id="btn-toggle-gtask-view" class="btn-gtask-toggle-text" title="Switch View Mode">Switch Google Task</button>
-             </div>
              <div style="position: relative;">
                 <button class="btn-icon" id="btn-google-apps-menu" title="Google Integrations" style="padding: 6px;">
                     <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M4 8h4V4H4v4zm6 12h4v-4h-4v4zm-6 0h4v-4H4v4zm0-6h4v-4H4v4zm6 0h4v-4h-4v4zm6-10v4h4V4h-4zm-6 4h4V4h-4v4zm6 6h4v-4h-4v4zm0 6h4v-4h-4v4z"/></svg>
@@ -286,13 +274,11 @@
                             <button id="btn-keep-tag" class="btn-icon app-btn" title="Filter Label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg></button>
                         </div>
                     </div>
-                    <!-- Row 2: Tasks -->
+                    <!-- Row 2: Calendar -->
                     <div class="app-row">
-                        <span class="app-label label-tasks">Tasks</span>
+                        <span class="app-label label-calendar">Calendar</span>
                         <div class="app-controls">
-                            <button id="btn-open-google-tasks-launcher" class="btn-icon app-btn" title="Open Tasks" style="color:#2684fc;"><svg viewBox="0 0 24 24" fill="currentColor" style="width:20px;height:20px;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"></path></svg></button>
-                            <button class="btn-icon app-btn side-view-toggle" id="tasks-side-view-btn" title="Toggle Side View"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="15" y1="3" x2="15" y2="21"></line></svg></button>
-                            <button id="connect-google-btn" class="btn-icon app-btn" title="Connect Google Tasks"><svg style="width:20px;height:20px;"><use href="#icon-google-minimal"></use></svg></button>
+                            <button id="connect-calendar-btn" class="btn-icon app-btn" title="Connect Google Calendar"><svg class="svg-icon-sm" style="width:20px;height:20px;"><use href="#icon-calendar"></use></svg></button>
                         </div>
                     </div>
                 </div>
@@ -319,7 +305,6 @@
             </div>
             
             <div class="task-input-bar">
-              <button id="btn-sync-toggle" class="btn-sync-toggle active" title="Save to Google Tasks"><svg style="width:18px;height:18px;"><use href="#icon-gtask"></use></svg></button>
               <input type="text" id="new-task-input" class="task-input" placeholder="Type a task...">
               <div class="date-wrapper">
                  <input type="date" id="new-task-date" class="task-date-input" title="Set Due Date" style="width: 100%;">
@@ -328,10 +313,6 @@
               </div>
               <button id="btn-task-repeat" class="btn-icon" title="Set Repeat" style="padding: 2px; margin-left: 2px;"><svg class="svg-icon-sm"><use href="#icon-repeat"></use></svg></button>
               <button class="btn btn-primary" id="btn-add-task" style="padding: 5px 12px; flex-shrink: 0; font-size: 13px; margin-left: 4px;">Add</button>
-              <div id="google-task-controls" class="google-task-menu" style="display:none;">
-                 <button id="btn-toggle-specific-list" class="btn-icon" title="Space-Specific List" style="margin-right: 4px; padding: 2px;"><svg class="svg-icon-sm"><use href="#icon-lock-minimal"></use></svg></button>
-                 <select id="google-task-list-select" style="background:transparent; border:none; color:var(--text-main); font-size:12px; font-weight:700; outline:none; cursor:pointer; max-width: 120px; text-overflow: ellipsis;" title="Select List"></select>
-              </div>
             </div>
 
             <ul class="task-list drag-container" id="task-list"></ul>
@@ -497,16 +478,17 @@
         </div>
     </div>
 
-    <div class="settings-group" id="task-sync-row" style="display:flex; align-items:center; gap:8px; margin-top:20px; background:var(--hover-bg); padding:10px; border-radius:6px; cursor:pointer;">
+    <div class="settings-group" style="display:flex; align-items:center; gap:8px; margin-top:20px; background:var(--hover-bg); padding:10px; border-radius:6px; cursor:pointer;">
         <label class="google-task-checkbox">
-            <input type="checkbox" id="edit-task-sync-check">
+            <input type="checkbox" id="sync-calendar-checkbox">
             <div class="checkmark-circle">
                 <svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg>
             </div>
         </label>
-        <label style="margin:0; cursor:pointer; font-weight:600; flex:1;">Sync with Google Tasks</label>
-        <svg style="width:18px;height:18px;"><use href="#icon-gtask"></use></svg>
+        <label for="sync-calendar-checkbox" style="margin:0; cursor:pointer; font-weight:600; flex:1;">Sync to Google Calendar</label>
+        <svg class="svg-icon-sm" style="color:#4285f4;"><use href="#icon-calendar"></use></svg>
     </div>
+
     <div class="modal-actions" style="margin-top: 20px; text-align:right;"><button class="btn btn-outline" id="btn-close-task-edit">Cancel</button> <button class="btn btn-primary" id="btn-save-task-edit">Save</button></div>
   </div></div>
 
@@ -766,15 +748,6 @@
       <div style="display:flex; align-items:center; gap:10px; margin-top:5px;">
         <input type="number" id="setting-auto-delete-days" class="settings-input" style="width:80px;" min="1" max="365">
         <span style="font-size:12px; color:var(--text-muted);">Days until items are permanently removed.</span>
-      </div>
-    </div>
-
-    <div class="settings-group" style="border-top: 1px solid var(--border-color); padding-top: 15px;">
-      <label style="display:flex; align-items:center; gap:6px; color:#dc2626;">🛠️ Troubleshooting:</label>
-      <div style="display:flex; align-items:center; gap:10px; margin-top:5px;">
-        <button class="btn btn-outline" id="btn-reset-sync-ids" style="color:#dc2626; border-color:#fecaca; font-size:12px;">Reset All Sync IDs</button>
-        <button class="btn btn-outline" id="btn-deep-sync-duplicates" style="color:#dc2626; border-color:#fecaca; font-size:12px;">Deep Sync & Remove Duplicates</button>
-        <span style="font-size:11px; color:var(--text-muted);">Use this if Google Tasks IDs are out of sync or tasks were deleted on Google.</span>
       </div>
     </div>
 

@@ -4,9 +4,7 @@ import { initSidebar, renderSidebar } from './components/sidebar.js';
 import { initTabs } from './components/tabs.js';
 import { initResources, resetUndoStack } from './components/resources.js';
 import { initTodoManager } from './features/todoManager.js';
-import { initGoogleTasks, fetchGoogleAPI, getGoogleStatus } from './features/googleTasks.js';
 import { initGoogleKeep } from './features/googleKeep.js';
-import { initGoogleTasksLauncher } from './features/googleTasksLauncher.js';
 import { initCustomLaunchers } from './features/customLaunchers.js';
 import { setupSpaceModals, setupItemModals, setupTagModal, setupSettingsModal, setupLauncherModal } from './components/modals.js';
 import { initDragAndDrop } from './core/drag-and-drop.js';
@@ -133,20 +131,10 @@ document.addEventListener('DOMContentLoaded', () => {
         initFocusTimer();
         initScheduleMode();
         initTodoManager({ 
-            fetchGoogleAPI: fetchGoogleAPI,
-            getGoogleAuthToken: () => getGoogleStatus().googleAuthToken,
-            // 🟢 ปรับปรุงให้รองรับการส่ง Space เข้าไปตรวจสอบ Specific List
-            getCurrentGoogleListId: (space) => {
-                const s = space || getCurrentSpace();
-                return (s && s.isSpecificListEnabled && s.googleTaskListId) ? s.googleTaskListId : getGoogleStatus().currentGoogleListId;
-            },
-            isGoogleSyncEnabled: () => getGoogleStatus().isGoogleSyncEnabled,
             onRender: renderAll
         });
         
-        initGoogleTasks({ onRender: renderAll });
         initGoogleKeep();
-        initGoogleTasksLauncher();
         initCustomLaunchers();
         initDashboardQuickNote();
         initRewardSystem();

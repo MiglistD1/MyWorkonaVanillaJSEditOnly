@@ -1,7 +1,6 @@
 import { svgTrashRed, svgPencil } from '../core/icons.js';
 import { getSpaces, saveData, getThaiUnit, getUnitCharFromThai } from '../core/storage.js';
 import { saveFlow, flowState, getFlowItems } from './smartFlow.js';
-import { fetchGoogleAPI, getGoogleStatus } from './googleTasks.js';
 
 let rewardData = {
     lootList: [],
@@ -93,7 +92,6 @@ async function saveRewardData() {
     } catch (e) {
         console.error("Failed to save reward data", e);
     }
-    syncLootWithGoogleTasks();
 }
 
 /**
@@ -101,295 +99,22 @@ async function saveRewardData() {
  */
 let isSyncInProgress = false; // 🟢 ป้องกันการรันซิงค์ซ้อนกัน (Race Condition)
 async function syncLootWithGoogleTasks() {
-    if (isSyncInProgress) return;
-    isSyncInProgress = true;
-
-    // 🟢 แสดงสถานะ Syncing... ทันที
-    updateSyncStatusUI("Syncing...");
-
-    const status = getGoogleStatus();
-    if (!rewardData.isSyncEnabled || !rewardData.targetListId || !status.googleAuthToken) {
-        updateSyncStatusUI("Sync Disabled or Not Connected.");
-        return;
-    }
-
-    try {
-        // 1. ดึงรายการงานทั้งหมดจาก List ที่กำหนด
-        const data = await fetchGoogleAPI(`/lists/${rewardData.targetListId}/tasks?showCompleted=true&showHidden=true`);
-        if (!data || !data.items) return;
-
-        const googleTasks = data.items;
-        const googleMap = {}; // { taskId: taskObject }
-        
-        const googleBigRewardsMap = {}; // 🟢 แยก Map เฉพาะสำหรับ Big Rewards
-        googleTasks.forEach(t => { 
-            googleMap[t.id] = t; 
-            if (t.title.toLowerCase().startsWith('big reward :')) googleBigRewardsMap[t.id] = t;
-        });
-
-        let hasChanged = false;
-        const types = ['money', 'time', 'item'];
-
-        for (const type of types) {
-            const categories = type === 'money' ? rewardData.moneyCategories : (type === 'time' ? rewardData.timeCategories : rewardData.itemCategories);
-            const unit = type === 'money' ? 'b' : (type === 'time' ? 'm' : 'x');
-            const icon = type === 'money' ? '💰' : (type === 'time' ? '⏳' : '🎁');
-
-            for (const cat of categories) {
-                const amount = (rewardData.wallets[type]?.[cat] || 0);
-                const expectedTitle = `@รางวัล${amount.toFixed(2)}${getThaiUnit(unit)}_${cat.toLowerCase()}`; // 🟢 บังคับเป็น #lowercase
-                const lastSynced = (rewardData.lastSyncAmounts[type]?.[cat] || 0);
-                
-                let taskId = rewardData.walletTaskIds[type][cat];
-                let gTask = taskId ? googleMap[taskId] : null;
-                let googleAmount = null;
-
-                if (gTask && gTask.status !== 'completed') {
-                    const escapedCat = cat.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // Escape special characters for regex
-                    const titleRegex = new RegExp(`^@รางวัล([\\d.]+)(บาท|นาที|อัน)_(${escapedCat})$`, 'i'); // 🟢 ตรวจสอบรูปแบบใหม่
-                    const match = gTask.title.match(titleRegex);
-                    if (match) googleAmount = parseFloat(match[1]);
-                }
-
-                // --- A. ตรวจสอบการถอนเงินจาก Google (Completed) ---
-                if (gTask && gTask.status === 'completed' && amount > 0) {
-                    executeWithdrawal(cat, type, amount, icon, unit, null); // ถอนทันที
-                    await fetchGoogleAPI(`/lists/${rewardData.targetListId}/tasks/${taskId}`, 'DELETE');
-                    delete rewardData.walletTaskIds[type][cat];
-                    if (!rewardData.lastSyncAmounts[type]) rewardData.lastSyncAmounts[type] = {};
-                    rewardData.lastSyncAmounts[type][cat] = 0;
-                    hasChanged = true;
-                    continue;
-                }
-
-                // 🟢 ตรวจสอบว่ารูปแบบชื่อใน Google ถูกต้องหรือไม่ (มี # และเป็น lowercase หรือไม่)
-                const isTitleCorrect = gTask && gTask.title === expectedTitle;
-
-                // --- B. ตรวจสอบ Conflict ระหว่าง Google และ Local ---
-                if (googleAmount !== null && googleAmount !== lastSynced) {
-                    // 🟢 กรณี 1: ยอดใน Google เปลี่ยน (คุณแก้ในมือถือ) -> Google ชนะ
-                    rewardData.wallets[type][cat] = googleAmount;
-                    if (!rewardData.lastSyncAmounts[type]) rewardData.lastSyncAmounts[type] = {};
-                    rewardData.lastSyncAmounts[type][cat] = googleAmount;
-                    hasChanged = true;
-                } 
-                else if (amount !== lastSynced || (amount > 0 && (!taskId || !isTitleCorrect))) {
-                    // 🟢 กรณี 2: ยอดใน Web App เปลี่ยน OR รูปแบบชื่อใน Google ไม่ถูกต้อง -> อัปเดต Google
-                    if (!taskId || !gTask) {
-                        // สร้างงานใหม่ถ้ายังไม่มี
-                        const res = await fetchGoogleAPI(`/lists/${rewardData.targetListId}/tasks`, 'POST', { title: expectedTitle });
-                        if (res && res.id) {
-                            rewardData.walletTaskIds[type][cat] = res.id;
-                            // Only update lastSyncAmounts if Google API call was successful
-                            if (!rewardData.lastSyncAmounts[type]) rewardData.lastSyncAmounts[type] = {};
-                            rewardData.lastSyncAmounts[type][cat] = amount;
-                            hasChanged = true;
-                        } else {
-                            // If POST failed, don't update lastSyncAmounts, so it tries again next time
-                            console.error(`Failed to create Google Task for ${cat} (${type})`);
-                        }
-                    } else {
-                        // 🟢 อัปเดตยอดใน Google เฉพาะเมื่อข้อความไม่ตรงกันเป๊ะๆ (ป้องกันการยิง API ซ้ำ)
-                        const patchResult = await fetchGoogleAPI(`/lists/${rewardData.targetListId}/tasks/${taskId}`, 'PATCH', { title: expectedTitle });
-                        if (patchResult) { // Check if PATCH was successful
-                            if (!rewardData.lastSyncAmounts[type]) rewardData.lastSyncAmounts[type] = {};
-                            rewardData.lastSyncAmounts[type][cat] = amount;
-                            hasChanged = true;
-                        } else {
-                            // If PATCH failed, don't update lastSyncAmounts, so it tries again next time
-                            console.error(`Failed to update Google Task ${taskId} for ${cat} (${type})`);
-                        }
-                    }
-                } else if (amount <= 0 && taskId) {
-                    // ลบงานทิ้งถ้ายอดเป็น 0
-                    await fetchGoogleAPI(`/lists/${rewardData.targetListId}/tasks/${taskId}`, 'DELETE');
-                    delete rewardData.walletTaskIds[type][cat];
-                    if (rewardData.lastSyncAmounts[type]) rewardData.lastSyncAmounts[type][cat] = 0;
-                    hasChanged = true;
-                }
-            }
-        }
-
-        // --- D. Big Reward Sync (Local -> Google) ---
-        for (let i = rewardData.lootList.length - 1; i >= 0; i--) {
-            const item = rewardData.lootList[i];
-            const expectedBigTitle = `Big reward : ${item.name}`;
-            let gTask = item.googleTaskId ? googleBigRewardsMap[item.googleTaskId] : null;
-
-            if (item.googleTaskId && !gTask) {
-                // กรณี 1: มี ID แต่หาใน Google ไม่เจอ (ถูกลบจาก Google) -> ลบใน Local
-                rewardData.lootList.splice(i, 1);
-                hasChanged = true;
-                continue;
-            }
-
-            if (gTask) {
-                // กรณี 2: งานยังอยู่ใน Google
-                if (gTask.status === 'completed') {
-                    // ก. ถูกติ๊กถูกใน Google -> ให้ Claim ใน Local
-                    const claimedItem = rewardData.lootList.splice(i, 1)[0];
-                    claimedItem.collectedAt = new Date().toLocaleTimeString() + " (" + new Date().toLocaleDateString() + ")";
-                    rewardData.collectedList.unshift(claimedItem);
-                    
-                    // เอฟเฟกต์ฉลอง (เรียกใช้ฟังก์ชันที่มีอยู่)
-                    triggerMoneyRain(window.innerWidth/2, window.innerHeight/2);
-                    playChaChingSound();
-                    
-                    await fetchGoogleAPI(`/lists/${rewardData.targetListId}/tasks/${gTask.id}`, 'DELETE');
-                    hasChanged = true;
-                } else if (gTask.title !== expectedBigTitle) {
-                    // ข. ชื่อใน Google เปลี่ยนไป (คุณแก้ในมือถือ) -> อัปเดต Local
-                    const newName = gTask.title.replace(/^Big reward\s*:\s*/i, '').trim();
-                    if (newName) {
-                        item.name = newName;
-                        hasChanged = true;
-                    }
-                }
-            } else if (!item.googleTaskId) {
-                // กรณี 3: ยังไม่มีใน Google (เพิ่งเพิ่มมาใหม่จาก Local) -> สร้างงานใน Google
-                const res = await fetchGoogleAPI(`/lists/${rewardData.targetListId}/tasks`, 'POST', { title: expectedBigTitle });
-                if (res && res.id) {
-                    item.googleTaskId = res.id;
-                    hasChanged = true;
-                }
-            }
-            
-            // มาร์คว่ารายการนี้ซิงค์แล้ว เพื่อไม่ให้ไปซ้ำกับขั้นตอนตรวจสอบงานแปลกปลอม
-            if (item.googleTaskId) delete googleBigRewardsMap[item.googleTaskId];
-        }
-
-
-        if (hasChanged) await chrome.storage.local.set({ 'questRewardData': rewardData }); // บันทึกข้อมูลที่เปลี่ยนไป
-        rewardData.lastSyncTimestamp = Date.now(); // 🟢 อัปเดตเวลาซิงค์
-        await chrome.storage.local.set({ 'questRewardData': rewardData }); // บันทึกอีกครั้งเพื่อเก็บเวลา
-        updateSyncStatusUI(getTimeAgo(rewardData.lastSyncTimestamp));
-    } catch (e) { 
-        console.error("Loot sync failed", e); 
-        updateSyncStatusUI("Sync Failed!"); 
-    } finally {
-        isSyncInProgress = false;
-    }
 }
 
 /**
  * 🔄 ปุ่ม T: บังคับซิงค์ข้อมูลจาก Google Tasks มาลงที่ Web App (Local = Google)
  */
 async function forceSyncFromGoogle() {
-    const status = getGoogleStatus();
-    if (!rewardData.isSyncEnabled || !rewardData.targetListId || !status.googleAuthToken) return;
-    updateSyncStatusUI("Force Syncing from Google...");
-
-    try {
-        const data = await fetchGoogleAPI(`/lists/${rewardData.targetListId}/tasks?showCompleted=true&showHidden=true`);
-        if (!data || !data.items) return;
-        
-        const googleTasks = data.items;
-        let hasChanged = false;
-
-        // เตรียมข้อมูลใหม่
-        const newWallets = { money: {}, time: {}, item: {} };
-        const newWalletIds = { money: {}, time: {}, item: {} };
-        const newSyncAmounts = { money: {}, time: {}, item: {} };
-        const newLootList = [];
-
-        googleTasks.forEach(gt => {
-            if (gt.status === 'completed') return;
-
-            // 1. ตรวจสอบ Wallet: [amount][unit] สำหรับ #[cat]
-            const walletMatch = gt.title.match(/^@รางวัล([\d.]+)(บาท|นาที|อัน)_(.+)$/i); // Updated regex
-            if (walletMatch) {
-                const [_, val, unitChar, catName] = walletMatch;
-                const type = getUnitCharFromThai(unitChar) === 'b' ? 'money' : (getUnitCharFromThai(unitChar) === 't' ? 'time' : 'item'); // Convert Thai unit back to char
-                const cats = type === 'money' ? rewardData.moneyCategories : (type === 'time' ? rewardData.timeCategories : rewardData.itemCategories);
-                
-                const realCat = cats.find(c => c.toLowerCase() === catName.toLowerCase());
-                if (realCat) {
-                    newWallets[type][realCat] = parseFloat(val);
-                    newWalletIds[type][realCat] = gt.id;
-                    newSyncAmounts[type][realCat] = parseFloat(val);
-                    hasChanged = true;
-                }
-            }
-
-            // 2. ตรวจสอบ Big Reward: Big reward : [Name]
-            if (gt.title.toLowerCase().startsWith('big reward :')) {
-                const name = gt.title.replace(/^Big reward\s*:\s*/i, '').trim();
-                newLootList.push({
-                    id: Date.now() + Math.random(),
-                    name: name,
-                    date: new Date().toLocaleDateString(),
-                    isSpecial: false,
-                    googleTaskId: gt.id
-                });
-                hasChanged = true;
-            }
-        });
-
-        rewardData.wallets = newWallets;
-        rewardData.walletTaskIds = newWalletIds;
-        rewardData.lastSyncAmounts = newSyncAmounts;
-        rewardData.lootList = newLootList;
-        rewardData.lastSyncTimestamp = Date.now();
-
-        await chrome.storage.local.set({ 'questRewardData': rewardData });
-        renderRewardContent();
-        updateSyncStatusUI(getTimeAgo(rewardData.lastSyncTimestamp));
-    } catch (e) { console.error(e); updateSyncStatusUI("Force Sync Failed", true); }
 }
 
 /**
  * 🔄 ปุ่ม W: บังคับส่งข้อมูลจาก Web App ไปทับใน Google Tasks (Google = Local)
  */
 async function forceSyncToGoogle() {
-    const status = getGoogleStatus();
-    if (!rewardData.isSyncEnabled || !rewardData.targetListId || !status.googleAuthToken) return;
-    updateSyncStatusUI("Force Syncing to Google...");
-
-    try {
-        // เคลียร์ค่า Mapping เดิมทั้งหมด
-        rewardData.walletTaskIds = { money: {}, time: {}, item: {} };
-        rewardData.lastSyncAmounts = { money: {}, time: {}, item: {} };
-        rewardData.lootList.forEach(l => delete l.googleTaskId);
-
-        // ลบงานเดิมใน Google Tasks ที่เป็นของระบบทิ้งทั้งหมด
-        const data = await fetchGoogleAPI(`/lists/${rewardData.targetListId}/tasks?showCompleted=false`);
-        if (data && data.items) {
-            for (const gt of data.items) {
-                const isWallet = gt.title.match(/^([\d.]+)([btx]) (?:สำหรับ|for) #(.+)$/i);
-                const isBig = gt.title.toLowerCase().startsWith('big reward :');
-                if (isWallet || isBig) {
-                    await fetchGoogleAPI(`/lists/${rewardData.targetListId}/tasks/${gt.id}`, 'DELETE');
-                }
-            }
-        }
-
-        // สั่ง Sync ปกติ (ระบบจะเห็นว่าฝั่ง Google ว่างเปล่า และจะทำการสร้างใหม่ให้ตรงกับ Local ทั้งหมด)
-        await syncLootWithGoogleTasks();
-        updateSyncStatusUI("Force Update Complete");
-    } catch (e) { console.error(e); updateSyncStatusUI("Force Sync Failed", true); }
 }
 
 export function initRewardSystem() {
     loadRewardData();
-
-    // Listen for Google Tasks sync completion to refresh reward modal
-    // 🟢 ตรวจสอบว่า chrome.runtime.onMessage มีอยู่ก่อนเรียกใช้
-    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) {
-        chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
-            if (message.type === 'GOOGLE_TASKS_SYNC_COMPLETE') {
-                // 🟢 เมื่อการซิงค์หลักเสร็จ ให้โหลดข้อมูลรางวัลใหม่และสั่งซิงค์ Loot ทันทีเพื่อดึงยอดล่าสุดจาก Google
-                await loadRewardData();
-                await syncLootWithGoogleTasks();
-                
-                const modal = document.getElementById('reward-modal');
-                if (modal && modal.style.display === 'flex') {
-                    renderRewardContent();
-                }
-            }
-        }
-        );
-    }
-    
     // 🟢 1. ส่งออกข้อมูลเพื่อให้ระบบ Autocomplete ใน ui-helpers.js ดึงไปใช้แสดง Popup
     window.getRewardSystemData = () => rewardData;
 

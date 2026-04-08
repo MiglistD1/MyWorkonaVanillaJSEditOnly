@@ -40,7 +40,7 @@
   "oauth2": {
       "client_id": "586837492075-10190s3r8iqqhccc90vsuvvb5jqml05a.apps.googleusercontent.com",
       "scopes": [
-        "https://www.googleapis.com/auth/tasks",
+        "https://www.googleapis.com/auth/calendar.events",
         "https://www.googleapis.com/auth/drive.file"
       ]
     }

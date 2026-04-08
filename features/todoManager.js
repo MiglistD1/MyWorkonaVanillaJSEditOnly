@@ -1,13 +1,12 @@
 import Sortable from '../sortable.esm.js';
-import { svgEdit, svgTrashRed, googleTasksIcon, svgRepeat } from '../core/icons.js';
+import { svgEdit, svgTrashRed, svgRepeat } from '../core/icons.js';
 import { getCurrentSpace, saveData, getShortDate, getAppSettings, setCurrentSpaceId, getSpaces, getFilterTags, loadData, getGlobalLaunchers, getLauncherTags, getCurrentSpaceId, getFilterMode } from '../core/storage.js';
 import { generateMiniTagsBtn, generateTaskHTML, attachSubtaskEventListeners, attachTaskInlineEditListeners, handleTagAutocomplete, applySyntaxHighlighting } from '../core/ui-helpers.js';
 
 import { saveToDrive, getAuthToken } from '../core/driveSync.js';
 import { svgRefresh, svgSpinner } from '../core/icons.js';
-import { syncAllGoogleTasks, createGoogleTask, updateGoogleTaskUI, getTargetListId } from './googleTasks.js';
 import { checkAndResetHabits, renderHabitList } from './habitSheet.js';
-import { openGoogleTasks } from './googleTasksLauncher.js';
+import { createCalendarEvent, updateCalendarEvent, deleteCalendarEvent } from '../core/calendarSync.js';
 
 // State & Callbacks
 /** 🟢 Helper: ตรวจสอบว่ากำลังโฟกัสที่ Element ที่พิมพ์ได้หรือไม่ */
@@ -148,10 +147,6 @@ export function toggleTaskFocus(spaceId, taskIndex, isSubtask, parentIndex = nul
         onRenderCallback();
     }
 }
-let fetchGoogleAPI = null;
-let getGoogleAuthToken = null;
-let getCurrentGoogleListId = null;
-let isGoogleSyncEnabled = null;
 let onRenderCallback = () => {};
 
 let _fromCommandCenter = false;
@@ -301,11 +296,124 @@ function updateDateInputLabel(inputEl) {
 }
 
 export function initTodoManager(callbacks) {
-    fetchGoogleAPI = callbacks.fetchGoogleAPI;
-    getGoogleAuthToken = callbacks.getGoogleAuthToken;
-    getCurrentGoogleListId = callbacks.getCurrentGoogleListId;
-    isGoogleSyncEnabled = callbacks.isGoogleSyncEnabled;
     onRenderCallback = callbacks.onRender;
+
+    // 🟢 ระบบ Mobile Tools Menu (3 จุด)
+    const mobileToolsBtn = document.getElementById('btn-mobile-todo-tools');
+    if (mobileToolsBtn) {
+        mobileToolsBtn.onclick = (e) => {
+            e.stopPropagation();
+            
+            // 1. ตรวจสอบหรือสร้าง Popup Element (Singleton)
+            let menuPopup = document.getElementById('sf-mobile-tools-popup');
+            if (!menuPopup) {
+                menuPopup = document.createElement('div');
+                menuPopup.id = 'sf-mobile-tools-popup';
+                menuPopup.className = 'mobile-tools-popup';
+                document.body.appendChild(menuPopup);
+            }
+
+            const isActive = menuPopup.classList.contains('is-active');
+            if (isActive) {
+                menuPopup.classList.remove('is-active');
+            } else {
+                // 2. อัปเดตเนื้อหาและแสดงผล
+                updateMobileToolsContent(menuPopup);
+                menuPopup.classList.add('is-active');
+            }
+        };
+    }
+
+    /** 🛠️ ฟังก์ชันย่อยสำหรับวาดเนื้อหาเมนูเครื่องมือมือถือ */
+    function updateMobileToolsContent(container) {
+        const settings = getAppSettings();
+        const space = getCurrentSpace();
+        // หากอยู่ใน Command Center ให้ใช้ Default Object เพื่อไม่ให้ Code พัง
+        const spaceRef = space || { showTaskActions: false, hideProminentTasks: true };
+        const showExtra = settings.showExtraTaskSections !== false;
+
+        const activeStyle = 'background: rgba(47, 128, 237, 0.15) !important; color: var(--primary-color) !important; border: 1.5px solid var(--primary-color) !important;';
+        const inactiveStyle = 'background: var(--bg-body) !important; opacity: 0.5; border: 1px solid var(--border-color) !important;';
+
+        container.innerHTML = `
+            <div class="drag-handle-bar"></div>
+            <div class="sf-input-bar-header" style="padding: 0 10px 15px 10px; border-bottom: 1px solid var(--border-color); margin-bottom: 15px;">
+                <span style="font-size: 11px; font-weight: 900; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px;">✨ Todo Tools</span>
+                <button class="btn-icon sf-btn-close-tools" style="font-size: 18px; font-weight: bold;">✕</button>
+            </div>
+            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                <button class="sf-tool-btn" data-action="actions" style="flex:1; justify-content:center; ${spaceRef.showTaskActions ? activeStyle : inactiveStyle}">
+                    <span class="toggle-actions-btn circle-icon ${spaceRef.showTaskActions ? 'expanded' : ''}" style="margin:0; pointer-events:none; border-color: currentColor;"></span>
+                </button>
+                <button class="sf-tool-btn" data-action="flags" style="flex:1; justify-content:center; ${!spaceRef.hideProminentTasks ? activeStyle : inactiveStyle}">
+                    <svg class="svg-icon-sm" style="width:18px; height:18px;"><use href="#icon-flag"></use></svg>
+                </button>
+                <button class="sf-tool-btn" data-action="extra" style="flex:1; justify-content:center; ${showExtra ? activeStyle : inactiveStyle}">
+                    <svg class="svg-icon-sm" style="width:18px; height:18px;"><use href="#icon-${showExtra ? 'eye' : 'eye-off'}"></use></svg>
+                </button>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                <button class="sf-tool-btn" data-action="expand" style="background: var(--bg-body) !important; border: 1px solid var(--border-color) !important; justify-content: center;"><svg class="svg-icon-sm" style="margin-right:8px;"><use href="#icon-chevrons-down"></use></svg> ขยาย</button>
+                <button class="sf-tool-btn" data-action="collapse" style="background: var(--bg-body) !important; border: 1px solid var(--border-color) !important; justify-content: center;"><svg class="svg-icon-sm" style="margin-right:8px;"><use href="#icon-chevrons-up"></use></svg> ยุบ</button>
+            </div>
+            <button class="sf-tool-btn" data-action="templates" style="width: 100%; justify-content: center; background: var(--bg-body) !important; border: 1px solid var(--border-color) !important;"><svg class="svg-icon-sm" style="margin-right:8px;"><use href="#icon-layers"></use></svg> Templates Manager</button>
+        `;
+
+        // ผูกเหตุการณ์ปุ่มปิด
+        container.querySelector('.sf-btn-close-tools').onclick = () => container.classList.remove('is-active');
+
+        // ผูกเหตุการณ์ปุ่มคำสั่ง (ใช้ Delegation ภายใน Container)
+        container.querySelectorAll('.sf-tool-btn').forEach(btn => {
+            btn.onclick = (ev) => {
+                const action = btn.dataset.action;
+                if (action === 'actions') document.getElementById('btn-toggle-task-actions')?.click();
+                else if (action === 'flags') document.getElementById('btn-toggle-prominent-tasks')?.click();
+                else if (action === 'extra') document.getElementById('btn-toggle-extra-sections')?.click();
+                else if (action === 'expand') document.getElementById('btn-expand-all-subtasks')?.click();
+                else if (action === 'collapse') document.getElementById('btn-collapse-all-subtasks')?.click();
+                else if (action === 'templates') { container.classList.remove('is-active'); document.getElementById('btn-todo-templates')?.click(); }
+                
+                if (action !== 'templates') setTimeout(() => updateMobileToolsContent(container), 50);
+            };
+        });
+    }
+
+    // 🟢 ระบบปิดเมนูเมื่อคลิกนอกพื้นที่
+    document.addEventListener('click', (e) => {
+        const menu = document.getElementById('sf-mobile-tools-popup');
+        if (menu && menu.classList.contains('is-active') && !menu.contains(e.target) && !e.target.closest('#btn-mobile-todo-tools')) {
+            menu.classList.remove('is-active');
+        }
+    });
+
+    // 📅 ระบบตรวจสอบสถานะการเชื่อมต่อ Google Calendar
+    const checkCalendarAuth = async () => {
+        const token = await getAuthToken(false);
+        const btns = [document.getElementById('connect-calendar-btn'), document.getElementById('master-connect-calendar-btn')];
+        
+        btns.forEach(btn => {
+            if (!btn) return;
+            if (token) {
+                btn.style.background = '#34a853';
+                btn.style.color = '#ffffff';
+                btn.title = "Google Calendar: Connected";
+            } else {
+                btn.style.background = '';
+                btn.style.color = '';
+                btn.title = "Connect Google Calendar";
+            }
+            
+            btn.onclick = async (e) => {
+                e.stopPropagation();
+                if (!token) {
+                    const newToken = await getAuthToken(true);
+                    if (newToken) checkCalendarAuth();
+                } else {
+                    alert("Google Calendar เชื่อมต่อเรียบร้อยแล้วผ่านระบบ Drive Sync ครับ");
+                }
+            };
+        });
+    };
 
     // 🟢 Moved from top level to inside init
     const taskInput = document.getElementById('new-task-input');
@@ -829,11 +937,9 @@ export function initTodoManager(callbacks) {
     // Edit Modal Events
     document.getElementById('btn-close-task-edit').addEventListener('click', () => { document.getElementById('task-edit-modal').style.display = 'none'; }); //
     document.getElementById('btn-save-task-edit').addEventListener('click', saveEditedTask);
-    document.getElementById('btn-close-link-modal').addEventListener('click', () => { document.getElementById('task-link-modal').style.display = 'none'; });
-    document.getElementById('btn-save-task-link').addEventListener('click', saveTaskLink);
-    document.getElementById('task-sync-row').addEventListener('click', (e) => {
-        if (e.target.id !== 'edit-task-sync-check') document.getElementById('edit-task-sync-check').click();
-    });
+
+    // รันการตรวจสอบสถานะเริ่มต้น
+    setTimeout(checkCalendarAuth, 1000);
 
     // Note Events
     document.querySelectorAll('.custom-color-slot').forEach((picker, index) => {
@@ -970,12 +1076,6 @@ export function initTodoManager(callbacks) {
             e.stopPropagation(); // ป้องกันการพับ/เปิดของ Details เมื่อกดปุ่ม
             const space = getCurrentSpace();
             if (space && confirm("Empty Tasks Trash? This cannot be undone.")) {
-                // ลบออกจาก Google Tasks ด้วยหากมีการซิงค์อยู่
-                for (const t of space.tasks) {
-                    if (t.isDeleted && t.googleTaskId && getGoogleAuthToken()) {
-                        await fetchGoogleAPI(`/lists/${getCurrentGoogleListId()}/tasks/${t.googleTaskId}`, 'DELETE');
-                    }
-                }
                 space.tasks = space.tasks.filter(t => !t.isDeleted);
                 saveData();
                 onRenderCallback();
@@ -1060,39 +1160,6 @@ export function initTodoManager(callbacks) {
             return;
         }
 
-        // 🔘 Main Task Sync Toggle
-        if (e.target.closest('.main-task-sync-toggle-btn')) {
-            const btn = e.target.closest('.main-task-sync-toggle-btn');
-            const idx = parseInt(btn.getAttribute('data-index'));
-            const task = space.tasks[idx];
-            if (!task) return;
-
-            const token = getGoogleAuthToken();
-            const listId = getCurrentGoogleListId(space); // 🟢 ส่ง space เข้าไปด้วย
-
-            if (!token) {
-                alert("Please connect to Google first");
-                return;
-            }
-
-            if (task.googleTaskId) {
-                // ปิดการซิงค์: ลบออกจาก Google
-                await fetchGoogleAPI(`/lists/${listId}/tasks/${task.googleTaskId}`, 'DELETE');
-                task.googleTaskId = null;
-            } else {
-                // เปิดการซิงค์: สร้างบน Google
-                const gTitle = `${task.text} (S: ${space.name})`;
-                let gBody = { title: gTitle };
-                if (task.dueDate) { gBody.due = new Date(task.dueDate).toISOString(); }
-                const gTask = await createGoogleTask(listId, gBody);
-                if (gTask && gTask.id) {
-                    task.googleTaskId = gTask.id;
-                }
-            }
-            saveData();
-            onRenderCallback();
-        }
-
         // 🔘 Archive Task Button (Main Task)
         if (e.target.closest('.archive-task-btn')) {
             const btn = e.target.closest('.archive-task-btn');
@@ -1102,11 +1169,6 @@ export function initTodoManager(callbacks) {
                 task.completed = true;
                 task.completedAt = Date.now();
                 task.isProminent = false;
-                // Google Sync
-                if (task.googleTaskId && getGoogleAuthToken()) {
-                    const targetListId = getCurrentGoogleListId(space);
-                    fetchGoogleAPI(`/lists/${targetListId}/tasks/${task.googleTaskId}`, 'PATCH', { status: 'completed' });
-                }
                 // Auto-complete subtasks
                 if (task.subtasks) {
                     task.subtasks.forEach(sub => { sub.completed = true; });
@@ -1124,10 +1186,6 @@ export function initTodoManager(callbacks) {
             const task = space.tasks[pIdx]?.subtasks?.[sIdx];
             if (task) {
                 task.completed = true;
-                if (task.googleTaskId && getGoogleAuthToken()) {
-                    const targetListId = getCurrentGoogleListId(space);
-                    fetchGoogleAPI(`/lists/${targetListId}/tasks/${task.googleTaskId}`, 'PATCH', { status: 'completed' });
-                }
                 saveData(); onRenderCallback();
             }
             return;
@@ -1148,12 +1206,6 @@ export function initTodoManager(callbacks) {
             const days = getAppSettings().autoDeleteDays || 30;
             task.expiryAt = task.deletedAt + (days * 24 * 60 * 60 * 1000);
             task.completed = false; // เอากลับมาเป็นงานที่ยังไม่เสร็จเผื่อกู้คืน
-
-            // ☁️ Sync with Google Tasks: เมื่อลบงานในแอป ให้ทำเครื่องหมายว่าเสร็จใน Google เพื่อซ่อนงาน
-            if (task.googleTaskId && getGoogleAuthToken()) {
-                const targetListId = getTargetListId(space);
-                fetchGoogleAPI(`/lists/${targetListId}/tasks/${task.googleTaskId}`, 'PATCH', { status: 'completed' });
-            }
             saveData(); onRenderCallback();
             triggerCloudSave();
         }
@@ -1182,9 +1234,11 @@ export function initTodoManager(callbacks) {
         if (e.target.closest('.delete-task-perm-btn')) {
             const idx = parseInt(e.target.closest('.delete-task-perm-btn').dataset.index);
             if (confirm("Delete task permanently?")) {
-                if (space.tasks[idx].googleTaskId && getGoogleAuthToken()) {
-                    const targetListId = getCurrentGoogleListId(space);
-                    fetchGoogleAPI(`/lists/${targetListId}/tasks/${space.tasks[idx].googleTaskId}`, 'DELETE'); 
+                const task = space.tasks[idx];
+                if (task.calendarEventId) {
+                    getAuthToken(false).then(token => {
+                        if (token) deleteCalendarEvent(task.calendarEventId, token);
+                    });
                 }
                 space.tasks.splice(idx, 1);
                 saveData(); onRenderCallback();
@@ -1198,9 +1252,10 @@ export function initTodoManager(callbacks) {
             const sIdx = parseInt(btn.getAttribute('data-sub-index'));
             if (confirm("Delete subtask permanently?")) {
                 const subtask = space.tasks[pIdx]?.subtasks?.[sIdx];
-                if (subtask && subtask.googleTaskId && getGoogleAuthToken()) {
-                    const targetListId = getCurrentGoogleListId(space);
-                    fetchGoogleAPI(`/lists/${targetListId}/tasks/${subtask.googleTaskId}`, 'DELETE');
+                if (subtask && subtask.calendarEventId) {
+                    getAuthToken(false).then(token => {
+                        if (token) deleteCalendarEvent(subtask.calendarEventId, token);
+                    });
                 }
                 space.tasks[pIdx].subtasks.splice(sIdx, 1);
                 saveData();
@@ -1259,48 +1314,6 @@ export function initTodoManager(callbacks) {
                 triggerCloudSave(); // Trigger cloud save after converting
                 onRenderCallback(); // Rerender UI
             }
-        }
-        // Sub-task Sync Toggle
-        if (e.target.closest('.subtask-sync-toggle-btn')) {
-            const btn = e.target.closest('.subtask-sync-toggle-btn');
-            const pIdx = parseInt(btn.getAttribute('data-parent-index'));
-            const sIdx = parseInt(btn.getAttribute('data-sub-index'));
-
-            const parentTask = space.tasks[pIdx];
-            const task = parentTask?.subtasks?.[sIdx];
-            if (!task) return;
-
-            const token = getGoogleAuthToken();
-            const targetListId = getCurrentGoogleListId(space);
-
-            if (!token) {
-                alert("Please connect to Google first");
-                return;
-            }
-
-            if (task.googleTaskId) {
-                // ปิดการซิงค์: ลบออกจาก Google
-                await fetchGoogleAPI(`/lists/${targetListId}/tasks/${task.googleTaskId}`, 'DELETE');
-                task.googleTaskId = null;
-            } else {
-                // เปิดการซิงค์: ตรวจสอบว่างานหลักซิงค์แล้วหรือยังเพื่อทำการ Nesting
-                if (!parentTask.googleTaskId) {
-                    alert("Please sync the main task first to nest this subtask in Google Tasks.");
-                    return;
-                }
-
-                // สร้างบน Google พร้อมระบุ Parent ID
-                const gTitle = `${task.text} (S: ${space.name})`;
-                let gBody = { title: gTitle };
-                if (task.dueDate) { gBody.due = new Date(task.dueDate).toISOString(); }
-                const gTask = await createGoogleTask(targetListId, gBody, parentTask.googleTaskId);
-                if (gTask && gTask.id) {
-                    task.googleTaskId = gTask.id;
-                }
-            }
-            
-            saveData();
-            onRenderCallback();
         }
     };
 
@@ -1546,20 +1559,13 @@ export function initTodoManager(callbacks) {
                 }
             }
 
-            // ☁️ Sync with Google Tasks (ใช้ targetListId ที่ถูกต้อง)
-            if (task.googleTaskId && getGoogleAuthToken()) {
-                const targetListId = getTargetListId(space);
-                fetchGoogleAPI(`/lists/${targetListId}/tasks/${task.googleTaskId}`, 'PATCH', { status: isChecked ? 'completed' : 'needsAction' });
-            }
-
-            // อัปเดตสถานะงานย่อยทั้งหมด
-            if (task.subtasks && task.subtasks.length > 0) {
-                task.subtasks.forEach(sub => {
-                    if (!sub) return;
-                    sub.completed = isChecked;
-                    if (sub.googleTaskId && getGoogleAuthToken()) {
-                        const targetListId = getCurrentGoogleListId(space);
-                        fetchGoogleAPI(`/lists/${targetListId}/tasks/${sub.googleTaskId}`, 'PATCH', { status: isChecked ? 'completed' : 'needsAction' });
+            // Sync completion status to Google Calendar if linked
+            if (task.calendarEventId) {
+                getAuthToken(false).then(token => {
+                    if (token) {
+                        // Map isDeleted (Trash) to completed status for Calendar prefixing
+                        const summaryTask = { ...task, completed: task.completed || task.isDeleted };
+                        updateCalendarEvent(task.calendarEventId, summaryTask, token);
                     }
                 });
             }
@@ -1578,20 +1584,11 @@ export function initTodoManager(callbacks) {
                     clonedTask.expiryAt = null;
                     clonedTask.createdAt = Date.now();
                     clonedTask.wasRegenerated = false; // งานตัวใหม่ต้องพร้อมสำหรับการทำซ้ำรอบถัดไป
+                    clonedTask.calendarEventId = null; // New task needs its own event
                     clonedTask.dueDate = nextDate;
                     clonedTask.occurrenceCount = (task.occurrenceCount || 1) + 1; // 🟢 เพิ่มตัวนับครั้งที่ทำ
-                    clonedTask.googleTaskId = null;
                     
                     space.tasks.push(clonedTask);
-                    
-                    // Create on Google Tasks if sync is active
-                    if (isGoogleSyncEnabled() && getGoogleAuthToken()) {
-                        const listId = getTargetListId(space);
-                        const gTitle = `${clonedTask.text} (S: ${space.name})`;
-                        createGoogleTask(listId, { title: gTitle, due: new Date(nextDate).toISOString() }).then(gTask => {
-                            if (gTask && gTask.id) { clonedTask.googleTaskId = gTask.id; saveData(true); }
-                        });
-                    }
                 }
             }
 
@@ -1671,10 +1668,7 @@ export function initTodoManager(callbacks) {
         // Add Inline Editing for Main and Subtasks
         // ... (existing attachTaskInlineEditListeners code)
 
-        attachTaskInlineEditListeners(taskListEl, () => getCurrentSpace(), {
-            fetchGoogleAPI,
-            getGoogleAuthToken,
-            getCurrentGoogleListId,
+            attachTaskInlineEditListeners(taskListEl, () => getCurrentSpace(), {
             saveData,
             onAddMainTaskAfter: (space, index) => {
                 const newTask = { text: "", completed: false, tags: [], dueDate: null, createdAt: Date.now(), googleTaskId: null, isProminent: false, subtasks: [] };
@@ -1712,10 +1706,6 @@ export function initTodoManager(callbacks) {
                 } else {
                     const pIdx = parseInt(li.closest('.subtask-list').dataset.parentIndex);
                     task = space.tasks[pIdx]?.subtasks?.[index];
-                }
-                if (task && task.googleTaskId && getGoogleAuthToken()) {
-                    const targetListId = getCurrentGoogleListId(space);
-                    fetchGoogleAPI(`/lists/${targetListId || '@default'}/tasks/${task.googleTaskId}`, 'DELETE');
                 }
                 if (type === 'task') space.tasks.splice(index, 1);
                 else {
@@ -1760,9 +1750,6 @@ export function initTodoManager(callbacks) {
         });
 
         attachTaskInlineEditListeners(archiveListEl, () => getCurrentSpace(), {
-            fetchGoogleAPI,
-            getGoogleAuthToken,
-            getCurrentGoogleListId,
             saveData,
             onAddMainTaskAfter: (space, index) => {
                 // 🟢 สร้างงานหลักใหม่ต่อท้ายตำแหน่งที่เพิ่งพิมพ์เสร็จ
@@ -1792,10 +1779,6 @@ export function initTodoManager(callbacks) {
                 } else {
                     const pIdx = parseInt(li.closest('.subtask-list').dataset.parentIndex);
                     task = space.tasks[pIdx]?.subtasks?.[index];
-                }
-                if (task && task.googleTaskId && getGoogleAuthToken()) {
-                    const targetListId = getCurrentGoogleListId(space);
-                    fetchGoogleAPI(`/lists/${targetListId || '@default'}/tasks/${task.googleTaskId}`, 'DELETE');
                 }
                 if (type === 'task') space.tasks.splice(index, 1);
                 else {
@@ -1973,13 +1956,9 @@ function initTodoTemplateSystem() {
     const savedListUI = document.getElementById('saved-templates-list');
 
     // 🟢 บันทึกฟังก์ชัน Refresh ไว้เพื่อให้ Modals เรียกใช้งานได้
-    window._refreshSandbox = () => { renderSandbox(); };
-
     const renderSandbox = () => {
         sandboxList.innerHTML = currentTemplateTasks.map((t, i) => {
             const hasLink = t.linkData && t.linkData.url;
-            const linkIcon = hasLink ? '#icon-notebook' : '#icon-link';
-            const syncActive = t.wantsSync ? 'active' : '';
             
             return `
             <li class="task-item" style="padding:8px 12px; border-bottom:1px solid var(--border-color); display:flex; align-items:center; gap:10px;">
@@ -1989,14 +1968,6 @@ function initTodoTemplateSystem() {
                 <div class="item-action-group" style="display:flex; align-items:center; gap:6px; opacity:1;">
                     ${generateMiniTagsBtn(t.tags, 'sandbox-task', i)}
                     
-                    <button class="btn-icon task-link-btn ${hasLink ? 'has-link' : ''}" data-index="${i}" title="Task Link">
-                        <svg class="svg-icon-sm"><use href="${linkIcon}"></use></svg>
-                    </button>
-
-                    <button class="btn-icon main-task-sync-toggle-btn ${syncActive}" data-index="${i}" title="Google Tasks Sync">
-                        ${googleTasksIcon}
-                    </button>
-
                     <button class="btn-icon btn-remove-temp-task" data-index="${i}" style="color:#ef4444; margin-left: 5px;">✕</button>
                 </div>
             </li>`;
@@ -2007,21 +1978,13 @@ function initTodoTemplateSystem() {
         const target = e.target;
         const removeBtn = target.closest('.btn-remove-temp-task');
         const tagBtn = target.closest('.btn-edit-tags');
-        const linkBtn = target.closest('.task-link-btn');
-        const syncBtn = target.closest('.main-task-sync-toggle-btn');
 
         if (removeBtn) {
             const i = parseInt(removeBtn.dataset.index);
             currentTemplateTasks.splice(i, 1);
             renderSandbox();
         } else if (tagBtn) {
-            openSandboxTagModal(parseInt(tagBtn.dataset.index)); // 🟢 เรียก Modal แทน prompt
-        } else if (linkBtn) {
-            openTaskLinkModal(parseInt(linkBtn.dataset.index), false, null, 'sandbox'); // 🟢 เรียก Modal แทน prompt
-        } else if (syncBtn) {
-            const i = parseInt(syncBtn.dataset.index);
-            currentTemplateTasks[i].wantsSync = !currentTemplateTasks[i].wantsSync;
-            renderSandbox();
+            openSandboxTagModal(parseInt(tagBtn.dataset.index));
         }
     };
 
@@ -2054,20 +2017,7 @@ function initTodoTemplateSystem() {
                     subtasks: (t.subtasks || []).map(s => ({ ...s, id: Date.now() + Math.random() })),
                     createdAt: Date.now(),
                     isFromTemplate: true, // 🟢 มาร์คว่าเป็นงานจาก Template เพื่อติดสีส้ม
-                    googleTaskId: null
                 };
-
-                // ☁️ Auto-sync with Google Tasks if enabled in Template
-                if (t.wantsSync && isGoogleSyncEnabled() && getGoogleAuthToken()) {
-                    const gTitle = `${t.text} (S: ${space.name})`;
-                    let gBody = { title: gTitle };
-                    if (t.dueDate) gBody.due = new Date(t.dueDate).toISOString();
-                    
-                    const gTask = await fetchGoogleAPI(`/lists/${getCurrentGoogleListId()}/tasks`, 'POST', gBody);
-                    if (gTask && gTask.id) {
-                        newTask.googleTaskId = gTask.id;
-                    }
-                }
 
                 space.tasks.push(newTask);
             }
@@ -2124,7 +2074,7 @@ function initTodoTemplateSystem() {
 
     document.getElementById('btn-add-task-to-temp').onclick = () => {
         const val = tempTaskInput.value.trim();
-        if (val) { currentTemplateTasks.push({ text: val, completed: false, subtasks: [], tags: [], linkData: null, wantsSync: true }); tempTaskInput.value = ''; renderSandbox(); }
+        if (val) { currentTemplateTasks.push({ text: val, completed: false, subtasks: [], tags: [], linkData: null }); tempTaskInput.value = ''; renderSandbox(); }
     };
 
     document.getElementById('btn-save-full-template').onclick = () => {
@@ -2175,17 +2125,8 @@ async function addTask() {
         }
 
         // Initialize new task with isProminent: false
-        let newTask = { text: text, completed: false, tags: tags, dueDate: dateInput.value || null, createdAt: Date.now(), googleTaskId: null, isProminent: false, subtasks: [], subtasksHidden: false, repeatConfig: { ...currentTaskRepeatConfig } }; 
+        let newTask = { text: text, completed: false, tags: tags, dueDate: dateInput.value || null, createdAt: Date.now(), isProminent: false, subtasks: [], subtasksHidden: false, repeatConfig: { ...currentTaskRepeatConfig } }; 
 
-        if (isGoogleSyncEnabled() && getGoogleAuthToken()) {
-            input.placeholder = "Syncing... ☁️";
-            const listId = getCurrentGoogleListId(space);
-            const gTitle = `${text} (S: ${space.name})`;
-            let gBody = { title: gTitle };
-            if (newTask.dueDate) { gBody.due = new Date(newTask.dueDate).toISOString(); }
-            const gTask = await fetchGoogleAPI(`/lists/${listId}/tasks`, 'POST', gBody);
-            if (gTask && gTask.id) { newTask.googleTaskId = gTask.id; } 
-        }
         space.tasks.push(newTask); 
         currentTaskRepeatConfig = { isRepeating: false, frequency: 'daily', interval: 1 }; // Reset UI and state after add
         document.getElementById('btn-task-repeat').style.color = 'inherit';
@@ -2220,7 +2161,7 @@ export function openTaskEditModal(idx, fromCommandCenter = false, subId = null) 
     updateDateInputLabel(document.getElementById('edit-task-date-input'));
     editingTaskRepeatConfig = task.repeatConfig || { isRepeating: false, frequency: 'daily', interval: 1 };
     document.getElementById('btn-edit-task-repeat').style.color = editingTaskRepeatConfig.isRepeating ? 'var(--primary-color)' : 'inherit';
-    document.getElementById('edit-task-sync-check').checked = task.googleTaskId ? true : false;
+    document.getElementById('sync-calendar-checkbox').checked = !!task.calendarEventId;
     document.getElementById('task-edit-modal').style.display = 'flex';
 }
 
@@ -2239,9 +2180,7 @@ async function saveEditedTask() {
 
     const newName = document.getElementById('edit-task-name-input').value.trim();
     const newDate = document.getElementById('edit-task-date-input').value;
-    const wantsSync = document.getElementById('edit-task-sync-check').checked;
-    const token = getGoogleAuthToken();
-    const listId = getCurrentGoogleListId(space);
+    const wantsCalendarSync = document.getElementById('sync-calendar-checkbox').checked;
     
     if(newName === "") return;
     
@@ -2256,38 +2195,33 @@ async function saveEditedTask() {
 
     btnSave.innerText = "Saving..."; btnSave.disabled = true;
     
-    const gTitle = `${newName} (S: ${space.name})`;
-    let gPatchBody = { title: gTitle };
-    if (newDate) gPatchBody.due = new Date(newDate).toISOString(); else gPatchBody.due = null;
-
-    if (task.googleTaskId && wantsSync && token) {
-        await fetchGoogleAPI(`/lists/${listId}/tasks/${task.googleTaskId}`, 'PATCH', gPatchBody);
-    } else if (!task.googleTaskId && wantsSync && token) {
-        let parentGoogleTaskId = null;
-        if (editingSubtaskLocalId) {
-            const parentTask = space.tasks[editingTaskLocalIndex];
-            parentGoogleTaskId = parentTask.googleTaskId;
-            
-            if (!parentGoogleTaskId) {
-                alert("Please sync the main task first to nest this subtask.");
-                btnSave.innerText = "Save"; btnSave.disabled = false;
-                return;
-            }
-        }
-        const gTask = await createGoogleTask(listId, gPatchBody, parentGoogleTaskId);
-        if (gTask && gTask.id) { task.googleTaskId = gTask.id; }
-    } else if (task.googleTaskId && !wantsSync && token) {
-        await fetchGoogleAPI(`/lists/${listId}/tasks/${task.googleTaskId}`, 'DELETE');
-        task.googleTaskId = null;
-    } else if (wantsSync && !token) {
-        alert("Please connect to Google first");
-        btnSave.innerText = "Save"; btnSave.disabled = false;
-        return;
-    }
-
     task.text = newName;
     task.dueDate = newDate || null;
     task.repeatConfig = { ...editingTaskRepeatConfig };
+
+    // Calendar Sync Logic
+    try {
+        const token = await getAuthToken(false);
+        if (token) {
+            if (wantsCalendarSync && task.dueDate) {
+                if (!task.calendarEventId) {
+                    const event = await createCalendarEvent(task, token);
+                    if (event && event.id) {
+                        task.calendarEventId = event.id;
+                    }
+                } else {
+                    await updateCalendarEvent(task.calendarEventId, task, token);
+                }
+            } else if (task.calendarEventId) {
+                // Delete if unchecked or if dueDate was removed
+                await deleteCalendarEvent(task.calendarEventId, token);
+                delete task.calendarEventId;
+            }
+        } else if (wantsCalendarSync) {
+            alert("⚠️ ไม่สามารถซิงค์ปฏิทินได้: โปรดตรวจสอบการเชื่อมต่อที่เมนู Google Integrations (ไอคอน 9 จุด) และลองใหม่อีกครั้งครับ");
+        }
+    } catch (err) { console.error("Calendar sync error:", err); }
+
     if (space.taskSortOrder && space.taskSortOrder !== 'manual') sortSpaceTasks(space);
     document.getElementById('task-edit-modal').style.display = 'none';
     btnSave.innerText = "Save"; btnSave.disabled = false;
@@ -2326,7 +2260,6 @@ function openSandboxTagModal(index) {
     document.getElementById('btn-save-item-tags').onclick = () => {
         task.tags = Array.from(container.querySelectorAll('.sandbox-tag-check:checked')).map(cb => cb.value);
         modal.style.display = 'none';
-        if (window._refreshSandbox) window._refreshSandbox();
     };
     document.getElementById('btn-close-modal').onclick = () => { modal.style.display = 'none'; };
 }
@@ -2389,13 +2322,23 @@ async function saveTaskLink() {
         if (editingLinkSpaceId === 0 || window._isModalOpenedFromCommandCenter) {
             import('./defaultDashboard.js').then(m => m.renderDefaultDashboard());
         } else if (editingLinkSpaceId === 'sandbox') {
-            if (window._refreshSandbox) window._refreshSandbox(); // 🟢 Refresh Sandbox UI หลังเซฟลิงก์
         } else {
             onRenderCallback();
         }
     }
 }
+export function renderQuickNotes(space) {
+    const noteArea = document.getElementById('workspace-note');
+    if (noteArea) {
+        // Note: We don't overwrite innerHTML if it's focused to avoid cursor jumping, 
+        // but initially or when switching spaces we must set it.
+        if (document.activeElement !== noteArea) {
+            noteArea.innerHTML = space.note || "";
+        }
+    }
+}
 
+/** 🟢 กู้คืน: ฟังก์ชันวาดรายการงานหลัก (ฉบับ Clean จาก Google Tasks) */
 export function renderTasks(space, currentFilterTags, currentFilterMode, currentSearchQuery) {
     const taskListUI = document.getElementById('task-list'); 
     const archiveListUI = document.getElementById('archive-list');
@@ -2405,318 +2348,40 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
     const trashContainer = document.getElementById('trash-tasks-details');
     const archiveContainer = document.getElementById('archived-tasks-details');
 
-    // 🟢 1. จัดการตัวแปรและสถานะ Mobile
-    const isMobile = window.matchMedia("(max-width: 768px)").matches;
-    const isCommandCenter = getCurrentSpaceId() === 0;
-    const mobileTagBtn = document.getElementById('btn-open-mobile-tag-modal');
+    if (!taskListUI) return;
+    // 🟢 แก้ไข: หยุดวาดเฉพาะตอนกำลังแก้ไขชื่อ Task เดิมเท่านั้น ไม่รวมตอนเพิ่มงานใหม่
+    if (document.activeElement && document.activeElement.classList.contains('task-actual-text')) return; 
 
-    // 🟢 2. ระบบ Mobile FAB และ Menu (ย้ายมาไว้ที่นี่เพื่อให้รองรับการเปลี่ยน Space)
-    if (isMobile) {
-        const fab = document.getElementById('sf-mobile-fab-add');
-        const fabMenu = document.getElementById('sf-mobile-fab-menu');
-
-        // จัดการการแสดงผลของ FAB ตามหน้า (Command Center ไม่ให้มี)
-        if (fab) fab.style.setProperty('display', isCommandCenter ? 'none' : 'flex', 'important');
-
-        if (!isCommandCenter) {
-            let targetFab = fab;
-            if (!targetFab) {
-                targetFab = document.createElement('button');
-                targetFab.id = 'sf-mobile-fab-add';
-                targetFab.className = 'sf-mobile-fab';
-                targetFab.innerHTML = '+';
-                document.body.appendChild(targetFab);
-
-                // ระบบซ่อน FAB เมื่อเลื่อนจอ
-                const tasksCard = document.getElementById('tasks-card');
-                let lastSt = 0;
-                if (tasksCard) {
-                    tasksCard.onscroll = () => {
-                        let st = tasksCard.scrollTop;
-                        if (st > lastSt && st > 50) targetFab.style.transform = 'translateY(100px)';
-                        else targetFab.style.transform = 'translateY(0)';
-                        lastSt = st;
-                    };
-                }
-            }
-
-            // สร้าง Menu Popup ถ้ายังไม่มี
-            let targetMenu = fabMenu;
-            if (!targetMenu) {
-                targetMenu = document.createElement('div');
-                targetMenu.id = 'sf-mobile-fab-menu';
-                targetMenu.className = 'mobile-tools-popup';
-                targetMenu.innerHTML = `
-                    <div class="drag-handle-bar"></div>
-                    <button id="sf-fab-menu-add-task" style="display:flex; align-items:center; gap:12px;"><svg class="svg-icon-lg" style="width:20px; height:20px;"><use href="#icon-pencil"></use></svg> Add new task</button>
-                    <button id="sf-fab-menu-templates" style="display:flex; align-items:center; gap:12px;"><svg class="svg-icon-lg" style="width:20px; height:20px;"><use href="#icon-layers"></use></svg> Templates</button>
-                `;
-                document.body.appendChild(targetMenu);
-
-                targetMenu.querySelector('#sf-fab-menu-add-task').onclick = (e) => {
-                    e.stopPropagation();
-                    targetMenu.classList.remove('is-active');
-                    const bar = document.getElementById('new-task-input')?.closest('.task-input-bar');
-                    if (bar) bar.classList.add('is-active');
-                    document.getElementById('new-task-input').focus();
-                    document.getElementById('sf-mobile-fab-add')?.classList.add('is-hidden');
-                };
-
-                targetMenu.querySelector('#sf-fab-menu-templates').onclick = (e) => {
-                    e.stopPropagation();
-                    targetMenu.classList.remove('is-active');
-                    document.getElementById('btn-todo-templates')?.click();
-                };
-            }
-
-            // 🟢 Fix: Ensure the re-rendered FAB also triggers the task input directly
-            targetFab.onclick = (e) => {
-                e.stopPropagation();
-                const bar = document.getElementById('new-task-input')?.closest('.task-input-bar');
-                if (bar) bar.classList.add('is-active');
-                document.getElementById('new-task-input')?.focus();
-                targetFab.classList.add('is-hidden');
-            };
-        }
-    }
-
-    if (mobileTagBtn) {
-        mobileTagBtn.style.display = isMobile ? 'inline-flex' : 'none';
-    }
-
-    // รวบปุ่มบนหัว To-do เป็น Menu เดียวกันบนมือถือ
-    const btnToggleActions = document.getElementById('btn-toggle-task-actions');
-    const btnToggleProminent = document.getElementById('btn-toggle-prominent-tasks');
-    const btnExpand = document.getElementById('btn-expand-all-subtasks');
-    const btnCollapse = document.getElementById('btn-collapse-all-subtasks');
-    const btnTemplates = document.getElementById('btn-todo-templates');
-
-    if (isMobile) {
-        let mobileToolsBtn = document.getElementById('btn-mobile-todo-tools');
-        if (!mobileToolsBtn) {
-            mobileToolsBtn = document.createElement('button');
-            mobileToolsBtn.id = 'btn-mobile-todo-tools';
-            mobileToolsBtn.className = 'btn-icon mobile-only';
-            mobileToolsBtn.innerHTML = '⋮'; 
-            btnToggleActions.parentNode.insertBefore(mobileToolsBtn, btnToggleActions);
-        }
-
-        let menuPopup = document.getElementById('sf-mobile-tools-popup');
-        if (!menuPopup) {
-            menuPopup = document.createElement('div');
-            menuPopup.id = 'sf-mobile-tools-popup';
-            menuPopup.className = 'mobile-tools-popup';
-            document.body.appendChild(menuPopup);
-        }
-
-        // คลิกข้างนอกเพื่อปิดเมนู (รวมทั้ง FAB Menu และ Tools Menu)
-        if (!window._mobileMenuGlobalClickBound) {
-            document.addEventListener('click', (e) => {
-                const toolsMenu = document.getElementById('sf-mobile-tools-popup');
-                const fabMenu = document.getElementById('sf-mobile-fab-menu');
-                const inputBar = document.getElementById('new-task-input')?.closest('.task-input-bar');
-                
-                // 🟢 แก้ไข: ตรวจสอบว่าไม่ได้คลิกที่ตัวปุ่มเปิด (Trigger) เพื่อไม่ให้ปิดทันทีที่เปิด
-                if (toolsMenu && !toolsMenu.contains(e.target) && !e.target.closest('#btn-mobile-todo-tools')) toolsMenu.style.display = 'none';
-                if (fabMenu && !fabMenu.contains(e.target) && !e.target.closest('#sf-mobile-fab-add')) fabMenu.classList.remove('is-active');
-                
-                if (inputBar && !inputBar.contains(e.target) && inputBar.classList.contains('is-active') && !e.target.closest('#sf-mobile-fab-add')) {
-                    inputBar.classList.remove('is-active');
-                    document.getElementById('sf-mobile-fab-add')?.classList.remove('is-hidden');
-                }
-            });
-            window._mobileMenuGlobalClickBound = true;
-        }
-
-        mobileToolsBtn.onclick = (e) => {
-                e.stopPropagation();
-                
-                const updateContent = () => {
-                    const settings = getAppSettings();
-                    const showExtra = settings.showExtraTaskSections !== false;
-                    const spaceRef = getCurrentSpace(); // ดึงข้อมูลล่าสุด
-                    
-                    const activeStyle = 'background: rgba(47, 128, 237, 0.15) !important; color: var(--primary-color) !important; border: 1.5px solid var(--primary-color) !important;';
-                    const inactiveStyle = 'background: var(--bg-body) !important; opacity: 0.5; border: 1.5px solid var(--border-color) !important;';
-                    
-                    menuPopup.innerHTML = `
-                        <div class="sf-input-bar-header" style="padding: 4px 4px 12px 4px; border-bottom: 1px solid var(--border-color); margin-bottom: 12px;">
-                            <span style="font-size: 11px; font-weight: 900; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; display:flex; align-items:center; gap:4px;">✨ Todo Tools</span>
-                            <button class="btn-icon sf-btn-close-tools" style="padding: 4px 8px; opacity: 0.8; font-size: 18px; color: var(--text-main); font-weight: bold;">✕</button>
-                        </div>
-                        
-                        <!-- Row 1: Status Toggles (Icons Only) -->
-                        <div class="sf-mobile-toggle-row" style="display: flex; gap: 8px; margin-bottom: 12px;">
-                            <button data-action="1" style="flex:1; justify-content:center; ${spaceRef.showTaskActions ? activeStyle : inactiveStyle}" title="Quick Actions">
-                                <span class="toggle-actions-btn circle-icon ${spaceRef.showTaskActions ? 'expanded' : ''}" style="margin:0; pointer-events:none; border-color: currentColor;"></span>
-                            </button>
-                            <button data-action="2" style="flex:1; justify-content:center; ${!spaceRef.hideProminentTasks ? activeStyle : inactiveStyle}" title="Flags">
-                                <svg class="svg-icon-sm" style="width:18px; height:18px;"><use href="#icon-flag"></use></svg>
-                            </button>
-                            <button data-action="6" style="flex:1; justify-content:center; ${showExtra ? activeStyle : inactiveStyle}" title="Archive/Trash">
-                                <svg class="svg-icon-sm" style="width:18px; height:18px;"><use href="#icon-${showExtra ? 'eye' : 'eye-off'}"></use></svg>
-                            </button>
-                        </div>
-
-                        <!-- Row 2: Subtask Actions -->
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
-                            <button data-action="3" style="font-size: 13px; padding: 12px !important; justify-content: center; background: var(--bg-body) !important; border: 1px solid var(--border-color) !important;"><svg class="svg-icon-sm" style="margin-right:6px;"><use href="#icon-chevron-down"></use></svg> Expand All</button>
-                            <button data-action="4" style="font-size: 13px; padding: 12px !important; justify-content: center; background: var(--bg-body) !important; border: 1px solid var(--border-color) !important;"><svg class="svg-icon-sm" style="margin-right:6px;"><use href="#icon-chevron-up"></use></svg> Collapse</button>
-                        </div>
-
-                        <!-- Row 3: Templates -->
-                        <button data-action="5" style="width: 100%; justify-content: center; padding: 14px !important; background: var(--bg-body) !important; border: 1px solid var(--border-color) !important; font-size: 14px;">
-                            <svg class="svg-icon-sm" style="margin-right:8px;"><use href="#icon-layers"></use></svg> Templates Manager
-                        </button>
-                    `;
-
-                    menuPopup.querySelector('.sf-btn-close-tools').onclick = (ev) => {
-                        ev.stopPropagation();
-                        menuPopup.style.display = 'none';
-                    };
-                };
-
-                updateContent();
-                const isVisible = menuPopup.style.display === 'flex';
-                menuPopup.style.display = isVisible ? 'none' : 'flex';
-
-                menuPopup.onclick = (me) => {
-                    const btn = me.target.closest('button');
-                    if (!btn || btn.classList.contains('sf-btn-close-tools')) return;
-                    const action = btn.dataset.action;
-                    if (!action) return;
-                    me.stopPropagation();
-                    if (action === '1') btnToggleActions?.click();
-                    if (action === '2') btnToggleProminent?.click();
-                    if (action === '3') btnExpand?.click();
-                    if (action === '4') btnCollapse?.click();
-                    if (action === '5') btnTemplates?.click();
-                    if (action === '6') document.getElementById('btn-toggle-extra-sections')?.click();
-                    // สั่งอัปเดตเนื้อหาใน Popup ทันทีเพื่อให้ไอคอน/ข้อความเปลี่ยนตามสถานะใหม่
-                    setTimeout(updateContent, 50);
-                };
-            };
-
-        mobileToolsBtn.style.display = 'inline-flex';
-    } else {
-        // กลับสู่โหมด Desktop
-        const mobileToolsBtn = document.getElementById('btn-mobile-todo-tools');
-        if (mobileToolsBtn) mobileToolsBtn.style.display = 'none';
-    }
-
-    // 🛑 ป้องกัน UI เอ๋อ: หากผู้ใช้กำลังพิมพ์งานอยู่ ห้ามวาดรายการใหม่ทับเด็ดขาด
-    if (document.activeElement && document.activeElement.classList.contains('task-actual-text')) {
-        console.log("Render skipped: User is typing to prevent blinking and data loss.");
-        return; 
-    }
-
-    if (taskListUI) taskListUI.innerHTML = ''; 
+    taskListUI.innerHTML = ''; 
     if (archiveListUI) archiveListUI.innerHTML = ''; 
     if (trashListUI) trashListUI.innerHTML = '';
+    if (repeatingWaitingListUI) repeatingWaitingListUI.innerHTML = '';
     
     if(!space.tasks) space.tasks = [];
-
-    // 🟢 ตรวจสอบว่ามีงานที่มี Subtask หรือไม่ เพื่อซ่อน/แสดงปุ่ม Expand/Collapse All
-    const btnExpandAll = document.getElementById('btn-expand-all-subtasks');
-    const btnCollapseAll = document.getElementById('btn-collapse-all-subtasks');
-    if (btnExpandAll && btnCollapseAll) {
-        const hasSubtasks = space.tasks.some(t => t && !t.completed && !t.isDeleted && t.subtasks && t.subtasks.length > 0);
-        btnExpandAll.style.display = hasSubtasks ? 'inline-flex' : 'none';
-        btnCollapseAll.style.display = hasSubtasks ? 'inline-flex' : 'none';
-    }
-
-    // Update Google Task UI (Space-specific list settings)
-    updateGoogleTaskUI(space);
-
-    // ตรวจสอบและรีเซ็ตสถานะ Habit ของวันใหม่ก่อนคำนวณจำนวนงานบนปุ่ม
     checkAndResetHabits(space);
 
     const isProminentHidden = space.hideProminentTasks || false;
+    const isMobile = window.innerWidth <= 768;
 
-    // Update master toggle button UI
+    // 🟢 แสดงปุ่ม 3 จุดเฉพาะบนมือถือ
+    const mobileToolsBtn = document.getElementById('btn-mobile-todo-tools');
+    if (mobileToolsBtn) mobileToolsBtn.style.display = isMobile ? 'inline-flex' : 'none';
+
+    // Update UI Toggles
     const toggleProminentBtn = document.getElementById('btn-toggle-prominent-tasks');
     if (toggleProminentBtn) {
         toggleProminentBtn.style.opacity = isProminentHidden ? '0.3' : '1';
         toggleProminentBtn.classList.toggle('active', !isProminentHidden);
     }
-
-        // Update task actions toggle button UI
     const toggleTaskActionsBtn = document.getElementById('btn-toggle-task-actions');
     if (toggleTaskActionsBtn) {
-        toggleTaskActionsBtn.style.opacity = '1';
         toggleTaskActionsBtn.innerHTML = `<span class="toggle-actions-btn circle-icon ${space.showTaskActions ? 'expanded' : ''}" style="margin: 0; pointer-events: none;"></span>`;
-    }
-
-
-    // --- Habit Sheet Button Injection ---
-    const taskHeader = document.getElementById('header-tasks-text');
-    if (taskHeader) {
-        const habits = space.habits || [];
-        const total = habits.length;
-        const done = habits.filter(h => h.completed).length;
-        const percent = total > 0 ? (done / total) * 100 : 0;
-
-        let btnBg, btnText, btnBorder;
-        if (total === 0) { btnBg = '#f7f7f5'; btnText = '#787774'; btnBorder = '#e1e1e1'; } 
-        else if (percent === 0) { btnBg = '#fee2e2'; btnText = '#ef4444'; btnBorder = '#fca5a5'; } 
-        else if (percent < 100) { btnBg = '#fef3c7'; btnText = '#d97706'; btnBorder = '#fcd34d'; } 
-        else { btnBg = '#eafaf1'; btnText = '#27ae60'; btnBorder = '#2ecc71'; }
-
-        let habitBtn = document.getElementById('btn-open-habit');
-        if (!habitBtn) {
-            habitBtn = document.createElement('button');
-            habitBtn.id = 'btn-open-habit';
-            habitBtn.style = `margin-left: 15px; padding: 4px 12px; font-size: 13px; font-weight: 700; border-radius: 6px; cursor: pointer; vertical-align: middle; transition: all 0.3s ease;`;
-            taskHeader.parentElement.appendChild(habitBtn);
-        }
-
-        habitBtn.innerHTML = `✨ Habit ${done}/${total}`;
-        habitBtn.style.background = btnBg;
-        habitBtn.style.color = btnText;
-        habitBtn.style.border = `1px solid ${btnBorder}`;
-        habitBtn.onclick = () => { import('./habitSheet.js').then(m => m.toggleHabitModal(space)); };
-    }
-
-    // --- Sort Dropdown Injection ---
-    if (taskHeader) {
-        let sortContainer = document.getElementById('task-sort-container');
-        if (!sortContainer) {
-            sortContainer = document.createElement('div');
-            sortContainer.id = 'task-sort-container';
-            sortContainer.style = 'margin-left: 6px; display: flex; align-items: center;';
-        }
-
-        // 🟢 ย้ายตำแหน่งมาไว้หลังปุ่ม Template (ถ้ามี) เพื่อความเป็นระเบียบ
-        const templateBtn = document.getElementById('btn-todo-templates');
-        if (templateBtn) {
-            templateBtn.after(sortContainer);
-        } else {
-            taskHeader.parentElement.appendChild(sortContainer);
-        }
-
-        const currentSort = space.taskSortOrder || 'manual';
-        sortContainer.innerHTML = `
-            <select id="task-sort-select" title="Sort Tasks" style="font-family: var(--app-font); font-size: 11px; font-weight: 700; padding: 3px 8px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-body); color: var(--text-main); cursor: pointer; outline: none; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
-                <option value="manual" ${currentSort === 'manual' ? 'selected' : ''}>⇅ Manual</option>
-                <option value="date" ${currentSort === 'date' ? 'selected' : ''}>📅 By Date</option>
-                <option value="name" ${currentSort === 'name' ? 'selected' : ''}>🔤 By Name</option>
-            </select>
-        `;
-        sortContainer.querySelector('#task-sort-select').onchange = (e) => {
-            const val = e.target.value;
-            space.taskSortOrder = val;
-            if (val !== 'manual') {
-                sortSpaceTasks(space);
-            }
-            saveData(true);
-            onRenderCallback();
-        };
     }
 
     const filterTags = Array.isArray(currentFilterTags) ? currentFilterTags : [];
     const isFiltered = filterTags.length > 0 || (currentSearchQuery && currentSearchQuery !== "");
+    const filterMode = getFilterMode();
 
-    // 🟢 สร้างตัวแปรเก็บ HTML ไว้ก่อนวาดทีเดียวเพื่อประสิทธิภาพสูงสุด
     let todoHTML = '';
     let archiveHTML = '';
     let repeatingHTML = '';
@@ -2727,7 +2392,6 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
     let repeatingCount = 0;
     let trashCount = 0;
 
-    // 🟢 ตรวจสอบและจัดเรียงก่อนเริ่มลูปแสดงผล
     if (space.taskSortOrder && space.taskSortOrder !== 'manual') sortSpaceTasks(space);
 
     space.tasks.forEach((task, index) => {
@@ -2737,301 +2401,87 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
         if (filterTags.length > 0) {
             const itemTags = task.tags || [];
             const itemTagsUpper = itemTags.map(t => t.toUpperCase());
-            
             const checkTag = (tag) => {
                 if (tag === 'UNTAGGED') return itemTags.length === 0;
                 return itemTagsUpper.includes(tag.toUpperCase());
             };
-
-            if (currentFilterMode === 'AND') {
-                hasMatchTag = filterTags.every(checkTag);
-            } else {
-                hasMatchTag = filterTags.some(checkTag);
-            }
+            hasMatchTag = (filterMode === 'AND') ? filterTags.every(checkTag) : filterTags.some(checkTag);
         }
         
         if (!hasMatchTag) return;
         if (currentSearchQuery && !task.text.toLowerCase().includes(currentSearchQuery)) return;
 
-        // 🛡️ Filter: ซ่อนงานในอนาคต (ที่ยังไม่ถึงกำหนด) ออกจากรายการ To-Do ปกติ
         const today = new Date().setHours(0,0,0,0);
         const taskDue = task.dueDate ? new Date(task.dueDate).setHours(0,0,0,0) : null;
-        if (!task.completed && !task.isDeleted && taskDue && taskDue > today && !task.isProminent) return;
+        const isRepeating = task.repeatConfig && task.repeatConfig.isRepeating;
+        if (!task.completed && !task.isDeleted && taskDue && taskDue > today && !task.isProminent && isRepeating) return;
 
         const isRepeatingComplete = task.completed && task.repeatConfig && task.repeatConfig.isRepeating;
         const nextDate = isRepeatingComplete ? calculateNextDate(task.dueDate, task.repeatConfig, task) : null;
 
-        const liContent = generateTaskHTML(task, index, { //
-            showSpaceBadge: false,
-            isMasterView: false,
-            spaceId: space.id,
-            isProminentHidden: isProminentHidden,
-            isFiltered: isFiltered, // This is for drag-handle visibility
-            showActions: space.showTaskActions, // Pass the new state
-            isTrash: task.isDeleted, 
-            addingSubtaskToIndex,
-            isMobile, //
-            nextDueDate: nextDate // 🟢 ส่งวันที่รอบถัดไปให้ UI แสดงผล
+        const liContent = generateTaskHTML(task, index, {
+            showSpaceBadge: false, spaceId: space.id, isProminentHidden, isFiltered,
+            showActions: space.showTaskActions, isTrash: task.isDeleted, addingSubtaskToIndex, nextDueDate: nextDate
         });
         
-        // NEW: Check for completed repeating tasks first
         if (isRepeatingComplete) {
-            repeatingCount++;
             repeatingHTML += liContent;
+            repeatingCount++;
         }
-        else if (task.isDeleted) { 
-            trashCount++; 
+        else if (task.isDeleted) {
             trashHTML += liContent; 
+            trashCount++;
         }
-        else if (task.completed) { 
-            archiveCount++; 
+        else if (task.completed) {
             archiveHTML += liContent; 
+            archiveCount++;
         }
-        else { 
-            todoCount++; 
+        else {
             todoHTML += liContent; 
+            todoCount++;
         }
     });
 
-    // 🟢 อัปเดตจำนวนงานที่หัวข้อส่วนต่างๆ (Summary labels)
-    const repeatingSummary = repeatingContainer?.querySelector('summary span');
-    if (repeatingSummary) {
-        repeatingSummary.innerText = `Repeating Tasks (${repeatingCount})`;
-    }
-    const archiveSummary = archiveContainer?.querySelector('summary span');
-    if (archiveSummary) {
-        archiveSummary.innerText = `Archived Tasks (${archiveCount})`;
-    }
-    const trashSummary = trashContainer?.querySelector('summary span');
-    if (trashSummary) {
-        trashSummary.innerText = `Tasks Trash (${trashCount})`;
-    }
-
-    // 🟢 วาด HTML ลงใน Container ต่างๆ เพียงครั้งเดียว (ลดอาการชื่อหายและกระพริบ)
-    if (taskListUI) taskListUI.innerHTML = todoHTML;
+    taskListUI.innerHTML = todoHTML;
     if (archiveListUI) archiveListUI.innerHTML = archiveHTML;
     if (repeatingWaitingListUI) repeatingWaitingListUI.innerHTML = repeatingHTML;
     if (trashListUI) trashListUI.innerHTML = trashHTML;
 
-    // 🟢 NEW: Apply syntax highlighting to all rendered tasks after insertion
-    if (taskListUI) {
-        taskListUI.querySelectorAll('.task-actual-text').forEach(el => {
-            applySyntaxHighlighting(el);
-        });
-    }
-    if (archiveListUI) {
-        archiveListUI.querySelectorAll('.task-actual-text').forEach(el => {
-            applySyntaxHighlighting(el);
-        });
-    }
-    if (trashListUI) {
-        trashListUI.querySelectorAll('.task-actual-text').forEach(el => {
-            applySyntaxHighlighting(el);
-        });
-    }
+    // 🟢 อัปเดตตัวเลขจำนวนงานในแต่ละส่วน
+    const updateLabel = (id, count) => {
+        const el = document.getElementById(id);
+        if (el) el.innerText = count > 0 ? `(${count})` : '';
+    };
 
-    // 🟢 Show/Hide sections based on user toggle
-    const showExtra = getAppSettings().showExtraTaskSections !== false; // Default to true
+    updateLabel('todo-count-label', todoCount);
+    updateLabel('repeating-count-label', repeatingCount);
+    updateLabel('archive-count-label', archiveCount);
+    updateLabel('trash-count-label', trashCount);
+
+    [taskListUI, archiveListUI, trashListUI].forEach(c => c && c.querySelectorAll('.task-actual-text').forEach(el => applySyntaxHighlighting(el)));
+
+    const showExtra = getAppSettings().showExtraTaskSections !== false;
     const extraDisplay = showExtra ? 'block' : 'none';
-    
-    if (repeatingContainer) {
-        repeatingContainer.style.setProperty('display', extraDisplay, 'important');
-        repeatingContainer.style.marginTop = '2px'; // ลดระยะห่างให้เหลือนิดเดียว
-    }
-    if (archiveContainer) {
-        archiveContainer.style.setProperty('display', extraDisplay, 'important');
-        archiveContainer.style.marginTop = '2px'; // ลดระยะห่างให้เหลือนิดเดียว
-    }
-    if (trashContainer) {
-        trashContainer.style.setProperty('display', extraDisplay, 'important');
-        trashContainer.style.marginTop = '2px'; // ลดระยะห่างให้เหลือนิดเดียว
-    }
-
-    const btnToggleExtra = document.getElementById('btn-toggle-extra-sections');
-    if (btnToggleExtra) {
-        btnToggleExtra.style.opacity = showExtra ? '1' : '0.6';
-        btnToggleExtra.style.color = showExtra ? 'var(--primary-color)' : 'inherit';
-        btnToggleExtra.style.background = showExtra ? 'var(--hover-bg)' : 'transparent';
-        btnToggleExtra.innerHTML = `<svg class="svg-icon-sm"><use href="#icon-${showExtra ? 'eye' : 'eye-off'}"></use></svg>`;
-    }
-
-    // 🟢 อัปเดตข้อมูลใน Habit Modal ทันที (ถ้ามันเปิดอยู่) เพื่อแก้บัค Tag ไม่อัปเดตล่าสุด
-    const habitModal = document.getElementById('habit-modal');
-    if (habitModal && habitModal.style.display !== 'none') {
-        renderHabitList(space);
-    }
+    [repeatingContainer, archiveContainer, trashContainer].forEach(c => { if(c) c.style.display = extraDisplay; });
 
     if (!isFiltered && taskListUI) {
-        const isManual = (space.taskSortOrder || 'manual') === 'manual';
         if (taskListUI.sortable) taskListUI.sortable.destroy();
         taskListUI.sortable = Sortable.create(taskListUI, { 
-            group: 'nested-tasks', // กำหนดกลุ่มเพื่อให้ลากข้ามไปหา sub-task ได้
-            animation: 150,
-            disabled: space.isArchived || !isManual,
-            handle: '.drag-handle', // ล็อคให้ลากได้เฉพาะที่ไอคอน 6 จุด
-            ghostClass: 'sortable-ghost', 
+            group: 'nested-tasks', animation: 150, handle: '.drag-handle', ghostClass: 'sortable-ghost',
+            disabled: space.isArchived || (space.taskSortOrder !== 'manual' && !!space.taskSortOrder),
             onStart: () => { document.body.classList.add('is-sorting-tasks'); window.getSelection().removeAllRanges(); },
-            onMove: function (evt) {
-                const draggedIsProminent = evt.dragged.classList.contains('prominent');
-                const relatedIsProminent = evt.related.classList.contains('prominent');
-                
-                // ไม่อนุญาตให้ลากสลับกันระหว่างกลุ่มที่เปิดธง (Prominent) กับกลุ่มปกติ
-                // เพื่อให้งานที่ติดธงอยู่ด้านบนเสมอ และงานปกติห้ามแทรกขึ้นไปในโซนของธง
-                // คืนค่า false เพื่อยกเลิกการสลับตำแหน่งหากประเภทไม่ตรงกัน
-                return draggedIsProminent === relatedIsProminent;
-            },
             onEnd: function (evt) { 
                 document.body.classList.remove('is-sorting-tasks');
-                // 1. หาตำแหน่งจริงใน Array จาก attribute ที่เราฝังไว้
-                const oldIdxInArray = parseInt(evt.item.getAttribute('data-index'));
-                const movedItem = space.tasks.splice(oldIdxInArray, 1)[0];
-
-                // 2. หาตำแหน่งที่จะไปวาง โดยดูจากลำดับของ "เพื่อนบ้าน" ในหน้าจอ
+                const oldIdx = parseInt(evt.item.getAttribute('data-index'));
+                const movedItem = space.tasks.splice(oldIdx, 1)[0];
                 const nextEl = evt.item.nextElementSibling;
                 if (nextEl) {
-                    let nextIdxInArray = parseInt(nextEl.getAttribute('data-index'));
-                    // ถ้าตำแหน่งเป้าหมายอยู่หลังตำแหน่งเดิม ต้องลด index ลง 1 เพราะเรา splice ตัวเองออกไปแล้ว
-                    if (nextIdxInArray > oldIdxInArray) nextIdxInArray--;
-                    space.tasks.splice(nextIdxInArray, 0, movedItem);
-                } else {
-                    // ถ้าไม่มีเพื่อนบ้านข้างล่าง (วางท้ายสุดของรายการที่ยังไม่เสร็จ)
-                    // ให้ค้นหาตำแหน่งสุดท้ายของงานที่ยังไม่เสร็จใน Array รวม
-                    let lastActiveIdx = -1;
-                    for (let i = space.tasks.length - 1; i >= 0; i--) {
-                        if (!space.tasks[i].completed) { lastActiveIdx = i; break; }
-                    }
-                    if (lastActiveIdx === -1) space.tasks.push(movedItem);
-                    else space.tasks.splice(lastActiveIdx + 1, 0, movedItem);
-                }
-
-                saveData(); 
-                triggerCloudSave(); // ☁️ ซิงค์ไปที่ Cloud หลังจัดลำดับงาน
-                onRenderCallback(); 
-            },
-            // เมื่อลากจาก Sub-task กลับมาเป็นงานหลัก
-            onAdd: function (evt) {
-                document.body.classList.remove('is-sorting-tasks');
-                const space = getCurrentSpace();
-                const fromSubList = evt.from;
-                const oldParentIdx = parseInt(fromSubList.getAttribute('data-parent-index'));
-                const actualOldSubIdx = parseInt(evt.item.getAttribute('data-index'));
-
-                // 1. ดึงข้อมูลออกจาก Sub-tasks เดิม
-                if (space.tasks[oldParentIdx] && space.tasks[oldParentIdx].subtasks) {
-                    const movedSubtask = space.tasks[oldParentIdx].subtasks.splice(actualOldSubIdx, 1)[0];
-                    
-                    // 2. แปลงโครงสร้างให้เป็น Main Task โดยรักษา Metadata ทั้งหมดไว้
-                    const newMainTask = { ...movedSubtask };
-                    if (!newMainTask.subtasks) newMainTask.subtasks = [];
-                    if (!newMainTask.createdAt) newMainTask.createdAt = Date.now();
-
-                    // 3. แทรกเข้าไปในรายการหลัก
-                    const nextEl = evt.item.nextElementSibling;
-                    if (nextEl && nextEl.hasAttribute('data-index')) {
-                        const nextIdx = parseInt(nextEl.getAttribute('data-index'));
-                        space.tasks.splice(nextIdx, 0, newMainTask);
-                    } else {
-                        space.tasks.push(newMainTask);
-                    }
-                    
-                    saveData();
-                    triggerCloudSave(); // ☁️ ซิงค์ไปที่ Cloud
-                    onRenderCallback();
-                }
-            }
-        });
-    }
-
-    // --- New: Sub-task Drag & Drop ---
-    document.querySelectorAll('.subtask-list').forEach(subListEl => {
-        const pIdx = parseInt(subListEl.getAttribute('data-parent-index'));
-
-        // Shared subtask event handling (checkbox and delete)
-        attachSubtaskEventListeners(subListEl, space, onRenderCallback, {
-            fetchGoogleAPI: fetchGoogleAPI,
-            getGoogleAuthToken: getGoogleAuthToken,
-            getCurrentGoogleListId: getCurrentGoogleListId,
-            isGoogleSyncEnabled: isGoogleSyncEnabled
-        }, () => {
-            // This is the onUpdate callback for re-rendering from subtask changes
-            saveData();
-            onRenderCallback();
-            triggerCloudSave(); // ☁️ ซิงค์ไปที่ Cloud หลังแก้ไข Subtask (Checkbox หรือ Delete)
-        });
-
-        if (subListEl.sortable) subListEl.sortable.destroy();
-        
-        subListEl.sortable = Sortable.create(subListEl, {
-            group: 'nested-tasks', // ต้องชื่อเดียวกับรายการหลักด้านบน
-            animation: 150,
-            fallbackOnBody: true,
-            swapThreshold: 0.65,
-            delay: 150,
-            delayOnTouchOnly: true,
-            draggable: ".subtask-item:not(.subtask-add-row)",
-            ghostClass: 'sortable-ghost',
-            onStart: () => { document.body.classList.add('is-sorting-tasks'); window.getSelection().removeAllRanges(); },
-            onEnd: function (evt) { 
-                document.body.classList.remove('is-sorting-tasks');
-                if (evt.from !== evt.to) return; 
-                const space = getCurrentSpace();
-                if (!space.tasks[pIdx] || !space.tasks[pIdx].subtasks) return;
-
-                const subtasks = space.tasks[pIdx].subtasks;
-                const actualOldIdx = parseInt(evt.item.getAttribute('data-index'));
-                const movedItem = subtasks.splice(actualOldIdx, 1)[0];
-
-                const nextEl = evt.item.nextElementSibling;
-                if (nextEl && nextEl.hasAttribute('data-index')) {
                     let nextIdx = parseInt(nextEl.getAttribute('data-index'));
-                    if (nextIdx > actualOldIdx) nextIdx--;
-                    subtasks.splice(nextIdx, 0, movedItem);
-                } else {
-                    subtasks.push(movedItem);
-                }
-
-                saveData();
-                onRenderCallback();
-            },
-            // เมื่อลากจาก Main Task เข้ามาเป็น Sub-task
-            onAdd: function (evt) {
-                document.body.classList.remove('is-sorting-tasks');
-                const space = getCurrentSpace();
-                const actualOldMainIdx = parseInt(evt.item.getAttribute('data-index'));
-
-                // 1. ดึงข้อมูลจาก Main Tasks ออก
-                const movedTask = space.tasks.splice(actualOldMainIdx, 1)[0];
-
-                // 2. เตรียมข้อมูลงานย่อย โดยรักษา Metadata ทั้งหมด (รวมถึง googleTaskId)
-                const newSubtask = { ...movedTask };
-                delete newSubtask.subtasks; // งานย่อยไม่ควรซ้อนงานย่อยอีกชั้นในตอนนี้
-
-                // 3. ใส่เข้าไปในกลุ่ม Sub-tasks ของตัวเป้าหมาย
-                if (!space.tasks[pIdx].subtasks) space.tasks[pIdx].subtasks = [];
-                const subtasks = space.tasks[pIdx].subtasks;
-                const nextEl = evt.item.nextElementSibling;
-                if (nextEl && nextEl.hasAttribute('data-index')) {
-                    const nextIdx = parseInt(nextEl.getAttribute('data-index'));
-                    subtasks.splice(nextIdx, 0, newSubtask);
-                } else {
-                    subtasks.push(newSubtask);
-                }
-
-                saveData();
-                onRenderCallback();
+                    if (nextIdx > oldIdx) nextIdx--;
+                    space.tasks.splice(nextIdx, 0, movedItem);
+                } else space.tasks.push(movedItem);
+                saveData(); onRenderCallback(); 
             }
         });
-    });
-}
-
-export function renderQuickNotes(space) {
-    const noteArea = document.getElementById('workspace-note');
-    if (noteArea) {
-        // Note: We don't overwrite innerHTML if it's focused to avoid cursor jumping, 
-        // but initially or when switching spaces we must set it.
-        if (document.activeElement !== noteArea) {
-            noteArea.innerHTML = space.note || "";
-        }
     }
-    
 }

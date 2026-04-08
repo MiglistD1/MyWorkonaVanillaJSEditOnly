@@ -1468,8 +1468,7 @@ async function processFlowCompletion(item, shouldClaimRewards, e) {
     // 🌟 Quest Loot Scanner: สแกนหาเงิน/เวลา เฉพาะเมื่อเลือกสำเร็จ (✔) เท่านั้น
     if (shouldClaimRewards && window.processRewardScanner) {
         const combinedText = `${item.title} ${item.description || ''}`;
-        const coords = e ? { x: e.clientX, y: e.clientY } : { x: window.innerWidth/2, y: window.innerHeight/2 };
-        window.processRewardScanner(combinedText, false, coords, 'flow', item.linkedSpaceId, { id: item.id, tags: item.tags });
+        window.processRewardScanner(combinedText, false, null, 'flow', item.linkedSpaceId, { id: item.id, tags: item.tags });
     }
 
     // --- Success Celebration Check ---

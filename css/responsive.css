@@ -3,6 +3,9 @@
   #btn-utility-more { display: flex !important; }
   .topbar { flex-wrap: wrap; }
 
+  /* ย้ายการซ่อนปุ่มไปที่ 768px เพื่อให้สัมพันธ์กับปุ่ม 3 จุดใน todoManager.js */
+  /* #btn-toggle-task-actions... ลบออกจากจุดนี้ */
+
   .utility-group.show-popup {
     display: flex;
     position: absolute;

@@ -1,4 +1,4 @@
-import { svgTag, dragHandleSvg, googleTasksIcon, svgEdit, svgTrashRed, svgPencil, svgRestore, svgArchive, svgRepeat } from './icons.js';
+import { svgTag, dragHandleSvg, svgEdit, svgTrashRed, svgPencil, svgRestore, svgArchive, svgRepeat } from './icons.js';
 import { getShortDate, getAppSettings, getUnitCharFromThai, getFilterTags } from './storage.js';
 
 export function generateMiniTagsBtn(itemTags, type, index, parentIndex = null, spaceId = null) {
@@ -225,7 +225,6 @@ export function generateTaskHTML(task, index, {
         : (isMasterView ? `data-space="${spaceId}" data-idx="${index}"` : `data-index="${index}"`);
 
     const editBtnClass = isMasterView ? 'edit-task-btn' : 'edit-task-text-btn';
-    const cloudIndicator = (task.googleTaskId) ? `<span style="width: 6px; height: 6px; background: #2684fc; border-radius: 50%; display: inline-block; margin-right: 6px; flex-shrink: 0;" title="Synced with Google Tasks"></span>` : '';
     
     const isDateOverdue = task.dueDate && !isCompletedOrDeleted && !isActuallyDeleted && new Date(task.dueDate).setHours(0,0,0,0) < new Date().setHours(0,0,0,0);
     const textStyle = (isCompletedOrDeleted || isActuallyDeleted) 
@@ -325,8 +324,6 @@ export function generateTaskHTML(task, index, {
     }
 
     let actionButtons = '';
-    const subtaskSyncBtn = isSubtask ? `<button class="btn-icon subtask-sync-toggle-btn ${task.googleTaskId ? 'active' : ''}" data-parent-index="${parentIndex}" data-sub-index="${index}" ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="Toggle Google Tasks Sync" style="padding: 2px;">${googleTasksIcon}</button>` : '';
-    const maintaskSyncBtn = !isSubtask ? `<button class="btn-icon main-task-sync-toggle-btn ${task.googleTaskId ? 'active' : ''}" data-index="${index}" ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="Toggle Google Tasks Sync" style="padding: 2px;">${googleTasksIcon}</button>` : '';
 
     const hasTags = task.tags && task.tags.length > 0;
     const tagBtnHTML = isSubtask ? generateMiniTagsBtn(task.tags, 'subtask', index, parentIndex, spaceId) : generateMiniTagsBtn(task.tags, 'task', index, null, spaceId);
@@ -345,7 +342,6 @@ export function generateTaskHTML(task, index, {
             ${(!hasLink || isSubtask) ? linkBtnHTML : ''}
             ${isSubtask ? `<button class="btn-icon convert-to-main-btn" data-parent-index="${parentIndex}" data-sub-index="${index}" title="Break into Main Task">${svgBreakLink}</button>` : `<button class="btn-icon add-subtask-btn" data-index="${index}" title="Add Sub-task" style="margin: 0;"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>`}
             ${!isCompletedOrDeleted && !isActuallyDeleted ? `<button class="btn-icon ${isSubtask ? 'archive-subtask-btn' : 'archive-task-btn'}" data-index="${index}" ${isSubtask ? `data-parent-index="${parentIndex}"` : ''} ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="Archive (Complete)">${svgArchive}</button>` : ''}
-            ${isSubtask ? subtaskSyncBtn : maintaskSyncBtn}
             ${isSubtask ? `
                 <button class="btn-icon edit-subtask-btn" data-parent-index="${parentIndex}" data-sub-index="${index}" data-id="${task.id}" title="Edit Sub-task">${svgEdit}</button>
                 <button class="btn-icon delete-subtask-btn" data-parent-index="${parentIndex}" data-sub-index="${index}" data-id="${task.id}" title="Delete Sub-task">${svgTrashRed}</button>
@@ -399,7 +395,6 @@ export function generateTaskHTML(task, index, {
 
             <div style="flex: 1; min-width: 0; display: flex; align-items: center;">
                 <div class="task-text-container" style="display: flex; align-items: center; font-size: 13.5px; width: 100%;">
-                    ${cloudIndicator}
                     <span class="task-actual-text" contenteditable="true" style="${textStyle}">${task.text}</span>${repeatIcon}
                     ${showSpaceBadge ? `<span class="space-tag" style="margin-left: 8px; flex-shrink: 0;">${spaceName}</span>` : ''}
                 </div>

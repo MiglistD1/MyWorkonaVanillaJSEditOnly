@@ -72,11 +72,13 @@ export function applyAppSettings() {
     mobileStyle.innerHTML = `
         @media (max-width: 768px) {
             /* 1. ซ่อนส่วนที่ไม่เกี่ยวข้องกับ To-do */
-            #tabs-card, #resources-card, .topbar .search-wrapper, .topbar #global-launchers-bar, .topbar #utility-group, .topbar #btn-utility-more, #schedule-mode-bar, #focus-mode-bar, #tag-bar-container,
-            #btn-toggle-task-actions, #btn-toggle-prominent-tasks, #btn-expand-all-subtasks, #btn-collapse-all-subtasks, #btn-todo-templates, #btn-toggle-extra-sections { display: none !important; }
+            #tabs-card, #resources-card, .topbar .search-wrapper, .topbar #global-launchers-bar, .topbar #utility-group, .topbar #btn-utility-more, #schedule-mode-bar, #focus-mode-bar, #tag-bar-container { display: none !important; }
             #main-grid { grid-template-columns: 1fr !important; padding: 0 !important; gap: 0 !important; }
             #tasks-card { border-radius: 0 !important; border: none !important; width: 100% !important; overflow-x: hidden !important; }
             .card-body { padding: 10px !important; }
+
+            /* 🟢 ซ่อนปุ่มเดิม และใช้ปุ่ม 3 จุด (Mobile Tools) แทน */
+            #btn-toggle-task-actions, #btn-toggle-prominent-tasks, #btn-expand-all-subtasks, #btn-collapse-all-subtasks, #btn-todo-templates, #btn-toggle-extra-sections { display: none !important; }
             
             /* 2. ปรับ Sidebar ให้เป็น Drawer เต็มหน้าจอ */
             #spacebar:not(.collapsed) { width: 85% !important; z-index: 10001; }
@@ -318,6 +320,8 @@ export function applyAppSettings() {
                 background: var(--hover-bg) !important; border: 1px solid var(--border-color) !important;
             }
             .btn-edit-tags svg { display: none; } /* ซ่อนไอคอนแท็กบนมือถือเพื่อความคลีน */
+            
+            #btn-mobile-todo-tools { display: inline-flex !important; }
 
             /* ซ่อนจุดลาก (Drag Handle) เพื่อลดความรกบนมือถือ */
             .task-item .drag-handle { display: none !important; }

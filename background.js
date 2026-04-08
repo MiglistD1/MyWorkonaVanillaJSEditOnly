@@ -1,5 +1,4 @@
 // When the extension icon is clicked, open a new tab
-import { syncAllGoogleTasks } from './features/googleTasks.js';
 
 chrome.action.onClicked.addListener(() => {
   // Open the vanilla JS dashboard.html directly
@@ -24,11 +23,6 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   }
 });
 
-// Create a periodic alarm for Google Tasks sync
-chrome.alarms.create('google-tasks-sync-alarm', { // Changed from 5 minutes to 1 minute for faster sync
-  periodInMinutes: 1
-});
-
 // Create a periodic alarm for auto-export
 chrome.alarms.create('auto-export', {
   periodInMinutes: 60
@@ -36,10 +30,6 @@ chrome.alarms.create('auto-export', {
 
 // Listen for the alarm and trigger Google Tasks sync
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === 'google-tasks-sync-alarm') {
-    syncAllGoogleTasks();
-  }
-
   if (alarm.name === 'auto-export') {
     chrome.storage.local.get(['appSettings'], (res) => {
       const settings = res.appSettings;

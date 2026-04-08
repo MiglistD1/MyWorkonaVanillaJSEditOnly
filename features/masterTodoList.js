@@ -1,8 +1,7 @@
 import { getSpaces, saveData, getAppSettings, setCurrentSpaceId, getFilterTags, loadData } from '../core/storage.js';
 import Sortable from '../sortable.esm.js';
-import { googleTasksIcon, svgRefresh } from '../core/icons.js';
-import { getGoogleStatus, fetchGoogleAPI, fetchGoogleLists, getGoogleAuthToken, getCurrentGoogleListId, getIsGoogleSyncEnabled, createGoogleTask, syncAllGoogleTasks, getTargetListId } from './googleTasks.js';
-import { openTaskEditModal, openTaskLinkModal, isAnyEditableElementFocused, toggleTaskFocus } from './todoManager.js'; // 🟢 Merged imports
+import { svgRefresh } from '../core/icons.js';
+import { openTaskEditModal, openTaskLinkModal, isAnyEditableElementFocused, toggleTaskFocus } from './todoManager.js'; 
 import { handleMiniTagClick } from '../components/modals.js';
 import { generateTaskHTML, attachSubtaskEventListeners, attachTaskInlineEditListeners, handleTagAutocomplete, applySyntaxHighlighting } from '../core/ui-helpers.js';
 
@@ -50,8 +49,6 @@ export const masterTodoListState = {
  */
 export function renderMasterHeaderControls() {
     const allSpaces = getSpaces().filter(s => !s.isArchived && !s.isDeleted);
-    const googleStatus = getGoogleStatus();
-    const isSync = googleStatus.isGoogleSyncEnabled;
     
     // หา ID ที่ควรจะถูกเลือกใน Dropdown (จาก State หรือค่าแรกสุดในรายการ)
     const selectedId = masterTodoListState.selectedQuickAddSpaceId || (allSpaces.length > 0 ? allSpaces[0].id : null);
@@ -67,9 +64,6 @@ export function renderMasterHeaderControls() {
         </div>
         
         <div class="task-input-bar master-input-area" style="flex: 1; margin: 0; height: 34px; box-shadow: none;">
-            <button id="btn-master-sync-toggle" class="btn-sync-toggle ${isSync ? 'active' : ''}" title="Google Tasks Sync" style="border-radius: 6px 0 0 6px; border-right: 1px solid var(--border-color);">
-                ${isSync ? googleTasksIcon : computerIcon}
-            </button>
             <select id="master-space-selector" class="master-space-select" style="border-radius: 0;">
                 ${allSpaces.map(s => `<option value="${s.id}" ${parseInt(s.id) === parseInt(selectedId) ? 'selected' : ''}>${s.name}</option>`).join('')}
             </select>
@@ -90,13 +84,7 @@ export function renderMasterTodoList(container) {
         console.log("Master Render skipped: User is typing.");
         return;
     }
-    // 🟢 FIX: ไม่ต้อง re-render ถ้ามี Element ที่กำลังแก้ไขอยู่
-    if (isAnyEditableElementFocused()) {
-        console.log("RenderMasterTodoList skipped: Editable element is focused.");
-        return;
-    }
-    if (!container) return;
-
+    // 🟢 
     const allSpaces = getSpaces().filter(s => !s.isArchived && !s.isDeleted);
     let totalTasks = 0;
     let completedTasks = 0;
@@ -133,9 +121,8 @@ export function renderMasterTodoList(container) {
         if (!groupDetails) return;
         const spaceId = parseInt(groupDetails.dataset.spaceId);
         const space = allSpaces.find(s => s.id === spaceId);
-        const googleApiCallbacks = { fetchGoogleAPI, getGoogleAuthToken, getCurrentGoogleListId, isGoogleSyncEnabled: getIsGoogleSyncEnabled };
         if (space) {
-            attachSubtaskEventListeners(subListEl, space, onRefresh, googleApiCallbacks, () => { saveData(); onRefresh(); });
+            attachSubtaskEventListeners(subListEl, space, onRefresh, {}, () => { saveData(); onRefresh(); });
         }
     });
 
@@ -144,7 +131,7 @@ export function renderMasterTodoList(container) {
         const spaceId = parseInt(li.getAttribute('data-space-id'));
         return getSpaces().find(s => s.id === spaceId);
     }, {
-        fetchGoogleAPI, getGoogleAuthToken, getCurrentGoogleListId, saveData,
+        saveData,
         onAddMainTaskAfter: (space, index) => {
             // 🟢 เพิ่มงานใหม่ใน Space ที่ระบุ และเลื่อนลำดับลงมา 1 ตำแหน่ง
             const newTask = { text: "", completed: false, tags: [], dueDate: null, createdAt: Date.now(), googleTaskId: null, isProminent: false, subtasks: [] };
@@ -186,10 +173,6 @@ export function renderMasterTodoList(container) {
             } else {
                 const pIdx = parseInt(li.closest('.subtask-list').dataset.parentIndex);
                 task = space.tasks[pIdx]?.subtasks?.[index];
-            }
-            if (task && task.googleTaskId && getGoogleAuthToken()) {
-                const listId = getTargetListId(space);
-                fetchGoogleAPI(`/lists/${listId}/tasks/${task.googleTaskId}`, 'DELETE');
             }
             if (type === 'task') space.tasks.splice(index, 1);
             else {
@@ -235,7 +218,6 @@ function renderProgressSection(allSpaces, totalTasks) {
                             ${isSingle ? 'Single' : 'Multi'}
                         </button>
                     </div>
-                    <select id="google-task-list-select-master" class="master-space-select" style="display: none; height: 20px; font-size: 10px; margin-left: 4px; padding: 0 4px; border-radius: 4px; max-width: 100px; text-overflow: ellipsis;"></select>
                 </div>
                 <span id="progress-text" style="font-weight: 700; color: var(--primary-color);">${totalTasks} ${masterTodoListState.showOnlyFlagged ? 'Flagged' : ''} Tasks Remaining</span>
             </div>
@@ -311,7 +293,7 @@ function renderTaskGroups(allSpaces) {
     }).join('');
 }
 
-function initMasterEvents() {
+export function initMasterEvents() {
     const addBtn = document.getElementById('btn-master-add-task');
     const taskInput = document.getElementById('master-task-input');
     const spaceSelect = document.getElementById('master-space-selector');
@@ -374,14 +356,7 @@ function initMasterEvents() {
                 });
             }
 
-            let newTask = { text, completed: false, createdAt: Date.now(), isProminent: false, tags: tags, googleTaskId: null };
-            const status = getGoogleStatus();
-            if (status.isGoogleSyncEnabled && status.googleAuthToken) {
-                taskInput.placeholder = "Syncing...";
-                const listId = getTargetListId(targetSpace);
-                const gTask = await fetchGoogleAPI(`/lists/${listId}/tasks`, 'POST', { title: `${text} (S: ${targetSpace.name})` });
-                if (gTask && gTask.id) newTask.googleTaskId = gTask.id;
-            }
+            let newTask = { text, completed: false, createdAt: Date.now(), isProminent: false, tags: tags };
             targetSpace.tasks.push(newTask);
             if (targetSpace.taskSortOrder && targetSpace.taskSortOrder !== 'manual') sortSpaceTasks(targetSpace);
             taskInput.value = ''; taskInput.disabled = false; taskInput.placeholder = "Quick add task...";
@@ -523,13 +498,6 @@ function initMasterEvents() {
                 if (space && space.tasks[idx]) {
                     const task = space.tasks[idx];
                     
-                    // ☁️ Sync with Google Tasks (ใช้ List ID ตาม Space จริง)
-                    const status = getGoogleStatus();
-                    if (task.googleTaskId && status.googleAuthToken && status.isGoogleSyncEnabled) {
-                        const targetListId = getTargetListId(space);
-                        fetchGoogleAPI(`/lists/${targetListId}/tasks/${task.googleTaskId}`, 'PATCH', { status: isChecked ? 'completed' : 'needsAction' });
-                    }
-
                     if (isChecked) {
                         task.isDeleted = true;
                         task.deletedAt = Date.now();
@@ -617,59 +585,6 @@ function initMasterEvents() {
                 return;
             }
 
-            // 🔘 3. Toggle Google Tasks Sync (Subtask)
-            const syncBtn = target.closest('.subtask-sync-toggle-btn');
-            if (syncBtn) {
-                const pIdx = parseInt(syncBtn.dataset.parentIndex);
-                const sIdx = parseInt(syncBtn.dataset.subIndex);
-                const sid = parseInt(syncBtn.closest('li').dataset.spaceId);
-                const space = getSpaces().find(s => s.id === sid);
-                const parentTask = space?.tasks[pIdx];
-                const subtask = parentTask?.subtasks[sIdx];
-
-                if (subtask) {
-                    const status = getGoogleStatus();
-                    if (!status.googleAuthToken) return alert("Please connect to Google first");
-
-                    const listId = getTargetListId(space);
-                    if (subtask.googleTaskId) {
-                        await fetchGoogleAPI(`/lists/${listId}/tasks/${subtask.googleTaskId}`, 'DELETE');
-                        subtask.googleTaskId = null;
-                    } else {
-                        if (!parentTask.googleTaskId) return alert("Sync main task first to nest subtasks.");
-                        const gTask = await createGoogleTask(listId, { title: subtask.text }, parentTask.googleTaskId);
-                        if (gTask?.id) subtask.googleTaskId = gTask.id;
-                    }
-                    saveData(); onRefresh();
-                }
-                return;
-            }
-
-            // 🔘 6. Toggle Google Tasks Sync (Main Task)
-            const mainSyncBtn = target.closest('.main-task-sync-toggle-btn');
-            if (mainSyncBtn) {
-                const idx = parseInt(mainSyncBtn.dataset.index);
-                const sid = parseInt(mainSyncBtn.closest('li').dataset.spaceId);
-                const space = getSpaces().find(s => s.id === sid);
-                const task = space?.tasks[idx];
-
-                if (task) {
-                    const status = getGoogleStatus();
-                    if (!status.googleAuthToken) return alert("Please connect to Google first");
-
-                    const listId = getTargetListId(space);
-                    if (task.googleTaskId) {
-                        await fetchGoogleAPI(`/lists/${listId}/tasks/${task.googleTaskId}`, 'DELETE');
-                        task.googleTaskId = null;
-                    } else {
-                        const gTask = await createGoogleTask(listId, { title: `${task.text} (S: ${space.name})` });
-                        if (gTask?.id) task.googleTaskId = gTask.id;
-                    }
-                    saveData(); onRefresh();
-                }
-                return;
-            }
-
             // 🔘 7. Archive Task (Main)
             const arcBtn = target.closest('.archive-task-btn');
             if (arcBtn) {
@@ -681,10 +596,6 @@ function initMasterEvents() {
                     task.completed = true;
                     task.completedAt = Date.now();
                     task.isProminent = false;
-                    if (task.googleTaskId && getGoogleAuthToken()) {
-                        const listId = getTargetListId(space);
-                        fetchGoogleAPI(`/lists/${listId}/tasks/${task.googleTaskId}`, 'PATCH', { status: 'completed' });
-                    }
                     if (task.subtasks) task.subtasks.forEach(s => s.completed = true);
                     saveData(); onRefresh();
                 }
@@ -701,10 +612,6 @@ function initMasterEvents() {
                 const subtask = space?.tasks[pIdx]?.subtasks[sIdx];
                 if (subtask) {
                     subtask.completed = true;
-                    if (subtask.googleTaskId && getGoogleAuthToken()) {
-                        const listId = getTargetListId(space);
-                        fetchGoogleAPI(`/lists/${listId}/tasks/${subtask.googleTaskId}`, 'PATCH', { status: 'completed' });
-                    }
                     saveData(); onRefresh();
                 }
                 return;
@@ -895,11 +802,6 @@ function initMasterEvents() {
                     const space = getSpaces().find(s => s.id === spaceId);
                     if (space) { 
                         const task = space.tasks[taskIndex];
-                        // ☁️ ส่งคำสั่งลบไปยัง Google Tasks ทันที
-                        if (task.googleTaskId && getGoogleAuthToken()) {
-                            const listId = getTargetListId(space);
-                            fetchGoogleAPI(`/lists/${listId}/tasks/${task.googleTaskId}`, 'DELETE');
-                        }
                         space.tasks.splice(taskIndex, 1); saveData(); setCurrentSpaceId(0); onRefresh(); 
                     }
                 } else setCurrentSpaceId(0);

@@ -8,7 +8,7 @@ import {
 // 🔴 [PLACE YOUR NEW CLIENT ID HERE]
 const CLIENT_ID = '586837492075-e2cf86u76n2c9dil0equ98trbraqnngh.apps.googleusercontent.com';
 
-const SCOPES = 'https://www.googleapis.com/auth/drive.file';
+const SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar.events';
 const FILE_NAME = 'myworkona_todos.json';
 const REDIRECT_URI = window.location.origin + window.location.pathname;
 
