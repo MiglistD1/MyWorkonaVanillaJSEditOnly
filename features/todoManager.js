@@ -160,6 +160,7 @@ let editingLinkSubIdx = null;
 let editingLinkSpaceId = null;
 let addingSubtaskToIndex = null; // เก็บ Index ของงานหลักที่กำลังจะเพิ่มงานย่อย
 let currentTaskRepeatConfig = { isRepeating: false, frequency: 'daily', interval: 1 };
+let currentTaskCalendarSync = false;
 let editingTaskRepeatConfig = { isRepeating: false, frequency: 'daily', interval: 1 };
 let editingTemplateIndex = null; // 🟢 สำหรับจำว่ากำลังแก้ไข Template ไหนอยู่
 let currentTemplateTasks = []; // ตัวแปรชั่วคราวขณะสร้าง Template
@@ -690,6 +691,17 @@ export function initTodoManager(callbacks) {
         weeklyOptions.style.display = config.frequency === 'weekly' ? 'block' : 'none';
         monthlyOptions.style.display = config.frequency === 'monthly' ? 'block' : 'none';
     };
+
+    // 📅 ระบบ Toggle Sync Calendar สำหรับช่อง Add Task
+    const quickCalBtn = document.getElementById('btn-task-calendar-sync');
+    if (quickCalBtn) {
+        quickCalBtn.onclick = () => {
+            currentTaskCalendarSync = !currentTaskCalendarSync;
+            quickCalBtn.style.color = currentTaskCalendarSync ? 'var(--primary-color)' : '#4285f4';
+            quickCalBtn.style.borderColor = currentTaskCalendarSync ? 'var(--primary-color)' : 'var(--border-color)';
+            quickCalBtn.style.background = currentTaskCalendarSync ? 'rgba(47, 128, 237, 0.1)' : 'var(--bg-body)';
+        };
+    }
 
     document.getElementById('btn-task-repeat').onclick = () => {
         syncRepeatUI(currentTaskRepeatConfig);
@@ -1493,9 +1505,31 @@ export function initTodoManager(callbacks) {
     
     // Logic สำหรับ Checkbox แยกออกมา
     const handleTaskChange = (e) => { // This handles main tasks
-        // Subtask checkboxes are handled by attachSubtaskEventListeners
         if (e.target.classList.contains('subtask-check-box')) {
-            return; 
+            const isChecked = e.target.checked;
+            const pIdx = parseInt(e.target.dataset.parentIndex);
+            const sIdx = parseInt(e.target.dataset.subIndex);
+            const taskItem = e.target.closest('.subtask-item');
+            
+            // 🟢 แสดงผลขีดฆ่าทันทีที่กด (Immediate Feedback)
+            if (taskItem) {
+                taskItem.classList.toggle('completed-hold', isChecked);
+            }
+            
+            const space = getCurrentSpace();
+            const subtask = space?.tasks[pIdx]?.subtasks?.[sIdx];
+            if (subtask) {
+                subtask.completed = isChecked;
+                // 🌟 เรียก Reward Scanner สำหรับงานย่อย
+                if (isChecked && window.processRewardScanner) {
+                    window.processRewardScanner(subtask.text, false, { x: e.clientX, y: e.clientY }, 'task', space.id);
+                }
+                saveData(true);
+                triggerCloudSave();
+                // หน่วงเวลา Re-render เพื่อให้เห็น Animation
+                setTimeout(() => onRenderCallback(), isChecked ? 800 : 0);
+            }
+            return;
         }
 
         if (e.target.classList.contains('task-check-box')) {
@@ -2091,6 +2125,7 @@ function initTodoTemplateSystem() {
 async function addTask() { 
     const input = document.getElementById('new-task-input'); 
     const dateInput = document.getElementById('new-task-date');
+    const quickCalBtn = document.getElementById('btn-task-calendar-sync');
     let text = input.value.trim();
     if (text !== '') {
         // 🔴 ป้องกันการเพิ่มงาน Repeat ที่ไม่มีวันที่ (กรณีผู้ใช้ลบวันที่ออกหลังตั้งค่า Repeat)
@@ -2127,9 +2162,29 @@ async function addTask() {
         // Initialize new task with isProminent: false
         let newTask = { text: text, completed: false, tags: tags, dueDate: dateInput.value || null, createdAt: Date.now(), isProminent: false, subtasks: [], subtasksHidden: false, repeatConfig: { ...currentTaskRepeatConfig } }; 
 
+        // 📅 Calendar Sync Logic for Quick Add
+        if (currentTaskCalendarSync && newTask.dueDate) {
+            try {
+                const token = await getAuthToken(false);
+                if (token) {
+                    const event = await createCalendarEvent(newTask, token);
+                    if (event && event.id) newTask.calendarEventId = event.id;
+                }
+            } catch (err) { console.error("Quick add calendar sync error:", err); }
+        }
+
         space.tasks.push(newTask); 
         currentTaskRepeatConfig = { isRepeating: false, frequency: 'daily', interval: 1 }; // Reset UI and state after add
         document.getElementById('btn-task-repeat').style.color = 'inherit';
+
+        // Reset Calendar Sync UI
+        currentTaskCalendarSync = false;
+        if (quickCalBtn) {
+            quickCalBtn.style.color = '#4285f4';
+            quickCalBtn.style.borderColor = 'var(--border-color)';
+            quickCalBtn.style.background = 'var(--bg-body)';
+        }
+
         if (space.taskSortOrder && space.taskSortOrder !== 'manual') sortSpaceTasks(space);
         playTaskAddedSound();
         input.value = ''; input.disabled = false; input.placeholder = "Type a task..."; input.focus();
@@ -2360,12 +2415,35 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
     if(!space.tasks) space.tasks = [];
     checkAndResetHabits(space);
 
+    // --- 🟢 กู้คืน: ปุ่ม Dropdown สำหรับจัดเรียงงาน (Sort Tasks) ---
+    const taskHeader = document.getElementById('header-tasks-text');
+    if (taskHeader) {
+        let sortContainer = document.getElementById('task-sort-container');
+        if (!sortContainer) {
+            sortContainer = document.createElement('div');
+            sortContainer.id = 'task-sort-container';
+            sortContainer.style = 'margin-left: 10px; display: inline-flex; align-items: center;';
+            taskHeader.parentElement.appendChild(sortContainer);
+        }
+
+        const currentSort = space.taskSortOrder || 'manual';
+        sortContainer.innerHTML = `
+            <select id="task-sort-select" title="Sort Tasks" style="font-family: var(--app-font); font-size: 11px; font-weight: 700; padding: 2px 6px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-body); color: var(--text-main); cursor: pointer; outline: none; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                <option value="manual" ${currentSort === 'manual' ? 'selected' : ''}>⇅ Manual</option>
+                <option value="date" ${currentSort === 'date' ? 'selected' : ''}>📅 By Date</option>
+                <option value="name" ${currentSort === 'name' ? 'selected' : ''}>🔤 By Name</option>
+            </select>
+        `;
+        sortContainer.querySelector('#task-sort-select').onchange = (e) => {
+            space.taskSortOrder = e.target.value;
+            if (space.taskSortOrder !== 'manual') sortSpaceTasks(space);
+            saveData(true);
+            onRenderCallback();
+        };
+    }
+
     const isProminentHidden = space.hideProminentTasks || false;
     const isMobile = window.innerWidth <= 768;
-
-    // 🟢 แสดงปุ่ม 3 จุดเฉพาะบนมือถือ
-    const mobileToolsBtn = document.getElementById('btn-mobile-todo-tools');
-    if (mobileToolsBtn) mobileToolsBtn.style.display = isMobile ? 'inline-flex' : 'none';
 
     // Update UI Toggles
     const toggleProminentBtn = document.getElementById('btn-toggle-prominent-tasks');
@@ -2424,22 +2502,10 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
             showActions: space.showTaskActions, isTrash: task.isDeleted, addingSubtaskToIndex, nextDueDate: nextDate
         });
         
-        if (isRepeatingComplete) {
-            repeatingHTML += liContent;
-            repeatingCount++;
-        }
-        else if (task.isDeleted) {
-            trashHTML += liContent; 
-            trashCount++;
-        }
-        else if (task.completed) {
-            archiveHTML += liContent; 
-            archiveCount++;
-        }
-        else {
-            todoHTML += liContent; 
-            todoCount++;
-        }
+        if (isRepeatingComplete) { repeatingHTML += liContent; repeatingCount++; }
+        else if (task.isDeleted) { trashHTML += liContent; trashCount++; }
+        else if (task.completed) { archiveHTML += liContent; archiveCount++; }
+        else { todoHTML += liContent; todoCount++; }
     });
 
     taskListUI.innerHTML = todoHTML;
@@ -2447,22 +2513,16 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
     if (repeatingWaitingListUI) repeatingWaitingListUI.innerHTML = repeatingHTML;
     if (trashListUI) trashListUI.innerHTML = trashHTML;
 
-    // 🟢 อัปเดตตัวเลขจำนวนงานในแต่ละส่วน
     const updateLabel = (id, count) => {
         const el = document.getElementById(id);
         if (el) el.innerText = count > 0 ? `(${count})` : '';
     };
-
     updateLabel('todo-count-label', todoCount);
     updateLabel('repeating-count-label', repeatingCount);
     updateLabel('archive-count-label', archiveCount);
     updateLabel('trash-count-label', trashCount);
 
     [taskListUI, archiveListUI, trashListUI].forEach(c => c && c.querySelectorAll('.task-actual-text').forEach(el => applySyntaxHighlighting(el)));
-
-    const showExtra = getAppSettings().showExtraTaskSections !== false;
-    const extraDisplay = showExtra ? 'block' : 'none';
-    [repeatingContainer, archiveContainer, trashContainer].forEach(c => { if(c) c.style.display = extraDisplay; });
 
     if (!isFiltered && taskListUI) {
         if (taskListUI.sortable) taskListUI.sortable.destroy();
@@ -2471,15 +2531,12 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
             disabled: space.isArchived || (space.taskSortOrder !== 'manual' && !!space.taskSortOrder),
             onStart: () => { document.body.classList.add('is-sorting-tasks'); window.getSelection().removeAllRanges(); },
             onEnd: function (evt) { 
-                document.body.classList.remove('is-sorting-tasks');
                 const oldIdx = parseInt(evt.item.getAttribute('data-index'));
                 const movedItem = space.tasks.splice(oldIdx, 1)[0];
                 const nextEl = evt.item.nextElementSibling;
-                if (nextEl) {
-                    let nextIdx = parseInt(nextEl.getAttribute('data-index'));
-                    if (nextIdx > oldIdx) nextIdx--;
-                    space.tasks.splice(nextIdx, 0, movedItem);
-                } else space.tasks.push(movedItem);
+                let targetIdx = nextEl ? parseInt(nextEl.getAttribute('data-index')) : space.tasks.length;
+                if (nextEl && targetIdx > oldIdx) targetIdx--;
+                space.tasks.splice(targetIdx, 0, movedItem);
                 saveData(); onRenderCallback(); 
             }
         });

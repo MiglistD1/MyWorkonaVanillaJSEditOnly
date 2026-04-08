@@ -76,12 +76,6 @@ export function applyAppSettings() {
             #main-grid { grid-template-columns: 1fr !important; padding: 0 !important; gap: 0 !important; }
             #tasks-card { border-radius: 0 !important; border: none !important; width: 100% !important; overflow-x: hidden !important; }
             .card-body { padding: 10px !important; }
-
-            /* 🟢 ซ่อนปุ่มเดิม และใช้ปุ่ม 3 จุด (Mobile Tools) แทน */
-            #btn-toggle-task-actions, #btn-toggle-prominent-tasks, #btn-expand-all-subtasks, #btn-collapse-all-subtasks, #btn-todo-templates, #btn-toggle-extra-sections { display: none !important; }
-            
-            /* 2. ปรับ Sidebar ให้เป็น Drawer เต็มหน้าจอ */
-            #spacebar:not(.collapsed) { width: 85% !important; z-index: 10001; }
             
             /* 3. UI To-do แบบ Google Tasks และทำให้ Scroll ได้ */
             #tasks-card { overflow-y: auto !important; height: calc(100vh - 60px); }
@@ -194,12 +188,12 @@ export function applyAppSettings() {
                 transform: translateY(100%);
                 transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.2s;
                 display: grid !important;
-                grid-template-columns: 1fr auto !important;
+                grid-template-columns: 1fr 44px 44px !important;
                 grid-template-areas: 
-                    "header header"
-                    "input repeat"
-                    "date add"
-                    "list list" !important;
+                    "header header header"
+                    "input repeat calendar"
+                    "date add add"
+                    "list list list" !important;
                 gap: 10px 10px !important;
                 box-sizing: border-box !important;
             }
@@ -219,16 +213,25 @@ export function applyAppSettings() {
                 box-shadow: inset 0 1px 2px rgba(0,0,0,0.05) !important;
             }
 
-            #btn-task-repeat {
-                grid-area: repeat;
+            #btn-task-repeat, #btn-task-calendar-sync {
                 display: flex !important;
-                align-items: center; justify-content: center;
-                width: 44px !important; height: 44px !important;
-                background: var(--bg-body);
-                border: 1.5px solid var(--border-color);
-                border-radius: 12px;
+                align-items: center; 
+                justify-content: center;
+                width: 44px !important; 
+                height: 44px !important;
+                background: var(--bg-body) !important;
+                border: 1.5px solid var(--border-color) !important;
+                border-radius: 12px !important;
+                padding: 0 !important;
+                margin: 0 !important;
             }
-            
+
+            #btn-task-repeat { grid-area: repeat; }
+            #btn-task-calendar-sync { 
+                grid-area: calendar; 
+                color: #4285f4; /* Google Blue */
+            }
+
             .date-wrapper { 
                 grid-area: date; 
                 border: 1px solid var(--border-color) !important;

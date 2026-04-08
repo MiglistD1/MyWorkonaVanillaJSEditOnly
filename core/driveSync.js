@@ -19,7 +19,7 @@ function formatLogTime(ts) {
     return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " (" + d.getDate() + "/" + (d.getMonth() + 1) + ")";
 }
 
-let accessToken = null;
+let accessToken = localStorage.getItem('google_access_token');
 import { svgGoogleDrive, svgCloudOff, svgRefresh, svgSpinner, svgCloudUp, svgCloudDown, svgEdit } from './icons.js';
 
 /**
@@ -193,6 +193,7 @@ async function getAuthToken(interactive = true) {
                     resolve(null);
                 } else {
                     accessToken = token;
+                    localStorage.setItem('google_access_token', token);
                     resolve(token);
                 }
             });
@@ -204,6 +205,7 @@ async function getAuthToken(interactive = true) {
     const tokenFromHash = hashParams.get('access_token');
     if (tokenFromHash) {
         accessToken = tokenFromHash;
+        localStorage.setItem('google_access_token', tokenFromHash);
         window.history.replaceState(null, null, window.location.pathname); // Clean URL
         return accessToken;
     }
@@ -215,6 +217,15 @@ async function getAuthToken(interactive = true) {
     }
 
     return null;
+}
+
+/** 🗑️ ล้าง Token ออกจากระบบและ Storage */
+export async function clearAuthToken(tokenToClear) {
+    accessToken = null;
+    localStorage.removeItem('google_access_token');
+    if (typeof chrome !== 'undefined' && chrome.identity) {
+        return new Promise(resolve => chrome.identity.removeCachedAuthToken({ token: tokenToClear }, resolve));
+    }
 }
 
 /**
@@ -237,11 +248,7 @@ async function driveApiFetch(url, options = {}, interactive = false) {
             console.error(`Authentication Error (${response.status}):`, errorData);
             
             // ล้าง Token ทั้งในตัวแปรและใน Cache ของ Chrome ทันทีที่เจอ 401/403
-            const oldToken = accessToken || token;
-            accessToken = null; 
-            if (typeof chrome !== 'undefined' && chrome.identity) {
-                await new Promise(resolve => chrome.identity.removeCachedAuthToken({ token: oldToken }, resolve));
-            }
+            await clearAuthToken(accessToken || token);
 
             if (response.status === 403) {
                 alert("⚠️ สิทธิ์การเข้าถึงถูกปฏิเสธ (403):\n1. โปรดตรวจสอบว่าได้ติ๊กถูกที่ช่อง 'See, create, and delete its own configuration data' ในหน้าต่าง Google\n2. ตรวจสอบว่าเปิดใช้งาน 'Google Drive API' ใน Cloud Console แล้ว\n\nระบบจะล้างการล็อกอินเดิมเพื่อให้คุณกด Sync และเลือกสิทธิ์ใหม่อีกครั้ง");

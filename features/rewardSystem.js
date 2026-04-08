@@ -418,7 +418,6 @@ function renderRewardContent() {
     if (!container) return;
 
     const activeTab = container.dataset.activeTab || '1';
-    const status = getGoogleStatus();
 
     // 🟢 สร้างตัวเลือก Google Lists
     let googleListOptions = `<option value="@default">Default List</option>`;
@@ -426,15 +425,6 @@ function renderRewardContent() {
         googleListOptions = window._cachedGoogleLists.map(l => 
             `<option value="${l.id}" ${l.id === rewardData.targetListId ? 'selected' : ''}>${l.title}</option>`
         ).join('');
-    } else {
-        // ดึงรายการ List มาเก็บไว้ (เรียกแบบ async)
-        fetchGoogleAPI('/users/@me/lists').then(data => {
-            if (data && data.items) {
-                window._cachedGoogleLists = data.items;
-                const select = document.getElementById('sf-loot-google-list-select');
-                if (select) select.innerHTML = data.items.map(l => `<option value="${l.id}" ${l.id === rewardData.targetListId ? 'selected' : ''}>${l.title}</option>`).join('');
-            }
-        });
     }
 
     container.innerHTML = `
@@ -446,8 +436,7 @@ function renderRewardContent() {
         <div class="reward-pane" style="display: ${activeTab === '1' ? 'block' : 'none'}">
             <!-- 🟢 Google Sync Controls -->
             <div class="customize-section" style="margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; padding: 12px; background: var(--bg-body);">
-                <div style="display: flex; align-items: center; gap: 10px;"Tasks Sync</div>
-                </div>
+                <div style="display: flex; align-items: center; gap: 10px;">Tasks Sync</div>
                 <div style="display: flex; gap: 4px; margin-right: 5px; align-items: center;">
                     <button class="btn btn-outline" id="btn-toggle-sync-tools" title="Toggle Sync Tools" style="padding: 2px 6px; min-width: 24px; display: flex; align-items: center; justify-content: center;">
                         <svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 13px; height: 13px;">

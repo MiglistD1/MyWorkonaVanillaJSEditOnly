@@ -138,7 +138,7 @@ document.addEventListener('DOMContentLoaded', () => {
         initCustomLaunchers();
         initDashboardQuickNote();
         initRewardSystem();
-        
+
         const unarchiveBtn = document.getElementById('btn-unarchive-from-banner');
         if (unarchiveBtn) {
             unarchiveBtn.addEventListener('click', () => {

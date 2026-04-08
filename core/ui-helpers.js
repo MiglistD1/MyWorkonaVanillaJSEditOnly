@@ -424,10 +424,17 @@ export function attachSubtaskEventListeners(container, space, onRenderCallback, 
         if (e.target.classList.contains('subtask-check-box')) {
             const pIdx = parseInt(e.target.getAttribute('data-parent-index'));
             const sIdx = parseInt(e.target.getAttribute('data-sub-index')); // This is the index within the subtasks array
-            
+            const isChecked = e.target.checked;
+            const taskItem = e.target.closest('.subtask-item');
+
+            // 🟢 แสดง Animation ขีดฆ่าทันทีที่คลิก (รองรับทั้งติ๊กเข้าและออก)
+            if (taskItem) {
+                taskItem.classList.toggle('completed-hold', isChecked);
+            }
+
             if (space.tasks[pIdx]?.subtasks?.[sIdx]) {
                 const subtask = space.tasks[pIdx].subtasks[sIdx];
-                subtask.completed = e.target.checked;
+                subtask.completed = isChecked;
 
                 // 🌟 Trigger Quest Loot Scanner สำหรับ Sub-task
                 if (subtask.completed && window.processRewardScanner) {
@@ -440,8 +447,11 @@ export function attachSubtaskEventListeners(container, space, onRenderCallback, 
                 }
             }
             if (space.tasks[pIdx]?.subtasks?.[sIdx]) {
-                space.tasks[pIdx].subtasks[sIdx].completed = e.target.checked;
-                onUpdate();
+                space.tasks[pIdx].subtasks[sIdx].completed = isChecked;
+                // 🟢 หน่วงเวลา Re-render เพื่อให้เห็นผลการขีดฆ่าเหมือนงานหลัก
+                setTimeout(() => {
+                    onUpdate();
+                }, isChecked ? 800 : 0);
             }
         }
     });

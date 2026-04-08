@@ -355,7 +355,8 @@ body.is-sorting-tasks .smart-flow-desc {
 .google-task-checkbox input[type='checkbox']:checked + .checkmark-circle::after { animation: burstOut 0.4s forwards cubic-bezier(0.2, 0.0, 0.2, 1); }
 
 .checkmark-circle::after { content: ''; position: absolute; width: 100%; height: 100%; border-radius: 50%; border: 2px solid #2684fc; opacity: 0; transform: scale(0.5); pointer-events: none; }
-.task-item.completed-hold .task-actual-text { text-decoration: line-through !important; color: var(--text-muted) !important; opacity: 0.6; transition: all 0.3s ease; }
+.task-item.completed-hold .task-actual-text,
+.subtask-item.completed-hold .task-actual-text { text-decoration: line-through !important; color: var(--text-muted) !important; opacity: 0.6; transition: all 0.3s ease; }
 
 .btn-prominent-task.active .svg-icon-sm { fill: var(--primary-color) !important; }
 

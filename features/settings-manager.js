@@ -97,13 +97,13 @@ export function applyAppSettings() {
                 transform: translateY(100%);
                 transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.2s;
                 display: grid !important;
-                grid-template-columns: 1fr 48px !important; /* บังคับให้ปุ่ม Repeat มีพื้นที่ของตัวเองทางขวา */
+                grid-template-columns: 1fr 44px 44px !important;
                 grid-template-areas: 
-                    "header header"
-                    "input repeat"
-                    "date add"
-                    "list list" !important;
-                gap: 8px 8px !important;
+                    "header header header"
+                    "input repeat calendar"
+                    "date add add"
+                    "list list list" !important;
+                gap: 10px 10px !important;
                 box-sizing: border-box !important;
             }
             .task-input-bar.is-active { visibility: visible !important; transform: translateY(0) !important; }
@@ -118,23 +118,27 @@ export function applyAppSettings() {
 
             #new-task-input {
                 grid-area: input; 
-                width: auto !important; /* 🟢 แก้ไข: ลบ width 100% เพื่อให้ Grid จัดการ */
+                width: 100% !important;
                 min-width: 0 !important; /* 🟢 แก้ไข: ป้องกันการยืดเกิน */
                 padding: 12px 14px !important;
                 border: 2px solid var(--primary-color) !important;
                 background: var(--bg-body) !important;
                 border-radius: 10px !important;
-                box-sizing: border-box !important; /* 🟢 แก้ไข: ป้องกัน Padding ดัน Element */
+                box-sizing: border-box !important;
             }
 
-            #btn-task-repeat {
-                grid-area: repeat;
+            #btn-task-repeat, #btn-task-calendar-sync {
                 display: flex !important;
-                width: 48px !important; height: 48px !important;
-                background: var(--bg-body);
-                border: 2px solid var(--border-color);
-                border-radius: 10px;
+                width: 44px !important; height: 44px !important;
+                background: var(--bg-body) !important;
+                border: 2px solid var(--border-color) !important;
+                border-radius: 10px !important;
+                align-items: center; justify-content: center;
+                margin: 0 !important; padding: 0 !important;
             }
+
+            #btn-task-repeat { grid-area: repeat; }
+            #btn-task-calendar-sync { grid-area: calendar; }
 
             #btn-add-task {
                 padding: 0 16px !important; /* 🟢 แก้ไข: ลด Padding เพื่อไม่ให้ข้อความล้น */
@@ -298,6 +302,204 @@ export function initSettingsManager(callbacks) {
         });
     }
     
+    // Toggle Dark Mode
+    const btnToggleDark = document.getElementById('btn-toggle-darkmode');
+    if (btnToggleDark) {
+        btnToggleDark.addEventListener('click', () => { 
+            const settings = getAppSettings(); 
+            settings.isDarkMode = !settings.isDarkMode; 
+            saveData(); 
+            applyAppSettings(); 
+        });
+    }
+}
+    // Toggle Dark Mode
+    const btnToggleDark = document.getElementById('btn-toggle-darkmode');
+    if (btnToggleDark) {
+        btnToggleDark.addEventListener('click', () => { 
+            const settings = getAppSettings(); 
+            settings.isDarkMode = !settings.isDarkMode; 
+            saveData(); 
+            applyAppSettings(); 
+        });
+    }
+}
+    // Toggle Dark Mode
+    const btnToggleDark = document.getElementById('btn-toggle-darkmode');
+    if (btnToggleDark) {
+        btnToggleDark.addEventListener('click', () => { 
+            const settings = getAppSettings(); 
+            settings.isDarkMode = !settings.isDarkMode; 
+            saveData(); 
+            applyAppSettings(); 
+        });
+    }
+}
+    // Toggle Dark Mode
+    const btnToggleDark = document.getElementById('btn-toggle-darkmode');
+    if (btnToggleDark) {
+        btnToggleDark.addEventListener('click', () => { 
+            const settings = getAppSettings(); 
+            settings.isDarkMode = !settings.isDarkMode; 
+            saveData(); 
+            applyAppSettings(); 
+        });
+    }
+}
+    // Toggle Dark Mode
+    const btnToggleDark = document.getElementById('btn-toggle-darkmode');
+    if (btnToggleDark) {
+        btnToggleDark.addEventListener('click', () => { 
+            const settings = getAppSettings(); 
+            settings.isDarkMode = !settings.isDarkMode; 
+            saveData(); 
+            applyAppSettings(); 
+        });
+    }
+}
+    // Toggle Dark Mode
+    const btnToggleDark = document.getElementById('btn-toggle-darkmode');
+    if (btnToggleDark) {
+        btnToggleDark.addEventListener('click', () => { 
+            const settings = getAppSettings(); 
+            settings.isDarkMode = !settings.isDarkMode; 
+            saveData(); 
+            applyAppSettings(); 
+        });
+    }
+}
+    // Toggle Dark Mode
+    const btnToggleDark = document.getElementById('btn-toggle-darkmode');
+    if (btnToggleDark) {
+        btnToggleDark.addEventListener('click', () => { 
+            const settings = getAppSettings(); 
+            settings.isDarkMode = !settings.isDarkMode; 
+            saveData(); 
+            applyAppSettings(); 
+        });
+    }
+}
+    // Toggle Dark Mode
+    const btnToggleDark = document.getElementById('btn-toggle-darkmode');
+    if (btnToggleDark) {
+        btnToggleDark.addEventListener('click', () => { 
+            const settings = getAppSettings(); 
+            settings.isDarkMode = !settings.isDarkMode; 
+            saveData(); 
+            applyAppSettings(); 
+        });
+    }
+}
+    // Toggle Dark Mode
+    const btnToggleDark = document.getElementById('btn-toggle-darkmode');
+    if (btnToggleDark) {
+        btnToggleDark.addEventListener('click', () => { 
+            const settings = getAppSettings(); 
+            settings.isDarkMode = !settings.isDarkMode; 
+            saveData(); 
+            applyAppSettings(); 
+        });
+    }
+}
+    // Toggle Dark Mode
+    const btnToggleDark = document.getElementById('btn-toggle-darkmode');
+    if (btnToggleDark) {
+        btnToggleDark.addEventListener('click', () => { 
+            const settings = getAppSettings(); 
+            settings.isDarkMode = !settings.isDarkMode; 
+            saveData(); 
+            applyAppSettings(); 
+        });
+    }
+}
+    // Toggle Dark Mode
+    const btnToggleDark = document.getElementById('btn-toggle-darkmode');
+    if (btnToggleDark) {
+        btnToggleDark.addEventListener('click', () => { 
+            const settings = getAppSettings(); 
+            settings.isDarkMode = !settings.isDarkMode; 
+            saveData(); 
+            applyAppSettings(); 
+        });
+    }
+}
+    // Toggle Dark Mode
+    const btnToggleDark = document.getElementById('btn-toggle-darkmode');
+    if (btnToggleDark) {
+        btnToggleDark.addEventListener('click', () => { 
+            const settings = getAppSettings(); 
+            settings.isDarkMode = !settings.isDarkMode; 
+            saveData(); 
+            applyAppSettings(); 
+        });
+    }
+}
+    // Toggle Dark Mode
+    const btnToggleDark = document.getElementById('btn-toggle-darkmode');
+    if (btnToggleDark) {
+        btnToggleDark.addEventListener('click', () => { 
+            const settings = getAppSettings(); 
+            settings.isDarkMode = !settings.isDarkMode; 
+            saveData(); 
+            applyAppSettings(); 
+        });
+    }
+}
+    // Toggle Dark Mode
+    const btnToggleDark = document.getElementById('btn-toggle-darkmode');
+    if (btnToggleDark) {
+        btnToggleDark.addEventListener('click', () => { 
+            const settings = getAppSettings(); 
+            settings.isDarkMode = !settings.isDarkMode; 
+            saveData(); 
+            applyAppSettings(); 
+        });
+    }
+}
+    // Toggle Dark Mode
+    const btnToggleDark = document.getElementById('btn-toggle-darkmode');
+    if (btnToggleDark) {
+        btnToggleDark.addEventListener('click', () => { 
+            const settings = getAppSettings(); 
+            settings.isDarkMode = !settings.isDarkMode; 
+            saveData(); 
+            applyAppSettings(); 
+        });
+    }
+}
+    // Toggle Dark Mode
+    const btnToggleDark = document.getElementById('btn-toggle-darkmode');
+    if (btnToggleDark) {
+        btnToggleDark.addEventListener('click', () => { 
+            const settings = getAppSettings(); 
+            settings.isDarkMode = !settings.isDarkMode; 
+            saveData(); 
+            applyAppSettings(); 
+        });
+    }
+}
+    // Toggle Dark Mode
+    const btnToggleDark = document.getElementById('btn-toggle-darkmode');
+    if (btnToggleDark) {
+        btnToggleDark.addEventListener('click', () => { 
+            const settings = getAppSettings(); 
+            settings.isDarkMode = !settings.isDarkMode; 
+            saveData(); 
+            applyAppSettings(); 
+        });
+    }
+}
+    // Toggle Dark Mode
+    const btnToggleDark = document.getElementById('btn-toggle-darkmode');
+    if (btnToggleDark) {
+        btnToggleDark.addEventListener('click', () => { 
+            const settings = getAppSettings(); 
+            settings.isDarkMode = !settings.isDarkMode; 
+            saveData(); 
+            applyAppSettings(); 
+        });
+    }
+}
     // Toggle Dark Mode
     const btnToggleDark = document.getElementById('btn-toggle-darkmode');
     if (btnToggleDark) {
