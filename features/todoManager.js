@@ -3,10 +3,10 @@ import { svgEdit, svgTrashRed, svgRepeat } from '../core/icons.js';
 import { getCurrentSpace, saveData, getShortDate, getAppSettings, setCurrentSpaceId, getSpaces, getFilterTags, loadData, getGlobalLaunchers, getLauncherTags, getCurrentSpaceId, getFilterMode } from '../core/storage.js';
 import { generateMiniTagsBtn, generateTaskHTML, attachSubtaskEventListeners, attachTaskInlineEditListeners, handleTagAutocomplete, applySyntaxHighlighting } from '../core/ui-helpers.js';
 
-import { saveToDrive, getAuthToken } from '../core/driveSync.js';
 import { svgRefresh, svgSpinner } from '../core/icons.js';
 import { checkAndResetHabits, renderHabitList } from './habitSheet.js';
 import { createCalendarEvent, updateCalendarEvent, deleteCalendarEvent } from '../core/calendarSync.js';
+import { addTaskToCloud, updateTaskInCloud, deleteTaskFromCloud, setupRealtimeListener } from '../core/firebaseSync.js';
 
 // State & Callbacks
 /** 🟢 Helper: ตรวจสอบว่ากำลังโฟกัสที่ Element ที่พิมพ์ได้หรือไม่ */
@@ -34,31 +34,6 @@ function sortSpaceTasks(space) {
         }
         return 0;
     });
-}
-
-/** ☁️ ฟังก์ชันสำหรับสั่ง Sync ข้อมูลขึ้น Google Drive อัตโนมัติ (Background Auto-Sync) */
-async function triggerCloudSave() {
-    // ตรวจสอบสถานะการล็อกอินแบบเงียบๆ (ไม่เด้งหน้าต่างถาม)
-    const token = await getAuthToken(false);
-    if (!token) return; // ถ้าไม่ได้ล็อกอิน Drive ไว้ ก็ไม่ต้องทำอะไรต่อ
-
-    // เตรียมข้อมูลชุดเดียวกับที่ระบบ Restore (loadFromDrive) ต้องการ
-    const fullAppData = {
-        mySpacesData: getSpaces(),
-        appSettings: getAppSettings(),
-        lastSpaceId: getCurrentSpaceId(),
-        globalLaunchers: getGlobalLaunchers(),
-        launcherTags: getLauncherTags()
-    };
-
-    // ระบบ Debounce: หน่วงเวลา 5 วินาทีก่อนเซฟ เพื่อรวบรวมการแก้ไขหลายๆ อย่างไว้ในครั้งเดียว
-    if (window._driveSyncTimeout) clearTimeout(window._driveSyncTimeout);
-    window._driveSyncTimeout = setTimeout(() => {
-        // เรียกใช้ฟังก์ชันที่เตรียมไว้ใน window (หรือจะเรียกจาก import ก็ได้)
-        window.saveToDrive(fullAppData).then(success => {
-            if (success) console.log("☁️ Auto-synced tasks to Google Drive");
-        });
-    }, 5000);
 }
 
 /** 🔄 Helper: Calculate next due date with End Conditions */
@@ -321,6 +296,15 @@ function updateDateInputLabel(inputEl) {
 export function initTodoManager(callbacks) {
     onRenderCallback = callbacks.onRender;
 
+    // ☁️ Firebase Realtime Listener initialization
+    setupRealtimeListener((cloudTasks) => {
+        const space = getCurrentSpace();
+        if (space) {
+            space.tasks = cloudTasks;
+            onRenderCallback();
+        }
+    });
+
     // 🟢 ระบบ Mobile Tools Menu (3 จุด)
     const mobileToolsBtn = document.getElementById('btn-mobile-todo-tools');
     if (mobileToolsBtn) {
@@ -411,30 +395,11 @@ export function initTodoManager(callbacks) {
 
     // 📅 ระบบตรวจสอบสถานะการเชื่อมต่อ Google Calendar
     const checkCalendarAuth = async () => {
-        const token = await getAuthToken(false);
         const btns = [document.getElementById('connect-calendar-btn'), document.getElementById('master-connect-calendar-btn')];
-        
         btns.forEach(btn => {
             if (!btn) return;
-            if (token) {
-                btn.style.background = '#34a853';
-                btn.style.color = '#ffffff';
-                btn.title = "Google Calendar: Connected";
-            } else {
-                btn.style.background = '';
-                btn.style.color = '';
-                btn.title = "Connect Google Calendar";
-            }
-            
-            btn.onclick = async (e) => {
-                e.stopPropagation();
-                if (!token) {
-                    const newToken = await getAuthToken(true);
-                    if (newToken) checkCalendarAuth();
-                } else {
-                    alert("Google Calendar เชื่อมต่อเรียบร้อยแล้วผ่านระบบ Drive Sync ครับ");
-                }
-            };
+            btn.title = "Google Calendar Sync Disabled (Auth module missing)";
+            btn.onclick = () => alert("Google Calendar Sync is currently disabled because driveSync.js was removed.");
         });
     };
 
@@ -1209,27 +1174,7 @@ export function initTodoManager(callbacks) {
             const pIdx = pIdxAttr !== undefined ? parseInt(pIdxAttr) : null;
             const task = (pIdx !== null) ? space.tasks[pIdx].subtasks[idx] : space.tasks[idx];
 
-            if (task.calendarEventId) {
-                const token = await getAuthToken(false);
-                if (token) {
-                    await deleteCalendarEvent(task.calendarEventId, token);
-                    delete task.calendarEventId;
-                    saveData(); onRenderCallback();
-                }
-            } else {
-                if (!task.dueDate) {
-                    alert("โปรดตั้ง 'กำหนดส่ง' (Due Date) ก่อนซิงค์กับ Google Calendar ครับ");
-                    return;
-                }
-                const token = await getAuthToken(true);
-                if (token) {
-                    const event = await createCalendarEvent(task, token);
-                    if (event && event.id) {
-                        task.calendarEventId = event.id;
-                        saveData(); onRenderCallback();
-                    }
-                }
-            }
+            alert("Google Calendar Sync is unavailable.");
             return;
         }
 
@@ -1259,7 +1204,7 @@ export function initTodoManager(callbacks) {
                 if (task.subtasks) {
                     task.subtasks.forEach(sub => { sub.completed = true; });
                 }
-                saveData(); onRenderCallback();
+                await updateTaskInCloud(task.id || task.createdAt, { completed: true, completedAt: task.completedAt, isProminent: false, subtasks: task.subtasks });
             }
             return;
         }
@@ -1272,7 +1217,7 @@ export function initTodoManager(callbacks) {
             const task = space.tasks[pIdx]?.subtasks?.[sIdx];
             if (task) {
                 task.completed = true;
-                saveData(); onRenderCallback();
+                await updateTaskInCloud(space.tasks[pIdx].id || space.tasks[pIdx].createdAt, { subtasks: space.tasks[pIdx].subtasks });
             }
             return;
         }
@@ -1292,8 +1237,7 @@ export function initTodoManager(callbacks) {
             const days = getAppSettings().autoDeleteDays || 30;
             task.expiryAt = task.deletedAt + (days * 24 * 60 * 60 * 1000);
             task.completed = false; // เอากลับมาเป็นงานที่ยังไม่เสร็จเผื่อกู้คืน
-            saveData(); onRenderCallback();
-            triggerCloudSave();
+            await updateTaskInCloud(task.id || task.createdAt, { isDeleted: true, deletedAt: task.deletedAt, expiryAt: task.expiryAt, completed: false });
         }
         // Restore Task
         // 🟢 NEW: Restore Task (from trash)
@@ -1311,9 +1255,7 @@ export function initTodoManager(callbacks) {
                         sub.expiryAt = null;
                     });
                 }
-                saveData();
-                onRenderCallback();
-                triggerCloudSave();
+                await updateTaskInCloud(task.id || task.createdAt, { isDeleted: false, deletedAt: null, expiryAt: null, subtasks: task.subtasks });
             }
         }
         // Permanent Delete Task
@@ -1326,9 +1268,7 @@ export function initTodoManager(callbacks) {
                         if (token) deleteCalendarEvent(task.calendarEventId, token);
                     });
                 }
-                space.tasks.splice(idx, 1);
-                saveData(); onRenderCallback();
-                triggerCloudSave();
+                await deleteTaskFromCloud(task.id || task.createdAt);
             }
         }
         // 🟢 NEW: Permanent Delete Subtask
@@ -1344,9 +1284,7 @@ export function initTodoManager(callbacks) {
                     });
                 }
                 space.tasks[pIdx].subtasks.splice(sIdx, 1);
-                saveData();
-                onRenderCallback();
-                triggerCloudSave();
+                await updateTaskInCloud(space.tasks[pIdx].id || space.tasks[pIdx].createdAt, { subtasks: space.tasks[pIdx].subtasks });
             }
         }
 
@@ -1395,10 +1333,8 @@ export function initTodoManager(callbacks) {
             if (space.tasks[pIdx] && space.tasks[pIdx].subtasks) {
                 const sub = space.tasks[pIdx].subtasks.splice(sIdx, 1)[0];
                 // สร้างเป็น Main Task ใหม่ (ไม่มีงานย่อยติดไป)
-                space.tasks.push({ ...sub, subtasks: [], createdAt: Date.now() });
-                saveData(); // Save data locally
-                triggerCloudSave(); // Trigger cloud save after converting
-                onRenderCallback(); // Rerender UI
+                await addTaskToCloud({ ...sub, id: Date.now(), subtasks: [], createdAt: Date.now() });
+                await updateTaskInCloud(space.tasks[pIdx].id || space.tasks[pIdx].createdAt, { subtasks: space.tasks[pIdx].subtasks });
             }
         }
     };
@@ -1578,7 +1514,7 @@ export function initTodoManager(callbacks) {
     const trashListEl = document.getElementById('trash-task-list');
     
     // Logic สำหรับ Checkbox แยกออกมา
-    const handleTaskChange = (e) => { // This handles main tasks
+    const handleTaskChange = async (e) => { // This handles main tasks
         if (e.target.classList.contains('subtask-check-box')) {
             const isChecked = e.target.checked;
             const pIdx = parseInt(e.target.dataset.parentIndex);
@@ -1599,8 +1535,7 @@ export function initTodoManager(callbacks) {
                 if (isChecked && window.processRewardScanner) {
                     window.processRewardScanner(subtask.text, false, { x: e.clientX, y: e.clientY }, 'task', space.id);
                 }
-                saveData(true);
-                triggerCloudSave();
+                await updateTaskInCloud(space.tasks[pIdx].id || space.tasks[pIdx].createdAt, { subtasks: space.tasks[pIdx].subtasks });
                 // หน่วงเวลา Re-render เพื่อให้เห็น Animation
                 setTimeout(() => onRenderCallback(), isChecked ? 800 : 0);
             }
@@ -1630,18 +1565,21 @@ export function initTodoManager(callbacks) {
             const task = space?.tasks[index];
             if (!task) return;
 
+            let updates = {};
             if (task.repeatConfig && task.repeatConfig.isRepeating) {
                 // For repeating tasks, mark as completed, not deleted
                 task.completed = isChecked;
                 task.completedAt = isChecked ? Date.now() : null;
                 task.isProminent = false; // Repeating tasks should not be prominent when completed
                 // Do not touch isDeleted, deletedAt, expiryAt for repeating tasks here
+                updates = { completed: task.completed, completedAt: task.completedAt, isProminent: false };
 
                 if (task.subtasks) {
                     task.subtasks.forEach(sub => {
                         sub.completed = isChecked;
                         // Subtasks of repeating tasks should also not be marked as deleted
                     });
+                    updates.subtasks = task.subtasks;
                 }
                 console.log(`[handleTaskChange] Repeating task ${task.text} (ID: ${task.id}) completed: ${isChecked}.`);
 
@@ -1651,8 +1589,10 @@ export function initTodoManager(callbacks) {
                 task.completedAt = isChecked ? Date.now() : null;
                 task.isDeleted = false;
                 task.isProminent = false;
+                updates = { completed: task.completed, completedAt: task.completedAt, isDeleted: false, isProminent: false };
                 if (task.subtasks) {
                     task.subtasks.forEach(sub => { sub.completed = isChecked; });
+                    updates.subtasks = task.subtasks;
                 }
                 console.log(`[handleTaskChange] Task ${task.text} (ID: ${task.id}) with calendarEventId: ${task.calendarEventId} is now completed: ${isChecked}. isDeleted: ${task.isDeleted}`);
             } else {
@@ -1668,16 +1608,22 @@ export function initTodoManager(callbacks) {
                     task.expiryAt = task.deletedAt + (days * 24 * 60 * 60 * 1000);
                     task.completed = false; // Mark as false for deleted tasks
                     task.isProminent = false;
-                    if (task.subtasks) task.subtasks.forEach(sub => { sub.isDeleted = true; sub.deletedAt = task.deletedAt; sub.expiryAt = task.expiryAt; sub.completed = false; });
+                    updates = { isDeleted: true, deletedAt: task.deletedAt, expiryAt: task.expiryAt, completed: false, isProminent: false };
+                    if (task.subtasks) {
+                        task.subtasks.forEach(sub => { sub.isDeleted = true; sub.deletedAt = task.deletedAt; sub.expiryAt = task.expiryAt; sub.completed = false; });
+                        updates.subtasks = task.subtasks;
+                    }
                 } else {
                     task.completed = false;
                     task.completedAt = null;
                     task.isDeleted = false;
                     task.deletedAt = null;
                     task.expiryAt = null;
-                    if (task.subtasks) task.subtasks.forEach(sub => { sub.isDeleted = false; sub.completed = false; });
-                    const [restoredTask] = space.tasks.splice(index, 1);
-                    space.tasks.unshift(restoredTask);
+                    updates = { completed: false, completedAt: null, isDeleted: false, deletedAt: null, expiryAt: null };
+                    if (task.subtasks) {
+                        task.subtasks.forEach(sub => { sub.isDeleted = false; sub.completed = false; });
+                        updates.subtasks = task.subtasks;
+                    }
                 }
             }
 
@@ -1698,7 +1644,9 @@ export function initTodoManager(callbacks) {
                 
                 if (nextDate) {
                     task.wasRegenerated = true; // 🟢 มาร์คว่าสร้างงานใหม่ไปแล้ว ป้องกันการงอกซ้ำ
+                    updates.wasRegenerated = true;
                     const clonedTask = JSON.parse(JSON.stringify(task));
+                    clonedTask.id = Date.now();
                     clonedTask.completed = false;
                     clonedTask.completedAt = null;
                     clonedTask.isDeleted = false;
@@ -1710,20 +1658,16 @@ export function initTodoManager(callbacks) {
                     clonedTask.dueDate = nextDate;
                     clonedTask.occurrenceCount = (task.occurrenceCount || 1) + 1; // 🟢 เพิ่มตัวนับครั้งที่ทำ
                     
-                    space.tasks.push(clonedTask);
+                    await addTaskToCloud(clonedTask);
                 }
             }
 
-            saveData(true); // บันทึกทันที
-            triggerCloudSave(); // ☁️ ซิงค์ไปที่ Cloud หลังเปลี่ยนสถานะงาน
-
-            // 🟢 เอาการหน่วงเวลาออกตามคำขอเพื่อให้ UI ลื่นไหลขึ้น
-            onRenderCallback(); 
+            await updateTaskInCloud(task.id || task.createdAt, updates);
         }
     };
 
     // ฟังก์ชันจัดการการพิมพ์ในช่อง Sub-task (Enter เพื่อบันทึก, Esc เพื่อยกเลิก)
-    const handleSubtaskInputKey = (e) => {
+    const handleSubtaskInputKey = async (e) => {
         const input = e.target;
         if (!input.classList.contains('subtask-add-input')) return;
 
@@ -1737,14 +1681,10 @@ export function initTodoManager(callbacks) {
             if (value && space.tasks[pIdx]) {
                 if (!space.tasks[pIdx].subtasks) space.tasks[pIdx].subtasks = [];
                 space.tasks[pIdx].subtasks.push({ id: Date.now(), text: value, completed: false });
-                saveData();
-                // We keep addingSubtaskToIndex as pIdx to trigger the next input rendering
+                await updateTaskInCloud(space.tasks[pIdx].id || space.tasks[pIdx].createdAt, { subtasks: space.tasks[pIdx].subtasks });
             } else {
                 addingSubtaskToIndex = null;
             }
-
-            onRenderCallback();
-
             if (addingSubtaskToIndex !== null) {
                 setTimeout(() => {
                     const newInput = document.querySelector(`.subtask-add-input[data-parent="${pIdx}"]`);
@@ -1791,12 +1731,10 @@ export function initTodoManager(callbacks) {
         // ... (existing attachTaskInlineEditListeners code)
 
             attachTaskInlineEditListeners(taskListEl, () => getCurrentSpace(), {
-            saveData,
-            onAddMainTaskAfter: (space, index) => {
-                const newTask = { text: "", completed: false, tags: [], dueDate: null, createdAt: Date.now(), googleTaskId: null, isProminent: false, subtasks: [] };
-                space.tasks.splice(index + 1, 0, newTask);
-                saveData();
-                onRenderCallback();
+            saveData: () => {},
+            onAddMainTaskAfter: async (space, index) => {
+                const newTask = { id: Date.now(), text: "", completed: false, tags: [], dueDate: null, createdAt: Date.now(), googleTaskId: null, isProminent: false, subtasks: [] };
+                await addTaskToCloud(newTask);
                 setTimeout(() => {
                     const items = document.querySelectorAll('#task-list .task-actual-text');
                     const target = Array.from(items).find(el => parseInt(el.closest('li').dataset.index) === index + 1);
@@ -1821,7 +1759,7 @@ export function initTodoManager(callbacks) {
                     }, 50);
                 }
             },
-            onDeleteEmptyTask: (space, index, type, li) => {
+            onDeleteEmptyTask: async (space, index, type, li) => {
                 let task;
                 if (type === 'task') {
                     task = space.tasks[index];
@@ -1834,10 +1772,15 @@ export function initTodoManager(callbacks) {
                     const pIdx = parseInt(li.closest('.subtask-list').dataset.parentIndex);
                     space.tasks[pIdx].subtasks.splice(index, 1);
                 }
-                saveData(); onRenderCallback();
+                if (type === 'task') await deleteTaskFromCloud(task.id || task.createdAt);
+                else await updateTaskInCloud(space.tasks[parseInt(li.closest('.subtask-list').dataset.parentIndex)].id, { subtasks: space.tasks[parseInt(li.closest('.subtask-list').dataset.parentIndex)].subtasks });
             },
-            onUpdate: () => {
-                onRenderCallback();
+            onUpdate: async (space, idx, type, li) => {
+                let task;
+                if (type === 'task') task = space.tasks[idx];
+                else task = space.tasks[parseInt(li.closest('.subtask-list').dataset.parentIndex)];
+                await updateTaskInCloud(task.id || task.createdAt, type === 'task' ? { text: task.text } : { subtasks: task.subtasks });
+
                 if (addingSubtaskToIndex !== null) {
                     setTimeout(() => {
                         const input = document.querySelector(`.subtask-add-input[data-parent="${addingSubtaskToIndex}"]`);
@@ -1872,13 +1815,11 @@ export function initTodoManager(callbacks) {
         });
 
         attachTaskInlineEditListeners(archiveListEl, () => getCurrentSpace(), {
-            saveData,
-            onAddMainTaskAfter: (space, index) => {
+            saveData: () => {},
+            onAddMainTaskAfter: async (space, index) => {
                 // 🟢 สร้างงานหลักใหม่ต่อท้ายตำแหน่งที่เพิ่งพิมพ์เสร็จ
-                const newTask = { text: "", completed: false, tags: [], dueDate: null, createdAt: Date.now(), googleTaskId: null, isProminent: false, subtasks: [] };
-                space.tasks.splice(index + 1, 0, newTask);
-                saveData();
-                onRenderCallback();
+                const newTask = { id: Date.now(), text: "", completed: false, tags: [], dueDate: null, createdAt: Date.now(), googleTaskId: null, isProminent: false, subtasks: [] };
+                await addTaskToCloud(newTask);
 
                 // Focus งานที่เพิ่งสร้างขึ้นมาใหม่
                 setTimeout(() => {
@@ -1894,7 +1835,7 @@ export function initTodoManager(callbacks) {
                     }
                 }, 100);
             },
-            onDeleteEmptyTask: (space, index, type, li) => {
+            onDeleteEmptyTask: async (space, index, type, li) => {
                 let task;
                 if (type === 'task') {
                     task = space.tasks[index];
@@ -1907,10 +1848,15 @@ export function initTodoManager(callbacks) {
                     const pIdx = parseInt(li.closest('.subtask-list').dataset.parentIndex);
                     space.tasks[pIdx].subtasks.splice(index, 1);
                 }
-                saveData(); onRenderCallback();
+                if (type === 'task') await deleteTaskFromCloud(task.id || task.createdAt);
+                else await updateTaskInCloud(space.tasks[parseInt(li.closest('.subtask-list').dataset.parentIndex)].id, { subtasks: space.tasks[parseInt(li.closest('.subtask-list').dataset.parentIndex)].subtasks });
             },
-            onUpdate: () => {
-                onRenderCallback();
+            onUpdate: async (space, idx, type, li) => {
+                let task;
+                if (type === 'task') task = space.tasks[idx];
+                else task = space.tasks[parseInt(li.closest('.subtask-list').dataset.parentIndex)];
+                await updateTaskInCloud(task.id || task.createdAt, type === 'task' ? { text: task.text } : { subtasks: task.subtasks });
+
                 if (addingSubtaskToIndex !== null) {
                     setTimeout(() => {
                         const input = document.querySelector(`.subtask-add-input[data-parent="${addingSubtaskToIndex}"]`);
@@ -2248,17 +2194,11 @@ async function addTask() {
         }
 
         // Initialize new task with isProminent: false
-        let newTask = { text: text, completed: false, tags: tags, dueDate: dateInput.value || null, createdAt: Date.now(), isProminent: false, subtasks: [], subtasksHidden: false, repeatConfig: { ...currentTaskRepeatConfig } }; 
+        let newTask = { id: Date.now(), text: text, completed: false, tags: tags, dueDate: dateInput.value || null, createdAt: Date.now(), isProminent: false, subtasks: [], subtasksHidden: false, repeatConfig: { ...currentTaskRepeatConfig } }; 
 
         // 📅 Calendar Sync Logic for Quick Add
         if (currentTaskCalendarSync && newTask.dueDate) {
-            try {
-                const token = await getAuthToken(false);
-                if (token) {
-                    const event = await createCalendarEvent(newTask, token);
-                    if (event && event.id) newTask.calendarEventId = event.id;
-                }
-            } catch (err) { console.error("Quick add calendar sync error:", err); }
+            console.warn("Calendar sync skipped: Auth token provider missing.");
         }
 
         space.tasks.push(newTask); 
@@ -2277,9 +2217,7 @@ async function addTask() {
         playTaskAddedSound();
         input.value = ''; input.disabled = false; input.placeholder = "Type a task..."; input.focus();
         dateInput.value = ''; updateDateInputLabel(dateInput);
-        saveData(); 
-        triggerCloudSave(); // ☁️ ซิงค์ไปที่ Cloud หลังเพิ่มงานใหม่
-        onRenderCallback(); 
+        await addTaskToCloud(newTask);
     } 
 }
 
@@ -2349,40 +2287,13 @@ async function saveEditedTask() {
     task.repeatConfig = { ...editingTaskRepeatConfig };
 
     // Calendar Sync Logic
-    try {
-        const token = await getAuthToken(false);
-        if (token) {
-            if (wantsCalendarSync && task.dueDate) {
-                if (!task.calendarEventId) {
-                    console.log("Attempting to create new calendar event for task:", task.text);
-                    const event = await createCalendarEvent(task, token);
-                    if (event && event.id) {
-                        task.calendarEventId = event.id;
-                        console.log("Calendar event created and assigned ID:", event.id, "to task:", task.text, "(Task ID:", task.id, ")");
-                    } else {
-                        console.error("Failed to create calendar event for task:", task.text, "(Task ID:", task.id, "). Event response:", event);
-                    }
-                } else {
-                    console.log("Updating existing calendar event for ID:", task.calendarEventId, "with new text:", task.text);
-                    await updateCalendarEvent(task.calendarEventId, task, token);
-                    console.log("Calendar event updated successfully.");
-                }
-            } else if (task.calendarEventId) {
-                // Delete if unchecked or if dueDate was removed
-                await deleteCalendarEvent(task.calendarEventId, token);
-                delete task.calendarEventId;
-                console.log("Calendar event deleted for ID:", task.calendarEventId);
-            }
-        } else if (wantsCalendarSync) {
-            alert("⚠️ ไม่สามารถซิงค์ปฏิทินได้: โปรดเชื่อมต่อ Google Drive/Calendar ในเมนู Google Integrations (ไอคอน 9 จุด) ก่อนครับ");
-        }
-    } catch (err) { console.error("Calendar sync error:", err); }
+    if (wantsCalendarSync) console.warn("Calendar sync unavailable.");
 
     if (space.taskSortOrder && space.taskSortOrder !== 'manual') sortSpaceTasks(space);
     document.getElementById('task-edit-modal').style.display = 'none';
     btnSave.innerText = "Save"; btnSave.disabled = false;
-    saveData(); 
-    triggerCloudSave(); // ☁️ ซิงค์ไปที่ Cloud หลังแก้ไขเสร็จ
+    await updateTaskInCloud(task.id || task.createdAt, { text: task.text, dueDate: task.dueDate, repeatConfig: task.repeatConfig, calendarEventId: task.calendarEventId });
+
     if (_fromCommandCenter) {
         setCurrentSpaceId(0); // Reset to Command Center
         if (window.renderDefaultDashboard) window.renderDefaultDashboard(); // 🟢 แก้ไข: เรียกผ่าน window เพื่อป้องกัน Reference Error
@@ -2472,8 +2383,7 @@ async function saveTaskLink() {
 
     if (task) {
         task.linkData = { url, isSideview };
-        saveData();
-        triggerCloudSave(); // ☁️ ซิงค์ไปที่ Cloud
+        await updateTaskInCloud(task.id || task.createdAt, { linkData: task.linkData });
         document.getElementById('task-link-modal').style.display = 'none';
         if (editingLinkSpaceId === 0 || window._isModalOpenedFromCommandCenter) {
             import('./defaultDashboard.js').then(m => m.renderDefaultDashboard());
