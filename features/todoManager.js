@@ -262,6 +262,28 @@ function playTaskAddedSound() {
     } catch (e) {}
 }
 
+/** 🔔 เสียงแจ้งเตือนเมื่องานเสร็จสิ้น (Catchy Chime) */
+export function playTaskCompletedSound() {
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const playNote = (freq, start, duration, vol) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, start);
+            gain.gain.setValueAtTime(0, start);
+            gain.gain.linearRampToValueAtTime(vol, start + 0.01);
+            gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(start);
+            osc.stop(start + duration);
+        };
+        playNote(1046.50, ctx.currentTime, 0.1, 0.05); // C6
+        playNote(1318.51, ctx.currentTime + 0.05, 0.2, 0.03); // E6
+    } catch (e) {}
+}
+
 function playTrashSound() {
     try {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -949,6 +971,25 @@ export function initTodoManager(callbacks) {
     // Edit Modal Events
     document.getElementById('btn-close-task-edit').addEventListener('click', () => { document.getElementById('task-edit-modal').style.display = 'none'; }); //
     document.getElementById('btn-save-task-edit').addEventListener('click', saveEditedTask);
+    
+    // Task Link Modal Events
+    document.getElementById('btn-save-task-link')?.addEventListener('click', saveTaskLink);
+    document.getElementById('btn-close-link-modal')?.addEventListener('click', () => { 
+        document.getElementById('task-link-modal').style.display = 'none'; 
+    });
+
+    // 🟢 New: Clear Calendar Sync Tasks Button
+    const btnClearCal = document.getElementById('btn-clear-calendar-sync');
+    if (btnClearCal) {
+        btnClearCal.addEventListener('click', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            const space = getCurrentSpace();
+            if (space && confirm("ต้องการล้างรายการงานที่ซิงค์ปฏิทินและเสร็จสิ้นแล้วทั้งหมดหรือไม่?")) {
+                space.tasks = space.tasks.filter(t => !(t.completed && t.calendarEventId));
+                saveData(); onRenderCallback();
+            }
+        });
+    }
 
     // รันการตรวจสอบสถานะเริ่มต้น
     setTimeout(checkCalendarAuth, 1000);
@@ -1547,6 +1588,7 @@ export function initTodoManager(callbacks) {
             // 🟢 แสดงผลขีดฆ่าทันทีที่กด (Immediate Feedback)
             if (taskItem) {
                 taskItem.classList.toggle('completed-hold', isChecked);
+                if (isChecked) playTaskCompletedSound();
             }
             
             const space = getCurrentSpace();
@@ -1573,6 +1615,7 @@ export function initTodoManager(callbacks) {
             // Animation 4: Hold & Vanish Effect
             if (isChecked && taskItem) {
                 taskItem.classList.add('completed-hold');
+                playTaskCompletedSound();
 
                 // 🌟 Quest Loot Scanner
                 const space = getCurrentSpace();
@@ -1600,6 +1643,18 @@ export function initTodoManager(callbacks) {
                         // Subtasks of repeating tasks should also not be marked as deleted
                     });
                 }
+                console.log(`[handleTaskChange] Repeating task ${task.text} (ID: ${task.id}) completed: ${isChecked}.`);
+
+            } else if (task.calendarEventId) {
+                // 🟢 NEW: สำหรับงานที่ซิงค์ปฏิทิน ให้ถือว่าเป็นการ Complete (ย้ายเข้าส่วน Synced Calendar) แทนการลงถังขยะ
+                task.completed = isChecked;
+                task.completedAt = isChecked ? Date.now() : null;
+                task.isDeleted = false;
+                task.isProminent = false;
+                if (task.subtasks) {
+                    task.subtasks.forEach(sub => { sub.completed = isChecked; });
+                }
+                console.log(`[handleTaskChange] Task ${task.text} (ID: ${task.id}) with calendarEventId: ${task.calendarEventId} is now completed: ${isChecked}. isDeleted: ${task.isDeleted}`);
             } else {
                 // For non-repeating tasks, use the existing logic (mark as deleted when checked)
                 if (isChecked) {
@@ -2270,6 +2325,8 @@ async function saveEditedTask() {
     const newDate = document.getElementById('edit-task-date-input').value;
     const wantsCalendarSync = document.getElementById('sync-calendar-checkbox').checked;
     
+    console.log("Saving task (edit modal):", { newName, newDate, wantsCalendarSync, calendarEventId: task.calendarEventId, taskId: task.id });
+
     if(newName === "") return;
     
     const btnSave = document.getElementById('btn-save-task-edit');
@@ -2278,6 +2335,10 @@ async function saveEditedTask() {
     if (editingTaskRepeatConfig.isRepeating && !newDate) {
         alert("⚠️ งานที่ตั้งค่าทำซ้ำ (Repeat) จำเป็นต้องมีกำหนดส่งครับ");
         btnSave.innerText = "Save"; btnSave.disabled = false;
+        return;
+    }
+    if (wantsCalendarSync && !newDate) {
+        alert("⚠️ งานที่ต้องการซิงค์กับ Google Calendar จำเป็นต้องมีกำหนดส่งครับ");
         return;
     }
 
@@ -2293,20 +2354,27 @@ async function saveEditedTask() {
         if (token) {
             if (wantsCalendarSync && task.dueDate) {
                 if (!task.calendarEventId) {
+                    console.log("Attempting to create new calendar event for task:", task.text);
                     const event = await createCalendarEvent(task, token);
                     if (event && event.id) {
                         task.calendarEventId = event.id;
+                        console.log("Calendar event created and assigned ID:", event.id, "to task:", task.text, "(Task ID:", task.id, ")");
+                    } else {
+                        console.error("Failed to create calendar event for task:", task.text, "(Task ID:", task.id, "). Event response:", event);
                     }
                 } else {
+                    console.log("Updating existing calendar event for ID:", task.calendarEventId, "with new text:", task.text);
                     await updateCalendarEvent(task.calendarEventId, task, token);
+                    console.log("Calendar event updated successfully.");
                 }
             } else if (task.calendarEventId) {
                 // Delete if unchecked or if dueDate was removed
                 await deleteCalendarEvent(task.calendarEventId, token);
                 delete task.calendarEventId;
+                console.log("Calendar event deleted for ID:", task.calendarEventId);
             }
         } else if (wantsCalendarSync) {
-            alert("⚠️ ไม่สามารถซิงค์ปฏิทินได้: โปรดตรวจสอบการเชื่อมต่อที่เมนู Google Integrations (ไอคอน 9 จุด) และลองใหม่อีกครั้งครับ");
+            alert("⚠️ ไม่สามารถซิงค์ปฏิทินได้: โปรดเชื่อมต่อ Google Drive/Calendar ในเมนู Google Integrations (ไอคอน 9 จุด) ก่อนครับ");
         }
     } catch (err) { console.error("Calendar sync error:", err); }
 
@@ -2426,69 +2494,38 @@ export function renderQuickNotes(space) {
     }
 }
 
-/** 🟢 กู้คืน: ฟังก์ชันวาดรายการงานหลัก (ฉบับ Clean จาก Google Tasks) */
 export function renderTasks(space, currentFilterTags, currentFilterMode, currentSearchQuery) {
-    const taskListUI = document.getElementById('task-list'); 
+    if (!space) return;
+    const taskListUI = document.getElementById('task-list');
     const archiveListUI = document.getElementById('archive-list');
     const repeatingWaitingListUI = document.getElementById('repeating-waiting-list');
     const repeatingContainer = document.getElementById('repeating-tasks-details');
+    const calendarSyncListUI = document.getElementById('calendar-sync-list');
+    const calendarSyncContainer = document.getElementById('calendar-sync-tasks-details');
     const trashListUI = document.getElementById('trash-task-list');
     const trashContainer = document.getElementById('trash-tasks-details');
     const archiveContainer = document.getElementById('archived-tasks-details');
 
     if (!taskListUI) return;
-    // 🟢 แก้ไข: หยุดวาดเฉพาะตอนกำลังแก้ไขชื่อ Task เดิมเท่านั้น ไม่รวมตอนเพิ่มงานใหม่
     if (document.activeElement && document.activeElement.classList.contains('task-actual-text')) return; 
 
     taskListUI.innerHTML = ''; 
     if (archiveListUI) archiveListUI.innerHTML = ''; 
     if (trashListUI) trashListUI.innerHTML = '';
     if (repeatingWaitingListUI) repeatingWaitingListUI.innerHTML = '';
+    if (calendarSyncListUI) calendarSyncListUI.innerHTML = '';
     
     if(!space.tasks) space.tasks = [];
     checkAndResetHabits(space);
 
-    // --- 🟢 กู้คืน: ปุ่ม Dropdown สำหรับจัดเรียงงาน (Sort Tasks) ---
-    const taskHeader = document.getElementById('header-tasks-text');
-    if (taskHeader) {
-        let sortContainer = document.getElementById('task-sort-container');
-        if (!sortContainer) {
-            sortContainer = document.createElement('div');
-            sortContainer.id = 'task-sort-container';
-            sortContainer.style = 'margin-left: 10px; display: inline-flex; align-items: center;';
-            taskHeader.parentElement.appendChild(sortContainer);
-        }
-
-        const currentSort = space.taskSortOrder || 'manual';
-        sortContainer.innerHTML = `
-            <select id="task-sort-select" title="Sort Tasks" style="font-family: var(--app-font); font-size: 11px; font-weight: 700; padding: 2px 6px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-body); color: var(--text-main); cursor: pointer; outline: none; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
-                <option value="manual" ${currentSort === 'manual' ? 'selected' : ''}>⇅ Manual</option>
-                <option value="date" ${currentSort === 'date' ? 'selected' : ''}>📅 By Date</option>
-                <option value="name" ${currentSort === 'name' ? 'selected' : ''}>🔤 By Name</option>
-            </select>
-        `;
-        sortContainer.querySelector('#task-sort-select').onchange = (e) => {
-            space.taskSortOrder = e.target.value;
-            if (space.taskSortOrder !== 'manual') sortSpaceTasks(space);
-            saveData(true);
-            onRenderCallback();
-        };
-    }
-
     const isProminentHidden = space.hideProminentTasks || false;
     const isMobile = window.innerWidth <= 768;
 
-    // Update UI Toggles
-    const toggleProminentBtn = document.getElementById('btn-toggle-prominent-tasks');
-    if (toggleProminentBtn) {
-        toggleProminentBtn.style.opacity = isProminentHidden ? '0.3' : '1';
-        toggleProminentBtn.classList.toggle('active', !isProminentHidden);
-    }
     const toggleTaskActionsBtn = document.getElementById('btn-toggle-task-actions');
     if (toggleTaskActionsBtn) {
         toggleTaskActionsBtn.innerHTML = `<span class="toggle-actions-btn circle-icon ${space.showTaskActions ? 'expanded' : ''}" style="margin: 0; pointer-events: none;"></span>`;
     }
-
+    
     const filterTags = Array.isArray(currentFilterTags) ? currentFilterTags : [];
     const isFiltered = filterTags.length > 0 || (currentSearchQuery && currentSearchQuery !== "");
     const filterMode = getFilterMode();
@@ -2496,11 +2533,13 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
     let todoHTML = '';
     let archiveHTML = '';
     let repeatingHTML = '';
+    let calendarSyncHTML = '';
     let trashHTML = '';
 
     let todoCount = 0;
     let archiveCount = 0;
     let repeatingCount = 0;
+    let calendarSyncCount = 0;
     let trashCount = 0;
 
     if (space.taskSortOrder && space.taskSortOrder !== 'manual') sortSpaceTasks(space);
@@ -2531,12 +2570,17 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
         const nextDate = isRepeatingComplete ? calculateNextDate(task.dueDate, task.repeatConfig, task) : null;
 
         const liContent = generateTaskHTML(task, index, {
+            // ... (existing options)
             showSpaceBadge: false, spaceId: space.id, isProminentHidden, isFiltered,
             showActions: space.showTaskActions, isTrash: task.isDeleted, addingSubtaskToIndex, nextDueDate: nextDate
         });
         
-        if (isRepeatingComplete) { repeatingHTML += liContent; repeatingCount++; }
-        else if (task.isDeleted) { trashHTML += liContent; trashCount++; }
+        if (task.isDeleted) { trashHTML += liContent; trashCount++; }
+        else if (task.completed && task.calendarEventId) {
+            console.log(`[renderTasks] Task ${task.text} (ID: ${task.id}) is being added to Synced Calendar Tasks. Completed: ${task.completed}, Calendar ID: ${task.calendarEventId}`);
+            calendarSyncHTML += liContent; calendarSyncCount++;
+        }
+        else if (isRepeatingComplete) { repeatingHTML += liContent; repeatingCount++; }
         else if (task.completed) { archiveHTML += liContent; archiveCount++; }
         else { todoHTML += liContent; todoCount++; }
     });
@@ -2544,18 +2588,26 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
     taskListUI.innerHTML = todoHTML;
     if (archiveListUI) archiveListUI.innerHTML = archiveHTML;
     if (repeatingWaitingListUI) repeatingWaitingListUI.innerHTML = repeatingHTML;
+    if (calendarSyncListUI) calendarSyncListUI.innerHTML = calendarSyncHTML;
     if (trashListUI) trashListUI.innerHTML = trashHTML;
 
     const updateLabel = (id, count) => {
         const el = document.getElementById(id);
-        if (el) el.innerText = count > 0 ? `(${count})` : '';
+        if (el) el.innerText = `(${count})`;
     };
     updateLabel('todo-count-label', todoCount);
     updateLabel('repeating-count-label', repeatingCount);
+    updateLabel('calendar-sync-count-label', calendarSyncCount);
     updateLabel('archive-count-label', archiveCount);
     updateLabel('trash-count-label', trashCount);
 
-    [taskListUI, archiveListUI, trashListUI].forEach(c => c && c.querySelectorAll('.task-actual-text').forEach(el => applySyntaxHighlighting(el)));
+    const showExtra = getAppSettings().showExtraTaskSections !== false;
+    if (repeatingContainer) repeatingContainer.style.display = showExtra ? 'block' : 'none';
+    if (calendarSyncContainer) calendarSyncContainer.style.display = showExtra ? 'block' : 'none';
+    if (archiveContainer) archiveContainer.style.display = showExtra ? 'block' : 'none';
+    if (trashContainer) trashContainer.style.display = showExtra ? 'block' : 'none';
+
+    [taskListUI, archiveListUI, trashListUI, repeatingWaitingListUI, calendarSyncListUI].forEach(c => c && c.querySelectorAll('.task-actual-text').forEach(el => applySyntaxHighlighting(el)));
 
     if (!isFiltered && taskListUI) {
         if (taskListUI.sortable) taskListUI.sortable.destroy();

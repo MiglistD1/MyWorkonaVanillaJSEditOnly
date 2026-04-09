@@ -309,19 +309,48 @@
             </div>
 
             <ul class="task-list drag-container" id="task-list"></ul>
-            
-            <details id="repeating-tasks-details" style="margin-top:10px; margin-bottom:15px;">
-              <summary class="section-label details-summary" style="margin:0; padding:5px 0; border:none; cursor:pointer; color:var(--primary-color);"><svg class="svg-icon-sm summary-chevron"><use href="#icon-chevron-right"></use></svg><span>Completed Recurring Tasks</span><span id="btn-clear-repeating-history" style="color:#dc2626; font-size:12px; cursor:pointer; margin-left: auto;">(Clear <svg class="svg-icon-sm" style="vertical-align: -2px;"><use href="#icon-trash"></use></svg>)</span></summary>
-              <ul class="task-list" id="repeating-waiting-list"></ul>
+            <details id="repeating-tasks-details" style="margin-top:10px; margin-bottom:10px;">
+                <summary class="section-label details-summary" style="margin:0; padding:5px 0; border:none; cursor:pointer; color:var(--primary-color);">
+                    <svg class="svg-icon-sm summary-chevron"><use href="#icon-chevron-right"></use></svg>
+                    <span>Completed Recurring Tasks <span id="repeating-count-label" style="opacity:0.5; font-weight:400; margin-left:4px;"></span></span>
+                    <span id="btn-clear-repeating-history" style="color:#dc2626; font-size:12px; cursor:pointer; margin-left: auto;">
+                        (Clear <svg class="svg-icon-sm" style="vertical-align: -2px;"><use href="#icon-trash"></use></svg>)
+                    </span>
+                </summary>
+                <ul class="task-list" id="repeating-waiting-list"></ul>
             </details>
 
-            <details id="archived-tasks-details" style="margin-top:10px; margin-bottom:15px;">
-              <summary class="section-label details-summary" style="margin:0; padding:5px 0; border:none; cursor:pointer;"><svg class="svg-icon-sm summary-chevron"><use href="#icon-chevron-right"></use></svg><span>Archived Tasks</span><span id="btn-clear-archive" style="color:#dc2626; font-size:12px; cursor:pointer; margin-left: auto;">(Clear <svg class="svg-icon-sm" style="vertical-align: -2px;"><use href="#icon-trash"></use></svg>)</span></summary>
-              <ul class="task-list" id="archive-list"></ul>
+            <details id="calendar-sync-tasks-details" style="margin-top:10px; margin-bottom:10px;">
+                <summary class="section-label details-summary" style="margin:0; padding:5px 0; border:none; cursor:pointer; color:#166534;">
+                    <svg class="svg-icon-sm summary-chevron"><use href="#icon-chevron-right"></use></svg>
+                    <span>Synced Calendar Tasks <span id="calendar-sync-count-label" style="opacity:0.5; font-weight:400; margin-left:4px;"></span></span>
+                    <span id="btn-clear-calendar-sync" style="color:#dc2626; font-size:12px; cursor:pointer; margin-left: auto;">
+                        (Clear <svg class="svg-icon-sm" style="vertical-align: -2px;"><use href="#icon-trash"></use></svg>)
+                    </span>
+                </summary>
+                <ul class="task-list" id="calendar-sync-list"></ul>
             </details>
-            <details id="trash-tasks-details" style="margin-top:5px;">
-              <summary class="section-label details-summary" style="margin:0; padding:5px 0; border:none; cursor:pointer; color:#dc2626;"><svg class="svg-icon-sm summary-chevron"><use href="#icon-chevron-right"></use></svg><span>Trash Tasks</span><span id="btn-empty-tasks-trash" style="color:#dc2626; font-size:12px; cursor:pointer; margin-left: auto;">(Empty <svg class="svg-icon-sm" style="vertical-align: -2px;"><use href="#icon-trash"></use></svg>)</span></summary>
-              <ul class="task-list" id="trash-task-list"></ul>
+
+            <details id="archived-tasks-details" style="margin-top:10px; margin-bottom:10px;">
+                <summary class="section-label details-summary" style="margin:0; padding:5px 0; border:none; cursor:pointer;">
+                    <svg class="svg-icon-sm summary-chevron"><use href="#icon-chevron-right"></use></svg>
+                    <span>Archived Tasks <span id="archive-count-label" style="opacity:0.5; font-weight:400; margin-left:4px;"></span></span>
+                    <span id="btn-clear-archive" style="color:#dc2626; font-size:12px; cursor:pointer; margin-left: auto;">
+                        (Clear <svg class="svg-icon-sm" style="vertical-align: -2px;"><use href="#icon-trash"></use></svg>)
+                    </span>
+                </summary>
+                <ul class="task-list" id="archive-list"></ul>
+            </details>
+
+            <details id="trash-tasks-details" style="margin-top:10px; margin-bottom:10px;">
+                <summary class="section-label details-summary" style="margin:0; padding:5px 0; border:none; cursor:pointer; color:#dc2626;">
+                    <svg class="svg-icon-sm summary-chevron"><use href="#icon-chevron-right"></use></svg>
+                    <span>Trash Tasks <span id="trash-count-label" style="opacity:0.5; font-weight:400; margin-left:4px;"></span></span>
+                    <span id="btn-empty-tasks-trash" style="color:#dc2626; font-size:12px; cursor:pointer; margin-left: auto;">
+                        (Empty <svg class="svg-icon-sm" style="vertical-align: -2px;"><use href="#icon-trash"></use></svg>)
+                    </span>
+                </summary>
+                <ul class="task-list" id="trash-task-list"></ul>
             </details>
           </div>
           

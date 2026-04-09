@@ -16,13 +16,14 @@ async function calendarFetch(url, token, options = {}) {
         });
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            console.error(`Google Calendar API Error (${response.status}):`, errorData);
+            console.error(`❌ Google Calendar API Error (${response.status}):`, errorData);
 
             // 403 Forbidden มักหมายถึง API ยังไม่ถูกเปิดใช้งาน หรือขาด Scope
             if (response.status === 401 || response.status === 403) {
                 let reason = "Access Denied (403)";
                 if (errorData.error && errorData.error.message) {
                     reason = errorData.error.message;
+                    console.log("🔍 Error Detail:", reason);
                 }
 
                 const isApiDisabled = reason.toLowerCase().includes("not enabled") || reason.toLowerCase().includes("access not configured");
@@ -30,11 +31,11 @@ async function calendarFetch(url, token, options = {}) {
                 if (isApiDisabled) {
                     alert(`❌ Google Calendar Sync ล้มเหลว (403 Forbidden)\n\nสาเหตุ: คุณยังไม่ได้เปิดใช้งาน 'Google Calendar API' ใน Google Cloud Console\n\nวิธีแก้: เข้าไปที่ Cloud Console > APIs & Services > Library > ค้นหา 'Google Calendar API' แล้วกดปุ่ม 'Enable' ครับ`);
                 } else {
-                    alert(`⚠️ Google Calendar API Error (${response.status}):\n${reason}\n\nระบบจะทำการ Reset การล็อกอิน โปรดลองกด Sync ใหม่อีกครั้งครับ`);
+                    alert(`⚠️ Google Calendar API Error (${response.status}):\n${reason}\n\nระบบจะทำการ Reset การล็อกอินและบังคับให้เลือกสิทธิ์ใหม่อีกครั้ง โปรดตรวจสอบว่าคุณได้ 'ติ๊กถูก' ในทุกช่องสิทธิ์ที่ Google ขอมานะครับ`);
                 }
 
-                // ล้าง Token ทั้งหมดเพื่อป้องกัน net::ERR_FAILED ในรอบถัดไป
-                await clearAuthToken(token || localStorage.getItem('google_access_token'));
+                // ล้าง Token ทั้งหมด และส่ง flag 'forceConsent' เพื่อให้รอบหน้าเด้งหน้าต่างเลือกสิทธิ์ใหม่
+                await clearAuthToken(token || localStorage.getItem('google_access_token'), true);
             }
             return null;
         }
@@ -66,6 +67,12 @@ export async function createCalendarEvent(task, token) {
         method: 'POST',
         body: JSON.stringify(body)
     });
+    if (result && result.id) {
+        console.log("Google Calendar API: Event created successfully with ID:", result.id, "for task:", task.text);
+    } else {
+        console.error("Google Calendar API: Failed to create event. Response:", result);
+    }
+    return result;
 }
 
 export async function updateCalendarEvent(eventId, task, token) {

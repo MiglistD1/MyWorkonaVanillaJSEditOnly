@@ -79,9 +79,10 @@ export function applyAppSettings() {
             
             /* 3. UI To-do แบบ Google Tasks และทำให้ Scroll ได้ */
             #tasks-card { overflow-y: auto !important; height: calc(100vh - 60px); }
-            .task-item { padding: 4px 8px !important; border-bottom: 1px solid var(--border-color) !important; align-items: center !important; gap: 2px !important; }
+            .task-item { padding: 4px 8px !important; border-bottom: 1px solid var(--border-color) !important; align-items: flex-start !important; gap: 2px !important; }
+            .task-date { font-size: 9px !important; padding: 1px 5px !important; }
             .task-actual-text { font-size: 13px !important; padding: 0 !important; }
-            .google-task-checkbox { transform: scale(0.9); margin-right: 4px !important; flex-shrink: 0; }
+            .google-task-checkbox { transform: scale(0.9); margin-right: 8px !important; flex-shrink: 0; }
             
             /* 🟢 จัดวาง Topbar ใหม่: ชื่อ Space อยู่บน, ปุ่มทั้ง 4 (CC, Sidebar, Rewards, Drive) อยู่แถวเดียวกันด้านล่าง */
             .topbar {
@@ -292,10 +293,18 @@ export function applyAppSettings() {
             }
 
 
-            /* 5. ปุ่ม Actions ต่างๆ ให้ดูสะอาดขึ้น */
-            .item-action-group { opacity: 1 !important; }
-            .toggle-actions-btn { width: 28px; height: 28px; display: flex !important; align-items: center; justify-content: center; opacity: 0.4; }
-            
+            /* 5. ปรับส่วน Badge และปุ่มคำสั่ง (Actions) ให้แบ่งบรรทัดแนวตั้งเพื่อไม่ให้ดันข้อความ */
+            .item-action-group { 
+                display: flex !important;
+                flex-direction: row !important; /* จัดเรียงป้ายต่างๆ กลับเป็นบรรทัดเดียวกัน */
+                align-items: center !important;   /* จัดกึ่งกลางแนวตั้ง */
+                gap: 4px !important;               /* ระยะห่างระหว่างป้าย */
+                margin-left: 8px !important;
+                flex-shrink: 0 !important;
+                opacity: 1 !important;
+                justify-content: center !important;
+            }
+            .toggle-actions-btn { width: 24px; height: 24px; display: flex !important; align-items: center; justify-content: center; opacity: 0.4; margin: 0 !important; }           
             /* 6. ส่วนหัว Header */
             .card-header { padding: 12px 16px !important; border-bottom: none !important; }
             #header-tasks-text { font-size: 18px !important; font-weight: 800 !important; }

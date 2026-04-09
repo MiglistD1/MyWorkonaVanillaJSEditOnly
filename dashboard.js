@@ -179,43 +179,64 @@ document.addEventListener('DOMContentLoaded', () => {
         // Advanced Data Management Logic
         const subfolderInput = document.getElementById('export-subfolder');
         const autoExportSelect = document.getElementById('auto-export-days');
+        const targetSelect = document.getElementById('export-target'); // 🟢 เพิ่มตัวเลือกอุปกรณ์
         const btnManualExport = document.getElementById('btn-manual-export');
         const btnImportData = document.getElementById('btn-import-data');
         const fileImportInput = document.getElementById('file-import-data');
 
         if (subfolderInput) subfolderInput.value = appSettings.exportSubfolder || "MyBackups";
         if (autoExportSelect) autoExportSelect.value = appSettings.autoExportDays || 0;
+        if (targetSelect) targetSelect.value = appSettings.exportTarget || "computer";
 
         const saveDataManagementSettings = () => {
             appSettings.exportSubfolder = subfolderInput.value.trim() || "MyBackups";
             appSettings.autoExportDays = parseInt(autoExportSelect.value, 10);
+            if (targetSelect) appSettings.exportTarget = targetSelect.value;
             saveData();
         };
 
         subfolderInput?.addEventListener('change', saveDataManagementSettings);
         autoExportSelect?.addEventListener('change', saveDataManagementSettings);
+        targetSelect?.addEventListener('change', saveDataManagementSettings);
 
         btnManualExport?.addEventListener('click', () => {
             const performExport = (allData) => {
+                const settings = getAppSettings();
+                const target = settings.exportTarget || "computer";
+                const folder = (settings.exportSubfolder || "MyBackups").trim();
+
                 const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);
                 const d = new Date();
                 const timestamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}_${String(d.getHours()).padStart(2, '0')}-${String(d.getMinutes()).padStart(2, '0')}`;
-                const filename = (appSettings.exportSubfolder || "MyBackups") + '/MyWorkspace_Backup_' + timestamp + '.json';
+                
+                let filename;
+                if (target === "computer") {
+                    // 💻 โหมดคอมพิวเตอร์: ใช้ Path เต็มรูปแบบ (ทำงานได้ดีใน Extension)
+                    filename = `${folder}/MyWorkspace_Backup_${timestamp}.json`;
+                } else {
+                    // 📱 โหมดมือถือ: Browser ไม่ยอมให้สร้างโฟลเดอร์ จึงใช้การเชื่อมชื่อแทน
+                    const cleanFolder = folder.replace(/[\/\\?%*:|"<>]/g, '-');
+                    filename = `${cleanFolder}_MyWorkspace_Backup_${timestamp}.json`;
+                }
                 
                 if (typeof chrome !== 'undefined' && chrome.downloads) {
                     chrome.downloads.download({ url, filename }, () => {
-                        appSettings.lastExportTimestamp = Date.now();
+                        settings.lastExportTimestamp = Date.now();
                         saveData();
                         URL.revokeObjectURL(url);
                     });
                 } else {
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = filename.split('/').pop();
+                    a.download = filename; // 🟢 FIX: ไม่ใช้ .pop() เพื่อรักษาโครงสร้างชื่อไฟล์/โฟลเดอร์
                     a.click();
-                    appSettings.lastExportTimestamp = Date.now();
+                    settings.lastExportTimestamp = Date.now();
                     saveData();
+                    
+                    if (target === "mobile") {
+                        alert("💡 หมายเหตุสำหรับมือถือ: Browser จะเซฟไฟล์ลงโฟลเดอร์ 'Downloads' เสมอ ระบบจึงได้เติมชื่อโฟลเดอร์ไว้ที่หน้าชื่อไฟล์เพื่อให้คุณจัดกลุ่มได้ง่ายขึ้นครับ");
+                    }
                     setTimeout(() => URL.revokeObjectURL(url), 100);
                 }
             };

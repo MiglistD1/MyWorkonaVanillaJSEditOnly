@@ -44,7 +44,14 @@ chrome.alarms.onAlarm.addListener((alarm) => {
             const dataUrl = 'data:application/json;charset=utf-8,' + encodeURIComponent(jsonStr);
             const d = new Date(now);
             const timestamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}_${String(d.getHours()).padStart(2, '0')}-${String(d.getMinutes()).padStart(2, '0')}`;
-            const filename = (settings.exportSubfolder || 'MyBackups') + '/MyWorkspace_AutoBackup_' + timestamp + '.json';
+            
+            let filename;
+            if (settings.exportTarget === 'mobile') {
+                const cleanFolder = (settings.exportSubfolder || 'MyBackups').replace(/[\/\\?%*:|"<>]/g, '-');
+                filename = `${cleanFolder}_MyWorkspace_AutoBackup_${timestamp}.json`;
+            } else {
+                filename = (settings.exportSubfolder || 'MyBackups') + '/MyWorkspace_AutoBackup_' + timestamp + '.json';
+            }
             
             chrome.downloads.download({ url: dataUrl, filename }, () => {
               settings.lastExportTimestamp = now;

@@ -234,10 +234,11 @@ export function generateTaskHTML(task, index, {
     const isOverdue = dueDateObj && dueDateObj < today && !task.completed && !task.isDeleted;
     const isToday = dueDateObj && dueDateObj.getTime() === today.getTime() && !task.completed && !task.isDeleted;
     const isFuture = (dueDateObj && dueDateObj > today && !task.completed && !task.isDeleted) || (!!nextDueDate && !task.isDeleted);
+    const isSynced = !!task.calendarEventId;
 
     const textStyle = (isCompletedOrDeleted || isActuallyDeleted) 
-        ? "flex: 1; word-break: break-word; white-space: normal; line-height: 1.4; color: var(--text-muted); text-decoration: line-through; opacity: 0.7;" 
-        : `flex: 1; word-break: break-word; white-space: normal; line-height: 1.4; color: ${task.isProminent ? 'var(--primary-color)' : 'var(--text-main)'}; ${task.isProminent ? 'font-weight: 700;' : ''}`;
+        ? "word-break: break-word; white-space: normal; line-height: 1.4; color: var(--text-muted); text-decoration: line-through; opacity: 0.7;" 
+        : `word-break: break-word; white-space: normal; line-height: 1.4; color: ${task.isProminent ? 'var(--primary-color)' : (isSynced ? '#166534' : 'var(--text-main)')}; ${(task.isProminent || isSynced) ? 'font-weight: 700;' : ''}`;
 
     // 🟢 ย่อวันที่ให้สั้นลงสำหรับมือถือ
     const formatDateMinimal = (d) => {
@@ -255,7 +256,7 @@ export function generateTaskHTML(task, index, {
     }
 
     // กำหนด Style ของ Badge วันที่แบบใหม่ให้โดดเด่นตามสถานะ
-    let dateBadgeStyle = "font-size: 10px; padding: 2px 8px; border-radius: 6px; font-weight: 800; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; transition: all 0.2s ease;";
+    let dateBadgeStyle = `${isMobile ? 'font-size: 9px; padding: 1px 5px;' : 'font-size: 10px; padding: 2px 8px;'} border-radius: 6px; font-weight: 800; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; transition: all 0.2s ease; vertical-align: middle;`;
     
     if (isActuallyDeleted) {
         dateBadgeStyle += " background: #fee2e2; color: #ef4444; border: 1px solid #fecaca;";
@@ -270,7 +271,7 @@ export function generateTaskHTML(task, index, {
     }
 
     const repeatIcon = (task.repeatConfig && task.repeatConfig.isRepeating) ? `<span style="margin-left:4px; opacity:0.6; color:var(--primary-color);" title="Repeating: ${task.repeatConfig.frequency}">${svgRepeat}</span>` : '';
-    const calendarIcon = task.calendarEventId ? `<span style="margin-left:4px; color:#4285f4;" title="Synced with Google Calendar"><svg class="svg-icon-sm" style="width:12px; height:12px;"><use href="#icon-calendar"></use></svg></span>` : '';
+    const calendarIcon = task.calendarEventId ? `<span style="margin-right:4px; color:#166534; display: inline-flex; vertical-align: middle;" title="Synced with Google Calendar"><svg class="svg-icon-sm" style="width:12px; height:12px;"><use href="#icon-calendar"></use></svg></span>` : '';
 
     // Recursively render Sub-tasks
     let subtasksHTML = '';
@@ -328,17 +329,19 @@ export function generateTaskHTML(task, index, {
         const countdown = getTrashCountdownText(task, getAppSettings().autoDeleteDays);
         return `<li class="task-item" data-index="${index}" data-type="task" ${isMasterView ? `data-space-id="${spaceId}"` : ''} style="list-style: none; width: 100%; opacity: 0.7;">
             <div class="item-main-row" style="display: flex; align-items: center; gap: 2px; padding: 2px 0; width: 100%; min-height: 28px;">
-                <label class="google-task-checkbox">
+                <label class="google-task-checkbox" style="margin-right: 8px;">
                     <input type="checkbox" class="${checkboxClass}" ${checkboxDataAttrs} checked>
                     <div class="checkmark-circle">
                         <svg style="display:block; opacity:1; transform:scale(1);" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg>
                     </div>
                 </label>
-                <div style="flex: 1; min-width: 0; display: flex; align-items: center;">
-                    <span class="task-actual-text" contenteditable="true" style="${textStyle}">${task.text}</span>
+                <div style="flex: 1; min-width: 0; display: block; padding: 2px 0;">
+                    <div class="task-text-container" style="font-size: 13.5px; line-height: 1.6; word-break: break-word;">
+                        <span class="task-date" style="${dateBadgeStyle} margin-right: 4px;">${countdown}</span>
+                        <span class="task-actual-text" contenteditable="true" style="display: inline; vertical-align: middle; outline: none; ${textStyle}">${task.text}</span>
+                    </div>
                 </div>
                 <div class="item-action-group" style="flex-shrink: 0; margin-left: auto; display: flex; align-items: center; gap: 8px;">
-                    <span style="${dateBadgeStyle}">${countdown}</span>
                     <button class="btn-icon restore-task-btn" data-index="${index}" ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="Restore Task">${svgRestore}</button>
                     <button class="btn-icon delete-task-perm-btn" data-index="${index}" ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="Delete Permanently">${svgTrashRed}</button>
                 </div>
@@ -364,7 +367,7 @@ export function generateTaskHTML(task, index, {
             ${!hasTags ? tagBtnHTML : ''}
             ${(!hasLink || isSubtask) ? linkBtnHTML : ''}
             ${isSubtask ? `<button class="btn-icon convert-to-main-btn" data-parent-index="${parentIndex}" data-sub-index="${index}" title="Break into Main Task">${svgBreakLink}</button>` : `<button class="btn-icon add-subtask-btn" data-index="${index}" title="Add Sub-task" style="margin: 0;"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>`}
-            <button class="btn-icon toggle-calendar-sync-btn" data-index="${index}" ${isSubtask ? `data-parent-index="${parentIndex}"` : ''} ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="${task.calendarEventId ? 'Remove from Calendar' : 'Sync to Calendar'}" style="color: ${task.calendarEventId ? '#4285f4' : 'inherit'}"><svg class="svg-icon-sm"><use href="#icon-calendar"></use></svg></button>
+            <button class="btn-icon toggle-calendar-sync-btn" data-index="${index}" ${isSubtask ? `data-parent-index="${parentIndex}"` : ''} ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="${task.calendarEventId ? 'Remove from Calendar' : 'Sync to Calendar'}" style="color: ${task.calendarEventId ? '#166534' : 'inherit'}"><svg class="svg-icon-sm"><use href="#icon-calendar"></use></svg></button>
             ${!isCompletedOrDeleted && !isActuallyDeleted ? `<button class="btn-icon ${isSubtask ? 'archive-subtask-btn' : 'archive-task-btn'}" data-index="${index}" ${isSubtask ? `data-parent-index="${parentIndex}"` : ''} ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="Archive (Complete)">${svgArchive}</button>` : ''}
             ${isSubtask ? `
                 <button class="btn-icon edit-subtask-btn" data-parent-index="${parentIndex}" data-sub-index="${index}" data-id="${task.id}" title="Edit Sub-task">${svgEdit}</button>
@@ -380,7 +383,7 @@ export function generateTaskHTML(task, index, {
     if (isActuallyDeleted) {
         const countdown = getTrashCountdownText(task, getAppSettings().autoDeleteDays);
         collapsibleActionsContent = `
-            <span style="${dateBadgeStyle} margin-right: 4px;">${countdown}</span>
+            <!-- Countdown moved to front of text -->
             <button class="btn-icon restore-task-btn" data-index="${index}" ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="Restore Task">${svgRestore}</button>
             ${isSubtask ? `
                 <button class="btn-icon delete-subtask-perm-btn" data-parent-index="${parentIndex}" data-sub-index="${index}" data-id="${task.id}" title="Delete Permanently">${svgTrashRed}</button>
@@ -410,22 +413,25 @@ export function generateTaskHTML(task, index, {
                 </button>
             </div>
 
-            <label class="google-task-checkbox">
+            <label class="google-task-checkbox" style="margin-right: 8px;">
                 <input type="checkbox" class="${checkboxClass}" ${checkboxDataAttrs} ${isActuallyDeleted ? 'checked' : (task.completed ? 'checked' : '')}>
                 <div class="checkmark-circle" style="${isActuallyDeleted ? 'background-color: #ef4444; border-color: #ef4444;' : ''}">
                     <svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg>
                 </div>
             </label>
 
-            <div style="flex: 1; min-width: 0; display: flex; align-items: center;">
-                <div class="task-text-container" style="display: flex; align-items: center; font-size: 13.5px; width: 100%;">
-                    <span class="task-actual-text" contenteditable="true" style="${textStyle}">${task.text}</span>${repeatIcon}${calendarIcon}
-                    ${showSpaceBadge ? `<span class="space-tag" style="margin-left: 8px; flex-shrink: 0;">${spaceName}</span>` : ''}
+            <div style="flex: 1; min-width: 0; display: block; padding: 2px 0;">
+                <div class="task-text-container" style="font-size: 13.5px; line-height: 1.6; word-break: break-word;">
+                    ${calendarIcon}
+                    ${dateDisplay ? `<span class="task-date" style="${dateBadgeStyle} margin-right: 4px;">${dateDisplay}</span>` : ''}
+                    ${isActuallyDeleted ? `<span class="task-date" style="${dateBadgeStyle} margin-right: 4px;">${getTrashCountdownText(task, getAppSettings().autoDeleteDays)}</span>` : ''}
+                    <span class="task-actual-text" contenteditable="true" style="display: inline; vertical-align: middle; outline: none; ${textStyle}">${task.text}</span>
+                    ${repeatIcon}
+                    ${showSpaceBadge ? `<span class="space-tag" style="margin-left: 8px; vertical-align: middle; display: inline-flex;">${spaceName}</span>` : ''}
                 </div>
             </div>
 
             <div class="item-action-group" style="flex-shrink: 0; margin-left: auto; display: flex; align-items: center; gap: 8px;">
-                ${dateDisplay ? `<span class="task-date" style="${dateBadgeStyle}">${dateDisplay}</span>` : ''}
                 ${subtaskSpecificActionsHTML}${actionButtons}
             </div>
         </div>

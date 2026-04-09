@@ -1,7 +1,7 @@
 import { getSpaces, saveData, getAppSettings, setCurrentSpaceId, getFilterTags, loadData } from '../core/storage.js';
 import Sortable from '../sortable.esm.js';
 import { svgRefresh } from '../core/icons.js';
-import { openTaskEditModal, openTaskLinkModal, isAnyEditableElementFocused, toggleTaskFocus } from './todoManager.js'; 
+import { openTaskEditModal, openTaskLinkModal, isAnyEditableElementFocused, toggleTaskFocus, playTaskCompletedSound } from './todoManager.js'; 
 import { handleMiniTagClick } from '../components/modals.js';
 import { generateTaskHTML, attachSubtaskEventListeners, attachTaskInlineEditListeners, handleTagAutocomplete, applySyntaxHighlighting } from '../core/ui-helpers.js';
 
@@ -492,6 +492,7 @@ export function initMasterEvents() {
                 // 🌟 แสดง Animation ขีดฆ่า และเรียก Reward Scanner
                 if (isChecked && taskItem && space && space.tasks[idx]) {
                     taskItem.classList.add('completed-hold');
+                    playTaskCompletedSound();
                     if (window.processRewardScanner) {
                         window.processRewardScanner(space.tasks[idx].text, false, { x: e.clientX, y: e.clientY }, 'task', space.id, { tags: space.tasks[idx].tags });
                     }

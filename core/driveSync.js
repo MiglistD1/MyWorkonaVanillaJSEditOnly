@@ -10,7 +10,11 @@ const CLIENT_ID = '586837492075-e2cf86u76n2c9dil0equ98trbraqnngh.apps.googleuser
 
 const SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar.events';
 const FILE_NAME = 'myworkona_todos.json';
-const REDIRECT_URI = location.href.split('#')[0].split('?')[0];
+// 🌐 Smart Redirect URI สำหรับทั้ง Web และ Extension
+const REDIRECT_URI = (typeof chrome !== 'undefined' && chrome.identity && chrome.identity.getRedirectURL)
+    ? chrome.identity.getRedirectURL()
+    : location.href.split('#')[0].split('?')[0];
+
 console.log("👉 ก๊อปปี้ URL นี้ไปใส่ใน Google Cloud Console (Authorized redirect URIs):", REDIRECT_URI);
 
 /** ⏱️ จัดรูปแบบเวลาสำหรับ Log (เช่น 14:30 (5/4)) */
@@ -188,13 +192,14 @@ async function getAuthToken(interactive = true) {
     if (typeof chrome !== 'undefined' && chrome.identity && chrome.identity.getAuthToken) {
         return new Promise((resolve) => {
             chrome.identity.getAuthToken({ interactive }, (token) => {
-                if (chrome.runtime.lastError || !token) {
-                    console.warn("Chrome Identity Error:", chrome.runtime.lastError);
-                    if (interactive) localStorage.removeItem('google_access_token');
+                const error = chrome.runtime.lastError;
+                if (error || !token) {
+                    if (interactive) console.warn("Chrome Identity Error:", error ? error.message : "No token");
+                    localStorage.removeItem('google_access_token');
                     resolve(null);
                 } else {
                     accessToken = token;
-                    localStorage.setItem('google_access_token', token);
+                    if (token) localStorage.setItem('google_access_token', token);
                     resolve(token);
                 }
             });
@@ -215,17 +220,23 @@ async function getAuthToken(interactive = true) {
 
     // 3. Trigger Web Redirect if interactive
     if (interactive) {
-        const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=token&scope=${encodeURIComponent(SCOPES)}&prompt=select_account`;
+        // หากมี flag forceConsent ให้ส่ง prompt=consent เพื่อบังคับให้ checkboxes ปรากฏ
+        const forceConsent = localStorage.getItem('google_auth_force_consent') === 'true';
+        const promptType = forceConsent ? 'select_account%20consent' : 'select_account';
+        localStorage.removeItem('google_auth_force_consent');
+
+        const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=token&scope=${encodeURIComponent(SCOPES)}&prompt=${promptType}`;
         window.location.href = authUrl;
     }
-
     return null;
 }
 
 /** 🗑️ ล้าง Token ออกจากระบบและ Storage */
-export async function clearAuthToken(tokenToClear) {
+export async function clearAuthToken(tokenToClear, forceConsentNextTime = false) {
     accessToken = null;
     localStorage.removeItem('google_access_token');
+    if (forceConsentNextTime) localStorage.setItem('google_auth_force_consent', 'true');
+
     if (typeof chrome !== 'undefined' && chrome.identity) {
         return new Promise(resolve => chrome.identity.removeCachedAuthToken({ token: tokenToClear }, resolve));
     }
@@ -301,17 +312,71 @@ export async function forceUploadToDrive() {
 }
 
 /**
+ * 🖥️ Custom Modal for Drive Import/Download Confirmation
+ */
+function showDriveImportConfirmModal(driveData, onConfirm) {
+    const modalId = 'ds-import-confirm-modal';
+    let modal = document.getElementById(modalId);
+    if (modal) modal.remove();
+
+    const cloudTime = driveData.appSettings?.lastUpdated || 0;
+    const cloudDate = cloudTime ? new Date(cloudTime).toLocaleString() : "Unknown Version";
+
+    const html = `
+        <div class="modal-overlay" id="${modalId}" style="display:flex; z-index:11000; background:rgba(0,0,0,0.4); backdrop-filter: blur(2px);">
+            <div class="modal-content" style="width:360px; padding:25px; border-radius:16px; box-shadow: 0 20px 50px rgba(0,0,0,0.2);">
+                <div style="text-align:center; margin-bottom:20px;">
+                    <div style="font-size:48px; margin-bottom:10px;">☁️</div>
+                    <h3 style="margin:0; font-size:18px; font-weight:800; color:var(--text-main);">Sync Data from Drive</h3>
+                    <p style="font-size:12px; color:var(--text-muted); margin-top:5px;">พบข้อมูลสำรองบน Google Drive ที่พร้อมใช้งาน</p>
+                </div>
+
+                <div style="background:var(--bg-body); padding:12px; border-radius:10px; border:1px solid var(--border-color); margin-bottom:20px;">
+                    <div style="font-size:10px; font-weight:800; color:var(--text-muted); text-transform:uppercase; margin-bottom:4px; letter-spacing:0.5px;">Cloud Version Date</div>
+                    <div style="font-size:13px; font-weight:700; color:var(--primary-color);">${cloudDate}</div>
+                </div>
+
+                <div class="settings-group" style="margin-bottom:25px; background: rgba(47, 128, 237, 0.05); padding: 12px; border-radius: 10px; border: 1px dashed var(--primary-color);">
+                    <label class="google-task-checkbox" style="display:flex; align-items:center; gap:10px; cursor:pointer; margin:0;">
+                        <input type="checkbox" id="ds-merge-checkbox" checked>
+                        <div class="checkmark-circle">
+                            <svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg>
+                        </div>
+                        <span style="font-size:13px; font-weight:700; color:var(--text-main);">Merge: เก็บข้อมูลเดิมที่ไม่ซ้ำไว้</span>
+                    </label>
+                    <p style="font-size:11px; color:var(--text-muted); margin: 8px 0 0 32px; line-height:1.4;">
+                        หากติ๊กไว้ ระบบจะนำข้อมูลจาก Cloud มาเพิ่มและอัปเดต แต่จะ <b>ไม่ลบ</b> ข้อมูลปัจจุบันในเครื่องที่ไม่มีอยู่บน Cloud
+                    </p>
+                </div>
+
+                <div style="display:grid; grid-template-columns: 1fr 1.5fr; gap:10px;">
+                    <button class="btn btn-outline" id="ds-btn-import-cancel" style="justify-content:center; padding:10px;">ยกเลิก</button>
+                    <button class="btn btn-primary" id="ds-btn-import-confirm" style="justify-content:center; font-weight:800; padding:10px;">ดาวน์โหลดข้อมูล</button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', html);
+
+    document.getElementById('ds-btn-import-cancel').onclick = () => document.getElementById(modalId).remove();
+    document.getElementById('ds-btn-import-confirm').onclick = () => {
+        const merge = document.getElementById('ds-merge-checkbox').checked;
+        document.getElementById(modalId).remove();
+        onConfirm(merge);
+    };
+}
+
+/**
  * ⬇️ บังคับดาวน์โหลดข้อมูลจาก Google Drive มาทับข้อมูล Local ทันที
  */
 export async function forceDownloadFromDrive() {
-    if (!confirm("⚠️ บังคับดาวน์โหลด (Force Download) จาก Google Drive\n\nการดำเนินการนี้จะนำข้อมูลจาก Google Drive มา \"เขียนทับ\" ข้อมูลทั้งหมดในเครื่องปัจจุบันนี้\n\nคุณต้องการดำเนินการต่อหรือไม่?")) return;
-
     renderDriveSyncUI("Downloading...", true);
     try {
         const driveData = await loadFromDrive();
         if (driveData) {
-            applyDriveData(driveData);
-            // applyDriveData จะ reload หน้าเอง
+            showDriveImportConfirmModal(driveData, (merge) => {
+                applyDriveData(driveData, merge);
+            });
         } else {
             alert("❌ ไม่พบข้อมูลบน Google Drive หรือการดาวน์โหลดล้มเหลว!");
         }
@@ -464,10 +529,9 @@ export async function autoCheckCloudUpdate() {
 
         if (cloudTime > localTime) {
             // ☁️ ข้อมูลบน Cloud ใหม่กว่า -> ถามเพื่อโหลดลงเครื่อง
-            const cloudDate = new Date(cloudTime).toLocaleString();
-            if (confirm(`☁️ Cloud Sync: พบข้อมูลเวอร์ชันใหม่กว่าบน Google Drive\n(เวลาที่บันทึกบน Cloud: ${cloudDate})\n\nคุณต้องการ "ดาวน์โหลด" ข้อมูลจาก Google Drive ลงมาทับข้อมูลในเครื่องนี้หรือไม่?\n\n⚠️ คำเตือน: ข้อมูลปัจจุบันในเครื่องนี้จะถูกลบและแทนที่ด้วยข้อมูลจาก Cloud ทั้งหมด`)) {
-                applyDriveData(driveData);
-            }
+            showDriveImportConfirmModal(driveData, (merge) => {
+                applyDriveData(driveData, merge);
+            });
         } else if (localTime > cloudTime) {
             // 💻 ข้อมูลในเครื่อง (Extension) ใหม่กว่า -> อัปโหลดขึ้น Cloud ทันทีเพื่ออัปเดตไฟล์บน Drive
             console.log("☁️ Local data is newer. Syncing to Google Drive...");
@@ -488,12 +552,45 @@ export async function autoCheckCloudUpdate() {
     }
 }
 
-function applyDriveData(driveData) {
-    if (driveData.mySpacesData) setSpaces(driveData.mySpacesData);
-    if (driveData.appSettings) setAppSettings(driveData.appSettings);
+function applyDriveData(driveData, merge = false) {
+    if (merge) {
+        // 🔄 LOGIC: Merge Data (เก็บข้อมูลที่ไม่ซ้ำเอาไว้)
+        
+        // 1. Merge Spaces (ใช้ ID เป็นหลัก)
+        const localSpaces = getSpaces() || [];
+        const cloudSpaces = driveData.mySpacesData || [];
+        cloudSpaces.forEach(cloudS => {
+            const localIdx = localSpaces.findIndex(ls => ls.id === cloudS.id);
+            if (localIdx > -1) {
+                localSpaces[localIdx] = cloudS; // อัปเดตตัวที่มีอยู่แล้ว
+            } else {
+                localSpaces.push(cloudS); // เพิ่มตัวใหม่
+            }
+        });
+        setSpaces(localSpaces);
+
+        // 2. Merge Global Launchers (ใช้ URL/Name เป็นหลัก)
+        const localLaunchers = getGlobalLaunchers() || [];
+        const cloudLaunchers = driveData.globalLaunchers || [];
+        cloudLaunchers.forEach(cloudL => {
+            if (!localLaunchers.some(ll => ll.url === cloudL.url && ll.name === cloudL.name)) {
+                localLaunchers.push(cloudL);
+            }
+        });
+        setGlobalLaunchers(localLaunchers);
+
+        // 3. Settings & Tags: รวมชุด Tag และทับ Settings ด้วยค่าจาก Cloud
+        if (driveData.launcherTags) setLauncherTags([...new Set([...getLauncherTags(), ...driveData.launcherTags])]);
+        if (driveData.appSettings) setAppSettings({ ...getAppSettings(), ...driveData.appSettings });
+    } else {
+        // ⚠️ LOGIC: Overwrite (ทับข้อมูลทั้งหมด)
+        if (driveData.mySpacesData) setSpaces(driveData.mySpacesData);
+        if (driveData.appSettings) setAppSettings(driveData.appSettings);
+        if (driveData.globalLaunchers) setGlobalLaunchers(driveData.globalLaunchers);
+        if (driveData.launcherTags) setLauncherTags(driveData.launcherTags);
+    }
+
     if (driveData.lastSpaceId !== undefined) setCurrentSpaceId(driveData.lastSpaceId);
-    if (driveData.globalLaunchers) setGlobalLaunchers(driveData.globalLaunchers);
-    if (driveData.launcherTags) setLauncherTags(driveData.launcherTags);
 
     getAppSettings().lastDriveDownload = Date.now();
     saveData(true);
@@ -504,9 +601,9 @@ function applyDriveData(driveData) {
 async function syncDataAfterLogin() {
     const driveData = await loadFromDrive();
     if (driveData) {
-        if (confirm("☁️ ตรวจพบไฟล์สำรองข้อมูลบน Google Drive\nคุณต้องการ \"ดาวน์โหลด\" ข้อมูลจาก Cloud มาเขียนทับข้อมูลในเครื่องนี้หรือไม่?\n\n⚠️ ข้อมูลเดิมที่อยู่ในเครื่องนี้จะถูกแทนที่ด้วยข้อมูลจาก Google Drive ทั้งหมด")) {
-            applyDriveData(driveData);
-        }
+        showDriveImportConfirmModal(driveData, (merge) => {
+            applyDriveData(driveData, merge);
+        });
     } else {
         const localData = {
             mySpacesData: getSpaces(),
