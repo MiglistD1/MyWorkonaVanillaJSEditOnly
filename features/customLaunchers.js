@@ -240,8 +240,7 @@ function createLauncherBtn(item) {
         btn.style.backgroundColor = item.bgColor || '#ffffff';
 
         // Icon Logic
-        // 🟢 ตรวจสอบว่ามีข้อมูลไอคอนและเป็น URL หรือ Dataที่ถูกต้องหรือไม่
-        if (item.iconData && (item.iconData.startsWith('http') || item.iconData.startsWith('data:'))) {
+        if (item.iconData) {
             btn.innerHTML = `<img src="${item.iconData}" style="width:100%; height:100%; object-fit:cover; border-radius:6px;">`;
         } else {
             // Default Link Icon

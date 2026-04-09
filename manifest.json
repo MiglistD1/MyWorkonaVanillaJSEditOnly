@@ -23,12 +23,8 @@
   ],
   "host_permissions": [
     "*://keep.google.com/*",
-    "*://tasks.google.com/*",
-    "https://*.firebaseio.com/*",
+    "*://tasks.google.com/*"
   ],
-  "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'"
-  },
   "declarative_net_request": {
     "rule_resources": [
       {
