@@ -79,6 +79,9 @@ document.addEventListener('DOMContentLoaded', () => {
     loadData(() => {
         const appSettings = getAppSettings();
         
+        // 🎨 Fix for tagBar.js: ทำให้ตัวแปร isDarkMode เข้าถึงได้จากทุกสคริปต์
+        window.isDarkMode = !!appSettings.isDarkMode;
+
         // 1. Requirement: Collapse all folders on refresh except locked ones
         const allSpaces = getSpaces();
         const spaces = allSpaces.filter(s => !s.isDeleted);
@@ -179,24 +182,39 @@ document.addEventListener('DOMContentLoaded', () => {
         // Advanced Data Management Logic
         const subfolderInput = document.getElementById('export-subfolder');
         const autoExportSelect = document.getElementById('auto-export-days');
+        const mergeCheck = document.getElementById('drive-merge-mode'); // 🟢 เพิ่มตัวเลือก Merge
         const targetSelect = document.getElementById('export-target'); // 🟢 เพิ่มตัวเลือกอุปกรณ์
         const btnManualExport = document.getElementById('btn-manual-export');
         const btnImportData = document.getElementById('btn-import-data');
         const fileImportInput = document.getElementById('file-import-data');
 
+        const updateExportUI = () => {
+            const target = targetSelect?.value || appSettings.exportTarget || "computer";
+            if (btnManualExport) {
+                btnManualExport.innerHTML = target === "computer" 
+                    ? "💻 Export (Laptop)" 
+                    : "📱 Export (Mobile)";
+            }
+        };
+
         if (subfolderInput) subfolderInput.value = appSettings.exportSubfolder || "MyBackups";
         if (autoExportSelect) autoExportSelect.value = appSettings.autoExportDays || 0;
+        if (mergeCheck) mergeCheck.checked = appSettings.mergeDriveData !== false;
         if (targetSelect) targetSelect.value = appSettings.exportTarget || "computer";
+        updateExportUI();
 
         const saveDataManagementSettings = () => {
             appSettings.exportSubfolder = subfolderInput.value.trim() || "MyBackups";
             appSettings.autoExportDays = parseInt(autoExportSelect.value, 10);
+            if (mergeCheck) appSettings.mergeDriveData = mergeCheck.checked;
             if (targetSelect) appSettings.exportTarget = targetSelect.value;
             saveData();
+            updateExportUI();
         };
 
         subfolderInput?.addEventListener('change', saveDataManagementSettings);
         autoExportSelect?.addEventListener('change', saveDataManagementSettings);
+        mergeCheck?.addEventListener('change', saveDataManagementSettings);
         targetSelect?.addEventListener('change', saveDataManagementSettings);
 
         btnManualExport?.addEventListener('click', () => {
@@ -217,7 +235,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else {
                     // 📱 โหมดมือถือ: Browser ไม่ยอมให้สร้างโฟลเดอร์ จึงใช้การเชื่อมชื่อแทน
                     const cleanFolder = folder.replace(/[\/\\?%*:|"<>]/g, '-');
-                    filename = `${cleanFolder}_MyWorkspace_Backup_${timestamp}.json`;
+                    filename = `${cleanFolder}_Backup_${timestamp}.json`;
                 }
                 
                 if (typeof chrome !== 'undefined' && chrome.downloads) {
@@ -235,7 +253,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     saveData();
                     
                     if (target === "mobile") {
-                        alert("💡 หมายเหตุสำหรับมือถือ: Browser จะเซฟไฟล์ลงโฟลเดอร์ 'Downloads' เสมอ ระบบจึงได้เติมชื่อโฟลเดอร์ไว้ที่หน้าชื่อไฟล์เพื่อให้คุณจัดกลุ่มได้ง่ายขึ้นครับ");
+                        alert("💡 Mobile Mode Active:\nเนื่องจากข้อกำหนดของมือถือ ไฟล์จะถูกเซฟลงโฟลเดอร์ 'Downloads' โดยระบบได้ใส่ชื่อ '" + folder + "_' นำหน้าไฟล์ไว้เพื่อให้คุณค้นหาและจัดกลุ่มได้ง่ายขึ้นครับ");
                     }
                     setTimeout(() => URL.revokeObjectURL(url), 100);
                 }
@@ -276,6 +294,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 } catch (err) { alert('Invalid JSON file.'); }
             };
             reader.readAsText(file);
+        });
+
+        // 🌙 อัปเดตตัวแปร Global เมื่อมีการสลับ Dark Mode
+        document.getElementById('btn-toggle-darkmode')?.addEventListener('click', () => {
+            setTimeout(() => {
+                window.isDarkMode = !!getAppSettings().isDarkMode;
+            }, 100);
         });
 
         // 🟢 Mobile Tag Modal Logic

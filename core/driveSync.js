@@ -131,14 +131,6 @@ export function renderDriveSyncUI(text = null, isLoading = false) {
             menu.style.display = isHidden ? 'flex' : 'none';
         };
     }
-
-    // ปิดเมนูเมื่อคลิกที่อื่น
-    if (!window._driveSyncBound) {
-        document.addEventListener('click', (e) => {
-            if (!wrapper.contains(e.target)) menu.style.display = 'none';
-        });
-        window._driveSyncBound = true;
-    }
 }
 
 /**
@@ -314,7 +306,7 @@ export async function forceUploadToDrive() {
 /**
  * 🖥️ Custom Modal for Drive Import/Download Confirmation
  */
-function showDriveImportConfirmModal(driveData, onConfirm) {
+function showDriveImportConfirmModal(driveData, mergeByDefault, onConfirm) {
     const modalId = 'ds-import-confirm-modal';
     let modal = document.getElementById(modalId);
     if (modal) modal.remove();
@@ -338,7 +330,7 @@ function showDriveImportConfirmModal(driveData, onConfirm) {
 
                 <div class="settings-group" style="margin-bottom:25px; background: rgba(47, 128, 237, 0.05); padding: 12px; border-radius: 10px; border: 1px dashed var(--primary-color);">
                     <label class="google-task-checkbox" style="display:flex; align-items:center; gap:10px; cursor:pointer; margin:0;">
-                        <input type="checkbox" id="ds-merge-checkbox" checked>
+                        <input type="checkbox" id="ds-merge-checkbox" ${mergeByDefault ? 'checked' : ''}>
                         <div class="checkmark-circle">
                             <svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg>
                         </div>
@@ -370,11 +362,13 @@ function showDriveImportConfirmModal(driveData, onConfirm) {
  * ⬇️ บังคับดาวน์โหลดข้อมูลจาก Google Drive มาทับข้อมูล Local ทันที
  */
 export async function forceDownloadFromDrive() {
-    renderDriveSyncUI("Downloading...", true);
+    const mergeByDefault = getAppSettings().mergeDriveData !== false;
+    renderDriveSyncUI(null, true);
+    
     try {
         const driveData = await loadFromDrive();
         if (driveData) {
-            showDriveImportConfirmModal(driveData, (merge) => {
+            showDriveImportConfirmModal(driveData, mergeByDefault, (merge) => {
                 applyDriveData(driveData, merge);
             });
         } else {
@@ -526,10 +520,11 @@ export async function autoCheckCloudUpdate() {
     if (driveData) {
         const cloudTime = driveData.appSettings?.lastUpdated || 0;
         const localTime = getAppSettings().lastUpdated || 0;
+        const mergeByDefault = getAppSettings().mergeDriveData !== false;
 
         if (cloudTime > localTime) {
             // ☁️ ข้อมูลบน Cloud ใหม่กว่า -> ถามเพื่อโหลดลงเครื่อง
-            showDriveImportConfirmModal(driveData, (merge) => {
+            showDriveImportConfirmModal(driveData, mergeByDefault, (merge) => {
                 applyDriveData(driveData, merge);
             });
         } else if (localTime > cloudTime) {
@@ -600,8 +595,10 @@ function applyDriveData(driveData, merge = false) {
 
 async function syncDataAfterLogin() {
     const driveData = await loadFromDrive();
+    const mergeByDefault = getAppSettings().mergeDriveData !== false;
+
     if (driveData) {
-        showDriveImportConfirmModal(driveData, (merge) => {
+        showDriveImportConfirmModal(driveData, mergeByDefault, (merge) => {
             applyDriveData(driveData, merge);
         });
     } else {

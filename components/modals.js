@@ -758,6 +758,18 @@ export function setupSettingsModal(onRender) {
         document.getElementById('setting-icon').value = currentIcon; 
         updateSettingPreview(currentIcon);
         document.getElementById('setting-auto-delete-days').value = appSettings.autoDeleteDays || 30;
+
+        // 🟢 ดึงค่า Data Management มาแสดงในช่อง Input ทันทีที่เปิดหน้า Modal
+        const targetSelect = document.getElementById('export-target');
+        const subfolderInput = document.getElementById('export-subfolder');
+        const autoExportSelect = document.getElementById('auto-export-days');
+        const mergeCheck = document.getElementById('drive-merge-mode');
+
+        if (targetSelect) targetSelect.value = appSettings.exportTarget || "computer";
+        if (subfolderInput) subfolderInput.value = appSettings.exportSubfolder || "MyBackups";
+        if (autoExportSelect) autoExportSelect.value = appSettings.autoExportDays || 0;
+        if (mergeCheck) mergeCheck.checked = appSettings.mergeDriveData !== false;
+
         document.getElementById('setting-bg-card').value = appSettings.bgCard || "#ffffff";
         document.getElementById('setting-text-main').value = appSettings.textMain || "#111111";
         document.getElementById('setting-bg-body').value = appSettings.bgBody || "#f4f4f0";

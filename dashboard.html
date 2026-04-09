@@ -149,7 +149,7 @@
 
       <h1 class="workspace-title" id="current-space-title">Loading...</h1>
       <div id="global-launchers-bar" class="launchers-bar"></div>
-      <!-- Drive Sync Button (Positioned for proper Desktop/Mobile layout) -->
+        <!-- ☁️ Drive Sync Button (Back to Topbar) -->
       <div id="drive-sync-container" style="display: flex; align-items: center; gap: 10px;">
         <button id="btn-drive-sync" class="btn-icon" title="Sync with Google Drive"></button>
       </div>
@@ -647,23 +647,47 @@
 
   <div class="modal-overlay" id="settings-modal"><div class="modal-content">
     <h3 style="font-size:16px; display:flex; align-items:center; gap:8px; margin-top:0;"><svg class="svg-icon-lg"><use href="#icon-settings"></use></svg> App Settings</h3>
-    <div class="settings-group" style="background: var(--hover-bg); padding: 10px; border-radius: 6px;">
-      <label style="display:flex; align-items:center; gap:6px;"><svg class="svg-icon-sm"><use href="#icon-floppy"></use></svg> Data Management:</label>
-      <div style="display:flex; flex-direction:column; gap:8px; margin-top: 8px;">
-        <div style="display:flex; gap:5px;">
-          <input type="text" id="export-subfolder" class="settings-input" style="flex:2; font-size:12px;" placeholder="Backup Subfolder (e.g., MyBackups)">
-          <select id="auto-export-days" class="settings-input" style="flex:1; font-size:12px;">
-            <option value="0">Auto: Off</option>
+    <div class="settings-group" style="background: var(--hover-bg); padding: 12px; border-radius: 10px; border: 1px solid var(--border-color);">
+      <label style="display:flex; align-items:center; gap:6px; font-weight: 800; color: var(--primary-color); margin-bottom: 12px;">
+        <svg class="svg-icon-sm"><use href="#icon-floppy"></use></svg> Data Management
+      </label>
+      
+      <!-- Section: Backup Config -->
+      <div style="display:flex; flex-direction:column; gap:10px; padding: 10px; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 12px;">
+        <div class="customize-row" style="margin-bottom: 0;">
+          <span style="font-size:12px; font-weight: 600;">Device Mode</span>
+          <select id="export-target" class="settings-input" style="width: 140px; font-size:11px; height:28px;">
+            <option value="computer">💻 Laptop (Subfolders)</option>
+            <option value="mobile">📱 Mobile (Prefixes)</option>
+          </select>
+        </div>
+        <div class="customize-row" style="margin-bottom: 0;">
+          <span style="font-size:12px; font-weight: 600;">Path / Prefix</span>
+          <input type="text" id="export-subfolder" class="settings-input" style="width: 140px; font-size:11px; height:28px;" placeholder="e.g. MyBackups">
+        </div>
+        <div class="customize-row" style="margin-bottom: 0;">
+          <span style="font-size:12px; font-weight: 600;">Auto Export</span>
+          <select id="auto-export-days" class="settings-input" style="width: 140px; font-size:11px; height:28px;">
+            <option value="0">Disabled</option>
             <option value="1">Every 1 Day</option>
             <option value="3">Every 3 Days</option>
             <option value="7">Every 7 Days</option>
           </select>
         </div>
-        <div style="display:flex; gap:10px;">
-          <button class="btn btn-outline" id="btn-manual-export" style="flex:1; font-size:12px;">Export Now</button>
-          <button class="btn btn-primary" id="btn-import-data" style="flex:1; font-size:12px;">Import Data</button>
-          <input type="file" id="file-import-data" accept=".json" style="display:none;">
+        <div class="customize-row" style="margin-bottom: 0;">
+          <span style="font-size:12px; font-weight: 600;">Merge Mode</span>
+          <label class="google-task-checkbox">
+            <input type="checkbox" id="drive-merge-mode">
+            <div class="checkmark-circle"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg></div>
+          </label>
         </div>
+      </div>
+
+      <!-- Section: Quick Actions -->
+      <div style="display:flex; gap:8px;">
+        <button class="btn btn-primary" id="btn-manual-export" style="flex:1.2; font-size:11px; justify-content: center; font-weight: 700;">Export Now</button>
+        <button class="btn btn-outline" id="btn-import-data" style="flex:1; font-size:11px; justify-content: center;">Import Data</button>
+        <input type="file" id="file-import-data" accept=".json" style="display:none;">
       </div>
     </div>
     <div class="settings-group"><label>App Name:</label><input type="text" id="setting-title" class="settings-input"></div>

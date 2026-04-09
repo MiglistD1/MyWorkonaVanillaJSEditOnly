@@ -49,6 +49,11 @@ export function initTabs(callbacks) {
 
     // Save Tabs (Chrome API interaction)
     document.getElementById('btn-save-tabs').addEventListener('click', () => { 
+        if (typeof chrome === 'undefined' || !chrome.tabs || !chrome.tabs.query) {
+            alert("⚠️ ฟีเจอร์ 'Save Tabs' ทำงานได้เฉพาะเมื่อติดตั้งและใช้งานผ่าน Chrome Extension เท่านั้นครับ");
+            return;
+        }
+
         chrome.tabs.query({ currentWindow: true }, (tabs) => { 
             const space = getSpaces().find(s => s.id === getCurrentSpaceId());
             if(space) {
