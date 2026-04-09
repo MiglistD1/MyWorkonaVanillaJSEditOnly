@@ -1,5 +1,4 @@
 // core/calendarSync.js
-import { clearAuthToken } from './driveSync.js';
 
 const CALENDAR_API_BASE = 'https://www.googleapis.com/calendar/v3/calendars/primary/events';
 
@@ -34,8 +33,7 @@ async function calendarFetch(url, token, options = {}) {
                     alert(`⚠️ Google Calendar API Error (${response.status}):\n${reason}\n\nระบบจะทำการ Reset การล็อกอินและบังคับให้เลือกสิทธิ์ใหม่อีกครั้ง โปรดตรวจสอบว่าคุณได้ 'ติ๊กถูก' ในทุกช่องสิทธิ์ที่ Google ขอมานะครับ`);
                 }
 
-                // ล้าง Token ทั้งหมด และส่ง flag 'forceConsent' เพื่อให้รอบหน้าเด้งหน้าต่างเลือกสิทธิ์ใหม่
-                await clearAuthToken(token || localStorage.getItem('google_access_token'), true);
+                console.error("Auth token invalid. Please re-authenticate (Auth provider missing).");
             }
             return null;
         }

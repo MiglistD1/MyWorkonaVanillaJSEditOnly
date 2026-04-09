@@ -635,7 +635,7 @@ export function attachTaskInlineEditListeners(container, getSpaceFn, callbacks =
                 } else if (wasEnter && type === 'subtask' && typeof callbacks.onAddSubtaskAfter === 'function') {
                     callbacks.onAddSubtaskAfter(space, idx, li);
                 } else if (onUpdate) {
-                    onUpdate();
+                    onUpdate(space, idx, type, li);
                 }
             }
         }
