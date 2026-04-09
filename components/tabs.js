@@ -49,19 +49,36 @@ export function initTabs(callbacks) {
 
     // Save Tabs (Chrome API interaction)
     document.getElementById('btn-save-tabs').addEventListener('click', () => { 
-        if (typeof chrome === 'undefined' || !chrome.tabs || !chrome.tabs.query) {
-            alert("⚠️ ฟีเจอร์ 'Save Tabs' ทำงานได้เฉพาะเมื่อติดตั้งและใช้งานผ่าน Chrome Extension เท่านั้นครับ");
-            return;
-        }
+        const space = getSpaces().find(s => s.id === getCurrentSpaceId());
+        if (!space) return;
 
-        chrome.tabs.query({ currentWindow: true }, (tabs) => { 
-            const space = getSpaces().find(s => s.id === getCurrentSpaceId());
-            if(space) {
+        if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.query) {
+            // 🛠️ Extension Mode: ดึงข้อมูล Tab อัตโนมัติจาก Browser
+            chrome.tabs.query({ currentWindow: true }, (tabs) => { 
                 space.tabs = tabs.map(t => ({ title: t.title, url: t.url, favIconUrl: t.favIconUrl })); 
                 saveData(); 
                 onRender(); 
+            }); 
+        } else {
+            // 🌐 Web Mode Fallback: ให้ผู้ใช้วางลิงก์ด้วยตนเอง (Manual Paste)
+            const rawInput = prompt("💡 Web Version Workaround:\nเนื่องจาก Browser ไม่อนุญาตให้เว็บทั่วไปเข้าถึง Tab อื่นๆ ได้โดยตรงครับ\n\nโปรดวางรายชื่อ URL (ก๊อปปี้จากที่อื่นมาวาง) บรรทัดละ 1 ลิงก์เพื่อบันทึกลงใน Space นี้:");
+            
+            if (rawInput) {
+                const lines = rawInput.split('\n').map(line => line.trim()).filter(line => line.startsWith('http'));
+                const newTabs = lines.map(url => {
+                    let displayTitle = url;
+                    try { displayTitle = new URL(url).hostname; } catch(e) {}
+                    return { title: displayTitle, url: url, favIconUrl: null };
+                });
+
+                if (newTabs.length > 0) {
+                    const isOverwrite = confirm(`พบ ${newTabs.length} ลิงก์\n\nตกลง: เพื่อ 'เขียนทับ' (Overwrite) รายการเดิม\nยกเลิก: เพื่อ 'เพิ่มต่อท้าย' (Append)`);
+                    space.tabs = isOverwrite ? newTabs : [...(space.tabs || []), ...newTabs];
+                    saveData();
+                    onRender();
+                }
             }
-        }); 
+        }
     });
 
     // Select All Checkbox
