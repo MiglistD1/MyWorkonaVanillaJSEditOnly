@@ -52,6 +52,7 @@ let appSettings = {
   folderThemes: {}, // Stores { folderName: { color, fontSize } }
   lockedFolders: [], // Stores folder names that should stay expanded on refresh
   exportSubfolder: "MyBackups",
+  firebaseAutoSync: false,
   autoExportDays: 0,
   exportTarget: "computer", // 'computer' or 'mobile'
   autoDeleteDays: 30, // ค่าเริ่มต้น 30 วัน

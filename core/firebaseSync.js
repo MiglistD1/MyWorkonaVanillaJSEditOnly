@@ -1,6 +1,6 @@
 import { initializeApp } from "./lib/firebase-app.js";
 import { getFirestore, doc, setDoc, getDoc, onSnapshot, enableIndexedDbPersistence } from "./lib/firebase-firestore.js";
-import { getCurrentSpace, saveData, getSpaces, setSpaces, setOnSaveFirebaseHook, getGlobalLaunchers, setGlobalLaunchers, getLauncherTags, setLauncherTags } from "./storage.js";
+import { getCurrentSpace, saveData, getSpaces, setSpaces, setOnSaveFirebaseHook, getGlobalLaunchers, setGlobalLaunchers, getLauncherTags, setLauncherTags, getAppSettings } from "./storage.js";
 import { isAnyEditableElementFocused } from "../features/todoManager.js";
 
 // Firebase config
@@ -55,7 +55,7 @@ const debouncedNoteSync = debounce(async (content) => {
 }, 1000);
 
 // UI Elements for Sync Status
-function updateSyncStatusUI(state) {
+export function updateSyncStatusUI(state) {
     const syncedIcon = document.getElementById('sync-icon-synced');
     const syncingIcon = document.getElementById('sync-icon-syncing');
     const offlineIcon = document.getElementById('sync-icon-offline');
@@ -64,29 +64,58 @@ function updateSyncStatusUI(state) {
     
     if (!syncedIcon || !syncingIcon || !offlineIcon || !triggerBtn) return;
 
-    syncedIcon.style.display = (state === 'synced') ? 'block' : 'none';
-    syncingIcon.style.display = (state === 'syncing') ? 'block' : 'none';
-    offlineIcon.style.display = (state === 'offline') ? 'block' : 'none';
+    // 🟢 กำหนดสถานะการแสดงผล (Default เป็น Synced หากไม่ได้ส่งค่ามา)
+    const displayState = state || 'synced';
+
+    syncedIcon.style.display = (displayState === 'synced') ? 'block' : 'none';
+    syncingIcon.style.display = (displayState === 'syncing') ? 'block' : 'none';
+    offlineIcon.style.display = (displayState === 'offline') ? 'block' : 'none';
 
     // 🛰️ Update Trigger Button (Cloud Icon) effect
     const cloudSvg = triggerBtn.querySelector('svg');
-    if (state === 'syncing') {
+    const isAutoSync = getAppSettings().firebaseAutoSync;
+    
+    // เพิ่ม Transition เพื่อความนุ่มนวล
+    triggerBtn.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+    triggerBtn.style.borderStyle = 'solid';
+
+    if (displayState === 'syncing') {
         cloudSvg.classList.add('spin');
-        triggerBtn.style.color = '#f59e0b'; // สีส้มขณะกำลังทำงาน
-    } else if (state === 'synced') {
+        const color = '#f59e0b';
+        triggerBtn.style.color = color;
+        triggerBtn.style.borderColor = color;
+        triggerBtn.style.borderWidth = '2px';
+        triggerBtn.style.boxShadow = `0 0 10px rgba(245, 158, 11, 0.4)`;
+    } else if (displayState === 'synced') {
         cloudSvg.classList.remove('spin');
-        triggerBtn.style.color = '#10b981'; // สีเขียวเมื่อสำเร็จ
+        if (isAutoSync) {
+            const color = '#10b981';
+            triggerBtn.style.color = color;
+            triggerBtn.style.borderColor = color;
+            triggerBtn.style.borderWidth = '2px';
+            triggerBtn.style.boxShadow = `0 0 12px rgba(16, 185, 129, 0.5)`;
+        } else {
+            const color = '#9ca3af';
+            triggerBtn.style.color = color;
+            triggerBtn.style.borderColor = color;
+            triggerBtn.style.borderWidth = '1px';
+            triggerBtn.style.boxShadow = 'none';
+        }
         
         // ⏱️ Update Last Synced Timestamp
-        if (lastSyncEl) {
+        if (lastSyncEl && state) {
             const now = new Date();
             const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             const dateStr = now.toLocaleDateString([], { day: '2-digit', month: 'short' });
             lastSyncEl.innerText = `Last Synced: ${dateStr}, ${timeStr}`;
         }
-    } else if (state === 'offline') {
+    } else if (displayState === 'offline') {
         cloudSvg.classList.remove('spin');
-        triggerBtn.style.color = '#ef4444'; // สีแดงเมื่อออฟไลน์
+        const color = '#ef4444';
+        triggerBtn.style.color = color;
+        triggerBtn.style.borderColor = color;
+        triggerBtn.style.borderWidth = '2px';
+        triggerBtn.style.boxShadow = `0 0 12px rgba(239, 68, 68, 0.5)`;
     }
 }
 
@@ -207,6 +236,10 @@ export function initFirebaseSync() {
     // 2. Push: เมื่อเราพิมพ์ ให้ส่งขึ้น Firebase ทันที
     workspaceNote.addEventListener('input', (e) => {
         const content = e.target.innerHTML;
+        
+        // 🟢 Check Auto Sync state before automatic push
+        if (!getAppSettings().firebaseAutoSync) return;
+
         // Only sync to cloud if the content has actually changed to avoid unnecessary writes
         if (getCurrentSpace()?.note !== content) {
             getCurrentSpace().note = content;
@@ -217,6 +250,9 @@ export function initFirebaseSync() {
 
     // 🟢 4. Push: เมื่อมีการเปลี่ยนสถานะงาน (Add, Delete, Check, Sort)
     setOnSaveFirebaseHook(async (data) => {
+        // 🟢 Check Auto Sync state before background sync
+        if (!getAppSettings().firebaseAutoSync) return;
+
         updateSyncStatusUI('syncing');
         // ส่งข้อมูล Spaces ทั้งหมดขึ้นไป (รวมถึง Tasks ภายในนั้น)
         try {

@@ -1,5 +1,5 @@
 import { initFocusTimer } from './features/focusTimer.js';
-import { initFirebaseSync, forcePushNote, forcePullNote } from "./core/firebaseSync.js";
+import { initFirebaseSync, forcePushNote, forcePullNote, updateSyncStatusUI } from "./core/firebaseSync.js";
 
 import { initScheduleMode } from './features/scheduleMode.js';
 import { initSidebar, renderSidebar } from './components/sidebar.js';
@@ -20,6 +20,8 @@ import {
   getAppSettings, saveData, loadData, getSpaces,
   getCurrentSpaceId, setCurrentSpaceId, getFilterTags, setFilterTags, setSearchQuery, getCurrentSpace, getFilterMode, setFilterMode
 } from './core/storage.js';
+
+let sessionReminderActive = true; // 🟢 ตัวแปรสำหรับคุมการแจ้งเตือนในเซสชั่นปัจจุบัน
 
 
 function handleSpaceChange(newId, isNewSpace) {
@@ -81,6 +83,10 @@ document.addEventListener('DOMContentLoaded', () => {
     loadData(() => {
         const appSettings = getAppSettings();
         
+        // 🟢 Reset Auto Sync to false on every load as requested
+        appSettings.firebaseAutoSync = false;
+        saveData(true);
+
         // 🎨 Fix for tagBar.js: ทำให้ตัวแปร isDarkMode เข้าถึงได้จากทุกสคริปต์
         window.isDarkMode = !!appSettings.isDarkMode;
 
@@ -149,6 +155,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // 🛰️ Firebase Sync Manual Actions
         const syncTrigger = document.getElementById('btn-firebase-sync-trigger');
         const syncPopup = document.getElementById('firebase-sync-popup');
+        const autoSyncChk = document.getElementById('chk-firebase-auto-sync');
 
         if (syncTrigger && syncPopup) {
             syncTrigger.onclick = (e) => {
@@ -163,6 +170,39 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
         }
+
+        const muteReminderWrapper = document.getElementById('wrapper-mute-reminder');
+        const muteReminderChk = document.getElementById('chk-mute-sync-reminder');
+        const updateReminderUI = () => {
+            if (!muteReminderWrapper || !muteReminderChk) return;
+            if (!appSettings.firebaseAutoSync) {
+                muteReminderWrapper.style.display = 'flex';
+                muteReminderChk.checked = sessionReminderActive;
+            } else {
+                muteReminderWrapper.style.display = 'none';
+            }
+        };
+
+        if (autoSyncChk) {
+            autoSyncChk.checked = !!appSettings.firebaseAutoSync;
+            autoSyncChk.onchange = () => {
+                appSettings.firebaseAutoSync = autoSyncChk.checked;
+                saveData();
+                updateSyncStatusUI(); // 🟢 อัปเดตสีไอคอนก้อนเมฆทันทีเมื่อมีการสับสวิตช์
+                updateReminderUI();   // 🟢 อัปเดตการแสดงผลปุ่ม Mute
+            };
+        }
+
+        if (muteReminderChk) {
+            muteReminderChk.onchange = (e) => {
+                e.stopPropagation();
+                sessionReminderActive = muteReminderChk.checked;
+                const status = sessionReminderActive ? "เปิด" : "ปิด";
+                if (typeof window.showToast === 'function') window.showToast(`${status}การเตือนความจำสำหรับรอบนี้แล้วครับ`);
+            };
+        }
+
+        updateReminderUI(); // Initial Check
 
         document.getElementById('btn-firebase-push')?.addEventListener('click', () => { forcePushNote(); if(syncPopup) syncPopup.style.display = 'none'; });
         document.getElementById('btn-firebase-pull')?.addEventListener('click', () => { forcePullNote(); if(syncPopup) syncPopup.style.display = 'none'; });
@@ -486,5 +526,28 @@ document.addEventListener('DOMContentLoaded', () => {
         renderSidebar();
         renderMainContent();
         updateArchivedStateUI();
+
+        // 🟢 Step 3: Auto Sync Reminder Logic (Dismissible for this session)
+        if (!appSettings.firebaseAutoSync) {
+            const msg = "คุณยังไม่ได้เปิด Auto Sync อย่าลืมเปิดหากต้องการให้ข้อมูลบันทึกลงคลาวด์อัตโนมัตินะครับ\n\n(คุณสามารถปิดการเตือนนี้ได้ที่สวิตช์ 'Reminders' ในเมนู Cloud Sync ครับ)";
+            
+            const triggerReminder = () => {
+                // ตรวจสอบทั้งสถานะการตั้งค่า และสถานะที่ผู้ใช้กดปิดไว้ในเซสชั่น
+                if (sessionReminderActive && !appSettings.firebaseAutoSync) {
+                    if (typeof window.showToast === 'function') {
+                        window.showToast(msg);
+                    } else {
+                        // ใช้ confirm แทน alert เพื่อให้มีปุ่ม Cancel สำหรับการ Dismiss
+                        if (!confirm(msg)) {
+                            sessionReminderActive = false;
+                            updateReminderUI();
+                        }
+                    }
+                }
+            };
+
+            triggerReminder(); // 🔔 แสดงการแจ้งเตือนทันทีที่โหลดเสร็จ
+            setInterval(triggerReminder, 300000); // ⏱️ ตั้งรอบถามทุกๆ 5 นาที
+        }
     });
 });

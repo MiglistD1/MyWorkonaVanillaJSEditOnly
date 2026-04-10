@@ -107,6 +107,26 @@
   }
 }
 
+@media (max-width: 768px) {
+    #firebase-sync-popup {
+        min-width: 180px !important;
+        padding: 10px !important;
+    }
+    #firebase-sync-popup .sync-controls-container {
+        gap: 8px !important;
+    }
+    #firebase-sync-popup .btn {
+        padding: 4px 8px !important;
+        font-size: 10px !important;
+    }
+    #firebase-sync-popup .switch {
+        transform: scale(0.85);
+    }
+    #firebase-sync-popup .sync-controls-container > div:first-child {
+        justify-content: space-around !important;
+    }
+}
+
 @media (min-width: 1101px) {
     .content-grid {
         grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.3fr);
