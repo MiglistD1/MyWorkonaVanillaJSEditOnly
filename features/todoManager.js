@@ -2,7 +2,7 @@ import Sortable from '../sortable.esm.js';
 import { svgEdit, svgTrashRed, svgRepeat } from '../core/icons.js';
 import { getCurrentSpace, saveData, getShortDate, getAppSettings, setCurrentSpaceId, getSpaces, getFilterTags, loadData, getGlobalLaunchers, getLauncherTags, getCurrentSpaceId, getFilterMode } from '../core/storage.js';
 import { generateMiniTagsBtn, generateTaskHTML, attachSubtaskEventListeners, attachTaskInlineEditListeners, handleTagAutocomplete, applySyntaxHighlighting } from '../core/ui-helpers.js';
-import { onSnapshot } from '../core/lib/firebase-firestore.js';
+
 import { checkAndResetHabits, renderHabitList } from './habitSheet.js';
 import { createCalendarEvent, updateCalendarEvent, deleteCalendarEvent } from '../core/calendarSync.js';
 
@@ -383,34 +383,34 @@ export function initTodoManager(callbacks) {
     });
 
     // 📅 ระบบตรวจสอบสถานะการเชื่อมต่อ Google Calendar
-    const checkCalendarAuth = async () => {
-        // TODO: Refactor Calendar Auth using chrome.identity later
-        // const token = await getAuthToken(false);
-        // const btns = [document.getElementById('connect-calendar-btn'), document.getElementById('master-connect-calendar-btn')];
-        
-        // btns.forEach(btn => {
-        //     if (!btn) return;
-        //     if (token) {
-        //         btn.style.background = '#34a853';
-        //         btn.style.color = '#ffffff';
-        //         btn.title = "Google Calendar: Connected";
-        //     } else {
-        //         btn.style.background = '';
-        //         btn.style.color = '';
-        //         btn.title = "Connect Google Calendar";
-        //     }
-            
-        //     btn.onclick = async (e) => {
-        //         e.stopPropagation();
-        //         if (!token) {
-        //             const newToken = await getAuthToken(true);
-        //             if (newToken) checkCalendarAuth();
-        //         } else {
-        //             alert("Google Calendar เชื่อมต่อเรียบร้อยแล้วผ่านระบบ Drive Sync ครับ");
-        //         }
-        //     };
-        // });
-    };
+    // TODO: Refactor Calendar Auth using chrome.identity later
+    // const checkCalendarAuth = async () => {
+    //     const token = await getAuthToken(false);
+    //     const btns = [document.getElementById('connect-calendar-btn'), document.getElementById('master-connect-calendar-btn')];
+    //     
+    //     btns.forEach(btn => {
+    //         if (!btn) return;
+    //         if (token) {
+    //             btn.style.background = '#34a853';
+    //             btn.style.color = '#ffffff';
+    //             btn.title = "Google Calendar: Connected";
+    //         } else {
+    //             btn.style.background = '';
+    //             btn.style.color = '';
+    //             btn.title = "Connect Google Calendar";
+    //         }
+    //         
+    //         btn.onclick = async (e) => {
+    //             e.stopPropagation();
+    //             if (!token) {
+    //                 const newToken = await getAuthToken(true);
+    //                 if (newToken) checkCalendarAuth();
+    //             } else {
+    //                 alert("Google Calendar เชื่อมต่อเรียบร้อยแล้วผ่านระบบ Drive Sync ครับ");
+    //             }
+    //         };
+    //     });
+    // };
 
     // 🟢 Moved from top level to inside init
     const taskInput = document.getElementById('new-task-input');
@@ -966,7 +966,7 @@ export function initTodoManager(callbacks) {
     }
 
     // รันการตรวจสอบสถานะเริ่มต้น
-    setTimeout(checkCalendarAuth, 1000);
+    // TODO: Refactor Calendar Auth - setTimeout(checkCalendarAuth, 1000);
 
     // Note Events
     document.querySelectorAll('.custom-color-slot').forEach((picker, index) => {
@@ -976,26 +976,6 @@ export function initTodoManager(callbacks) {
     document.getElementById('btn-undo-note').addEventListener('mousedown', (e) => { e.preventDefault(); document.execCommand('undo', false, null); getCurrentSpace().note = document.getElementById('workspace-note').innerHTML; saveData(); });
     document.querySelectorAll('.note-toolbar select').forEach(el => { el.addEventListener('change', (e) => { document.execCommand(e.target.dataset.cmd, false, e.target.value); getCurrentSpace().note = document.getElementById('workspace-note').innerHTML; saveData(); }); });
     
-    workspaceNote.addEventListener('input', (e) => { 
-        const content = e.target.innerHTML;
-        getCurrentSpace().note = content; 
-        saveData(); 
-        // Sync local changes to Firestore
-        setDoc(docRef, { content: content }, { merge: true });
-    });
-
-    // Setup real-time listener from Firestore
-    onSnapshot(docRef, (snapshot) => {
-        const data = snapshot.data();
-        if (data && data.content !== undefined) {
-            // Update UI only if content is different to avoid infinite loops and cursor jumping
-            if (workspaceNote && workspaceNote.innerHTML !== data.content) {
-                workspaceNote.innerHTML = data.content;
-                const space = getCurrentSpace();
-                if (space) space.note = data.content;
-            }
-        }
-    });
 
 
     // 🟢 Smart Checkbox Logic for Workspace Note
@@ -1670,17 +1650,18 @@ export function initTodoManager(callbacks) {
                 }
             }
 
-            // Sync completion status to Google Calendar if linked
+            // TODO: Refactor Calendar Auth using chrome.identity later
+            /*
             if (task.calendarEventId) {
-                // TODO: Refactor Calendar Auth using chrome.identity later
-                // getAuthToken(false).then(token => {
-                //     if (token) {
-                //         // Map isDeleted (Trash) to completed status for Calendar prefixing
-                //         const summaryTask = { ...task, completed: task.completed || task.isDeleted };
-                //         updateCalendarEvent(task.calendarEventId, summaryTask, token);
-                //     }
-                // });
+                getAuthToken(false).then(token => {
+                    if (token) {
+                        // Map isDeleted (Trash) to completed status for Calendar prefixing
+                        const summaryTask = { ...task, completed: task.completed || task.isDeleted };
+                        updateCalendarEvent(task.calendarEventId, summaryTask, token);
+                    }
+                });
             }
+            */
 
             // 🔄 Repeating Task Logic: Regenerate task on completion
             if (isChecked && task.repeatConfig && task.repeatConfig.isRepeating && task.dueDate && !task.wasRegenerated) {
@@ -2239,17 +2220,18 @@ async function addTask() {
         // Initialize new task with isProminent: false
         let newTask = { text: text, completed: false, tags: tags, dueDate: dateInput.value || null, createdAt: Date.now(), isProminent: false, subtasks: [], subtasksHidden: false, repeatConfig: { ...currentTaskRepeatConfig } }; 
 
-        // 📅 Calendar Sync Logic for Quick Add
+        // TODO: Refactor Calendar Auth using chrome.identity later
+        /*
         if (currentTaskCalendarSync && newTask.dueDate) {
             try {
-                // TODO: Refactor Calendar Auth using chrome.identity later
-                // const token = await getAuthToken(false);
-                // if (token) {
-                //     const event = await createCalendarEvent(newTask, token);
-                //     if (event && event.id) newTask.calendarEventId = event.id;
-                // }
+                const token = await getAuthToken(false);
+                if (token) {
+                    const event = await createCalendarEvent(newTask, token);
+                    if (event && event.id) newTask.calendarEventId = event.id;
+                }
             } catch (err) { console.error("Quick add calendar sync error:", err); }
         }
+        */
 
         space.tasks.push(newTask); 
         currentTaskRepeatConfig = { isRepeating: false, frequency: 'daily', interval: 1 }; // Reset UI and state after add
@@ -2337,36 +2319,37 @@ async function saveEditedTask() {
     task.dueDate = newDate || null;
     task.repeatConfig = { ...editingTaskRepeatConfig };
 
-    // Calendar Sync Logic
+    // TODO: Refactor Calendar Auth using chrome.identity later
+    /*
     try {
-        // TODO: Refactor Calendar Auth using chrome.identity later
-        // const token = await getAuthToken(false);
-        // if (token) {
-        //     if (wantsCalendarSync && task.dueDate) {
-        //         if (!task.calendarEventId) {
-        //             console.log("Attempting to create new calendar event for task:", task.text);
-        //             const event = await createCalendarEvent(task, token);
-        //             if (event && event.id) {
-        //                 task.calendarEventId = event.id;
-        //                 console.log("Calendar event created and assigned ID:", event.id, "to task:", task.text, "(Task ID:", task.id, ")");
-        //             } else {
-        //                 console.error("Failed to create calendar event for task:", task.text, "(Task ID:", task.id, "). Event response:", event);
-        //             }
-        //         } else {
-        //             console.log("Updating existing calendar event for ID:", task.calendarEventId, "with new text:", task.text);
-        //             await updateCalendarEvent(task.calendarEventId, task, token);
-        //             console.log("Calendar event updated successfully.");
-        //         }
-        //     } else if (task.calendarEventId) {
-        //         // Delete if unchecked or if dueDate was removed
-        //         await deleteCalendarEvent(task.calendarEventId, token);
-        //         delete task.calendarEventId;
-        //         console.log("Calendar event deleted for ID:", task.calendarEventId);
-        //     }
-        // } else if (wantsCalendarSync) {
-        //     alert("⚠️ ไม่สามารถซิงค์ปฏิทินได้: โปรดเชื่อมต่อ Google Drive/Calendar ในเมนู Google Integrations (ไอคอน 9 จุด) ก่อนครับ");
-        // }
+        const token = await getAuthToken(false);
+        if (token) {
+            if (wantsCalendarSync && task.dueDate) {
+                if (!task.calendarEventId) {
+                    console.log("Attempting to create new calendar event for task:", task.text);
+                    const event = await createCalendarEvent(task, token);
+                    if (event && event.id) {
+                        task.calendarEventId = event.id;
+                        console.log("Calendar event created and assigned ID:", event.id, "to task:", task.text, "(Task ID:", task.id, ")");
+                    } else {
+                        console.error("Failed to create calendar event for task:", task.text, "(Task ID:", task.id, "). Event response:", event);
+                    }
+                } else {
+                    console.log("Updating existing calendar event for ID:", task.calendarEventId, "with new text:", task.text);
+                    await updateCalendarEvent(task.calendarEventId, task, token);
+                    console.log("Calendar event updated successfully.");
+                }
+            } else if (task.calendarEventId) {
+                // Delete if unchecked or if dueDate was removed
+                await deleteCalendarEvent(task.calendarEventId, token);
+                delete task.calendarEventId;
+                console.log("Calendar event deleted for ID:", task.calendarEventId);
+            }
+        } else if (wantsCalendarSync) {
+            alert("⚠️ ไม่สามารถซิงค์ปฏิทินได้: โปรดเชื่อมต่อ Google Drive/Calendar ในเมนู Google Integrations (ไอคอน 9 จุด) ก่อนครับ");
+        }
     } catch (err) { console.error("Calendar sync error:", err); }
+    */
 
     if (space.taskSortOrder && space.taskSortOrder !== 'manual') sortSpaceTasks(space);
     document.getElementById('task-edit-modal').style.display = 'none';

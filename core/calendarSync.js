@@ -1,7 +1,16 @@
 // core/calendarSync.js
-import { clearAuthToken } from './driveSync.js';
 
 const CALENDAR_API_BASE = 'https://www.googleapis.com/calendar/v3/calendars/primary/events';
+
+/** 🗑️ ล้าง Token ออกจากระบบ (ย้ายมาจาก driveSync เดิมเพื่อใช้กับ Calendar) */
+export async function clearAuthToken(tokenToClear, forceConsentNextTime = false) {
+    localStorage.removeItem('google_access_token');
+    if (forceConsentNextTime) localStorage.setItem('google_auth_force_consent', 'true');
+
+    if (typeof chrome !== 'undefined' && chrome.identity && tokenToClear) {
+        return new Promise(resolve => chrome.identity.removeCachedAuthToken({ token: tokenToClear }, resolve));
+    }
+}
 
 async function calendarFetch(url, token, options = {}) {
     if (!token) return null;

@@ -219,8 +219,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         btnManualExport?.addEventListener('click', () => {
             const performExport = (allData) => {
-                const target = appSettings.exportTarget || "computer";
-                const folder = (appSettings.exportSubfolder || "MyBackups").trim();
+                const settings = getAppSettings();
+                const target = settings.exportTarget || "computer";
+                const folder = (settings.exportSubfolder || "MyBackups").trim();
 
                 const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);

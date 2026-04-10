@@ -8,7 +8,6 @@ import { generateTaskHTML, attachSubtaskEventListeners, attachTaskInlineEditList
 import { renderSidebar } from '../components/sidebar.js';
 import { updateKeepTagButtonState } from './googleKeep.js';
 import { createCalendarEvent, deleteCalendarEvent } from '../core/calendarSync.js';
-import { getAuthToken } from '../core/driveSync.js';
 
 /** 🟢 Helper: จัดลำดับงานตามเงื่อนไขที่เลือก (เฉพาะ Main Tasks) */
 function sortSpaceTasks(space) {
@@ -543,7 +542,8 @@ export function initMasterEvents() {
                 return;
             }
 
-            // 🔘 Toggle Calendar Sync (Master View)
+            // TODO: Refactor Calendar Sync using chrome.identity later (Master View)
+            /*
             const calBtn = target.closest('.toggle-calendar-sync-btn');
             if (calBtn) {
                 const idx = parseInt(calBtn.dataset.index);
@@ -576,6 +576,7 @@ export function initMasterEvents() {
                 }
                 return;
             }
+            */
 
             // 🔘 Toggle Subtask Specific Controls (Master View)
             const subtaskMenuBtn = target.closest('.toggle-subtask-controls-btn');
