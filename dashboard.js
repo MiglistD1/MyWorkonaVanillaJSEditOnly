@@ -202,14 +202,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (subfolderInput) subfolderInput.value = appSettings.exportSubfolder || "MyBackups";
         if (autoExportSelect) autoExportSelect.value = appSettings.autoExportDays || 0;
-        if (mergeCheck) mergeCheck.checked = appSettings.mergeDriveData !== false;
         if (targetSelect) targetSelect.value = appSettings.exportTarget || "computer";
         updateExportUI();
 
         const saveDataManagementSettings = () => {
             appSettings.exportSubfolder = subfolderInput.value.trim() || "MyBackups";
             appSettings.autoExportDays = parseInt(autoExportSelect.value, 10);
-            if (mergeCheck) appSettings.mergeDriveData = mergeCheck.checked;
             if (targetSelect) appSettings.exportTarget = targetSelect.value;
             saveData();
             updateExportUI();
@@ -217,14 +215,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         subfolderInput?.addEventListener('change', saveDataManagementSettings);
         autoExportSelect?.addEventListener('change', saveDataManagementSettings);
-        mergeCheck?.addEventListener('change', saveDataManagementSettings);
         targetSelect?.addEventListener('change', saveDataManagementSettings);
 
         btnManualExport?.addEventListener('click', () => {
             const performExport = (allData) => {
-                const settings = getAppSettings();
-                const target = settings.exportTarget || "computer";
-                const folder = (settings.exportSubfolder || "MyBackups").trim();
+                const target = appSettings.exportTarget || "computer";
+                const folder = (appSettings.exportSubfolder || "MyBackups").trim();
 
                 const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);

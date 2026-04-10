@@ -63,11 +63,6 @@ let appSettings = {
     collapsed: false
   },
   lastUpdated: 0, // 🟢 เก็บเวลาล่าสุดที่มีการแก้ไขข้อมูล
-  driveSyncFileName: 'myworkona_todos.json',
-  driveSyncFolderName: 'MyWorkona_Backups',
-  lastDriveUpload: 0, // 🟢 เวลาที่อัปโหลดล่าสุด
-  lastDriveDownload: 0, // 🟢 เวลาที่ดาวน์โหลดล่าสุด
-  mergeDriveData: true, // 🟢 ค่าเริ่มต้น: เก็บข้อมูลเดิมที่ไม่ซ้ำเอาไว้
   focusedTask: null // 🟢 { spaceId, createdAt } เก็บงานที่กำลังโฟกัสอยู่เพียงหนึ่งเดียว
 };
 
