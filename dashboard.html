@@ -273,6 +273,11 @@
           <div style="display:flex; align-items:center; gap:6px;">
             <button class="btn-icon" id="btn-collapse-tasks-inline" title="Collapse Tasks & Notes" style="padding:2px; opacity:0.7;"><svg xmlns="http://www.w3.org/2000/svg" class="svg-icon-sm" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
             <span>✅ <span id="header-tasks-text">Tasks & Notes</span></span>
+            <select id="btn-task-sort" title="Sort Tasks" style="font-family: var(--app-font); font-size: 10px; font-weight: 700; padding: 2px 6px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-body); color: var(--text-main); cursor: pointer; outline: none; margin-left: 5px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
+                <option value="manual">⇅ Man</option>
+                <option value="date">📅 Date</option>
+                <option value="name">🔤 Name</option>
+            </select>
           </div>
           <div style="display:flex; align-items:center; gap:10px;">
             <!-- 🟢 Mobile Tag Button -->
@@ -623,6 +628,30 @@
                     <option value="30">30</option>
                     <option value="31">31</option>
                 </select>
+            </div>
+        </div>
+        <!-- 📅 Yearly Specific Options -->
+        <div id="repeat-yearly-options" style="display:none; margin-top:15px;">
+            <div class="settings-group">
+                <label>On month:</label>
+                <select id="repeat-month-of-year" class="settings-input">
+                    <option value="0">January</option>
+                    <option value="1">February</option>
+                    <option value="2">March</option>
+                    <option value="3">April</option>
+                    <option value="4">May</option>
+                    <option value="5">June</option>
+                    <option value="6">July</option>
+                    <option value="7">August</option>
+                    <option value="8">September</option>
+                    <option value="9">October</option>
+                    <option value="10">November</option>
+                    <option value="11">December</option>
+                </select>
+            </div>
+            <div class="settings-group">
+                <label>On day of month:</label>
+                <input type="number" id="repeat-yearly-day-of-month" class="settings-input" min="1" max="31" value="1">
             </div>
         </div>
 

@@ -72,7 +72,8 @@ export function applyAppSettings() {
     mobileStyle.innerHTML = `
         @media (max-width: 768px) {
             /* 1. ซ่อนส่วนที่ไม่เกี่ยวข้องกับ To-do */
-            #tabs-card, #resources-card, .topbar .search-wrapper, .topbar #global-launchers-bar, .topbar #utility-group, .topbar #btn-utility-more, #schedule-mode-bar, #focus-mode-bar, #tag-bar-container { display: none !important; }
+            #tabs-card, #resources-card, .topbar .search-wrapper, .topbar #global-launchers-bar, .topbar #utility-group, 
+            .topbar #btn-utility-more, #schedule-mode-bar, #focus-mode-bar, #tag-bar-container { display: none !important; }
             #main-grid { grid-template-columns: 1fr !important; padding: 0 !important; gap: 0 !important; }
             #tasks-card { border-radius: 0 !important; border: none !important; width: 100% !important; overflow-x: hidden !important; }
             .card-body { padding: 10px !important; }

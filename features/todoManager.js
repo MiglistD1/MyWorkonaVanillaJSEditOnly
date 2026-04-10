@@ -76,15 +76,22 @@ export function calculateNextDate(currentDateStr, repeatConfig, currentTask = {}
             // Fallback ถ้าหาไม่เจอจริงๆ (ไม่ควรเกิดขึ้น) ให้บวกไปตามจำนวนสัปดาห์ปกติ
             if (!found) date.setDate(date.getDate() + (interval * 7));
             break;
-        case 'monthly':
+        case 'monthly': {
             const targetDay = parseInt(repeatConfig.dayOfMonth) || date.getDate();
             date.setMonth(date.getMonth() + interval);
             // ปรับวันที่ให้ตรงกับที่ระบุ (JS จะจัดการเรื่องเดือนที่มี 28/30/31 วันให้โดยอัตโนมัติ)
             date.setDate(targetDay);
             break;
-        case 'yearly':
+        }
+        case 'yearly': {
+            const targetMonth = repeatConfig.monthOfYear !== undefined ? parseInt(repeatConfig.monthOfYear) : date.getMonth();
+            const targetDay = repeatConfig.dayOfMonthYear !== undefined ? parseInt(repeatConfig.dayOfMonthYear) : date.getDate();
             date.setFullYear(date.getFullYear() + interval);
+            date.setMonth(targetMonth);
+            // จัดการกรณีวันที่ 31 ในเดือนที่มี 30 วัน
+            date.setDate(targetDay);
             break;
+        }
     }
     
     const nextDateStr = date.toISOString().split('T')[0];
@@ -325,7 +332,7 @@ export function initTodoManager(callbacks) {
         const settings = getAppSettings();
         const space = getCurrentSpace();
         // หากอยู่ใน Command Center ให้ใช้ Default Object เพื่อไม่ให้ Code พัง
-        const spaceRef = space || { showTaskActions: false, hideProminentTasks: true };
+        const spaceRef = space || { showTaskActions: false, hideProminentTasks: true, taskSortOrder: 'manual' };
         const showExtra = settings.showExtraTaskSections !== false;
 
         const activeStyle = 'background: rgba(47, 128, 237, 0.15) !important; color: var(--primary-color) !important; border: 1.5px solid var(--primary-color) !important;';
@@ -337,26 +344,51 @@ export function initTodoManager(callbacks) {
                 <span style="font-size: 11px; font-weight: 900; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px;">✨ Todo Tools</span>
                 <button class="btn-icon sf-btn-close-tools" style="font-size: 18px; font-weight: bold;">✕</button>
             </div>
-            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-                <button class="sf-tool-btn" data-action="actions" style="flex:1; justify-content:center; ${spaceRef.showTaskActions ? activeStyle : inactiveStyle}">
+
+            <div style="margin-bottom: 15px; padding: 0 10px;">
+                <label style="font-size: 10px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px; display: block;">Sort Tasks By:</label>
+                <select id="sf-mobile-task-sort" class="settings-input" style="font-weight: 700; color: var(--primary-color); height: 40px; border-radius: 10px;">
+                    <option value="manual" ${spaceRef.taskSortOrder === 'manual' ? 'selected' : ''}>⇅ Manual Order</option>
+                    <option value="date" ${spaceRef.taskSortOrder === 'date' ? 'selected' : ''}>📅 Due Date</option>
+                    <option value="name" ${spaceRef.taskSortOrder === 'name' ? 'selected' : ''}>🔤 Task Name</option>
+                </select>
+            </div>
+
+            <div style="display: flex; gap: 10px; margin-bottom: 15px; padding: 0 10px;">
+                <button class="sf-tool-btn" data-action="actions" style="flex:1; justify-content:center; ${spaceRef.showTaskActions ? activeStyle : inactiveStyle}" title="Toggle Task Actions">
                     <span class="toggle-actions-btn circle-icon ${spaceRef.showTaskActions ? 'expanded' : ''}" style="margin:0; pointer-events:none; border-color: currentColor;"></span>
                 </button>
-                <button class="sf-tool-btn" data-action="flags" style="flex:1; justify-content:center; ${!spaceRef.hideProminentTasks ? activeStyle : inactiveStyle}">
+                <button class="sf-tool-btn" data-action="flags" style="flex:1; justify-content:center; ${!spaceRef.hideProminentTasks ? activeStyle : inactiveStyle}" title="Toggle Flagged Tasks">
                     <svg class="svg-icon-sm" style="width:18px; height:18px;"><use href="#icon-flag"></use></svg>
                 </button>
-                <button class="sf-tool-btn" data-action="extra" style="flex:1; justify-content:center; ${showExtra ? activeStyle : inactiveStyle}">
+                <button class="sf-tool-btn" data-action="extra" style="flex:1; justify-content:center; ${showExtra ? activeStyle : inactiveStyle}" title="Toggle Extra Sections">
                     <svg class="svg-icon-sm" style="width:18px; height:18px;"><use href="#icon-${showExtra ? 'eye' : 'eye-off'}"></use></svg>
                 </button>
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
-                <button class="sf-tool-btn" data-action="expand" style="background: var(--bg-body) !important; border: 1px solid var(--border-color) !important; justify-content: center;"><svg class="svg-icon-sm" style="margin-right:8px;"><use href="#icon-chevrons-down"></use></svg> ขยาย</button>
-                <button class="sf-tool-btn" data-action="collapse" style="background: var(--bg-body) !important; border: 1px solid var(--border-color) !important; justify-content: center;"><svg class="svg-icon-sm" style="margin-right:8px;"><use href="#icon-chevrons-up"></use></svg> ยุบ</button>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; padding: 0 10px;">
+                <button class="sf-tool-btn" data-action="expand" style="background: var(--bg-body) !important; border: 1px solid var(--border-color) !important; justify-content: center;"><svg class="svg-icon-sm" style="margin-right:8px;"><use href="#icon-chevrons-down"></use></svg> ขยายทั้งหมด</button>
+                <button class="sf-tool-btn" data-action="collapse" style="background: var(--bg-body) !important; border: 1px solid var(--border-color) !important; justify-content: center;"><svg class="svg-icon-sm" style="margin-right:8px;"><use href="#icon-chevrons-up"></use></svg> ยุบทั้งหมด</button>
             </div>
-            <button class="sf-tool-btn" data-action="templates" style="width: 100%; justify-content: center; background: var(--bg-body) !important; border: 1px solid var(--border-color) !important;"><svg class="svg-icon-sm" style="margin-right:8px;"><use href="#icon-layers"></use></svg> Templates Manager</button>
+            <div style="padding: 0 10px;">
+                <button class="sf-tool-btn" data-action="templates" style="width: 100%; justify-content: center; background: var(--bg-body) !important; border: 1px solid var(--border-color) !important;"><svg class="svg-icon-sm" style="margin-right:8px;"><use href="#icon-layers"></use></svg> Manage Templates</button>
+            </div>
         `;
 
         // ผูกเหตุการณ์ปุ่มปิด
         container.querySelector('.sf-btn-close-tools').onclick = () => container.classList.remove('is-active');
+
+        // Logic for Sort Change
+        const sortSelect = container.querySelector('#sf-mobile-task-sort');
+        if (sortSelect) {
+            sortSelect.onchange = () => {
+                if (space) {
+                    space.taskSortOrder = sortSelect.value;
+                    if (space.taskSortOrder !== 'manual') sortSpaceTasks(space);
+                    saveData(true);
+                    onRenderCallback();
+                }
+            };
+        }
 
         // ผูกเหตุการณ์ปุ่มคำสั่ง (ใช้ Delegation ภายใน Container)
         container.querySelectorAll('.sf-tool-btn').forEach(btn => {
@@ -416,6 +448,20 @@ export function initTodoManager(callbacks) {
 
     // 🟢 Moved from top level to inside init
     const taskInput = document.getElementById('new-task-input');
+    const sortSelect = document.getElementById('btn-task-sort');
+
+    if (sortSelect) {
+        sortSelect.onchange = () => {
+            const space = getCurrentSpace();
+            if (space) {
+                space.taskSortOrder = sortSelect.value;
+                if (space.taskSortOrder !== 'manual') sortSpaceTasks(space);
+                saveData(true);
+                onRenderCallback();
+            }
+        };
+    }
+
     if (taskInput) {
         taskInput.addEventListener('input', (e) => handleTagAutocomplete(e, () => getCurrentSpace()?.tags || []));
         taskInput.addEventListener('focus', () => {
@@ -641,6 +687,7 @@ export function initTodoManager(callbacks) {
     const repeatOptions = document.getElementById('repeat-options');
     const weeklyOptions = document.getElementById('repeat-weekly-options');
     const monthlyOptions = document.getElementById('repeat-monthly-options');
+    const yearlyOptions = document.getElementById('repeat-yearly-options');
     const freqSelect = document.getElementById('repeat-frequency');
     
     if (repeatEnabled) {
@@ -651,6 +698,7 @@ export function initTodoManager(callbacks) {
         freqSelect.onchange = () => {
             weeklyOptions.style.display = freqSelect.value === 'weekly' ? 'block' : 'none';
             monthlyOptions.style.display = freqSelect.value === 'monthly' ? 'block' : 'none';
+            yearlyOptions.style.display = freqSelect.value === 'yearly' ? 'block' : 'none';
         };
     }
 
@@ -665,6 +713,8 @@ export function initTodoManager(callbacks) {
         freqSelect.value = config.frequency;
         document.getElementById('repeat-interval').value = config.interval;
         document.getElementById('repeat-day-of-month').value = config.dayOfMonth || 1;
+        document.getElementById('repeat-month-of-year').value = config.monthOfYear !== undefined ? config.monthOfYear : new Date().getMonth();
+        document.getElementById('repeat-yearly-day-of-month').value = config.dayOfMonthYear || new Date().getDate();
         
         // 📅 Sync Date from external input to Modal
         const mode = repeatModal.dataset.mode;
@@ -688,6 +738,7 @@ export function initTodoManager(callbacks) {
         repeatOptions.style.display = config.isRepeating ? 'block' : 'none';
         weeklyOptions.style.display = config.frequency === 'weekly' ? 'block' : 'none';
         monthlyOptions.style.display = config.frequency === 'monthly' ? 'block' : 'none';
+        yearlyOptions.style.display = config.frequency === 'yearly' ? 'block' : 'none';
     };
 
     // 📅 ระบบ Toggle Sync Calendar สำหรับช่อง Add Task
@@ -740,6 +791,8 @@ export function initTodoManager(callbacks) {
             interval: parseInt(document.getElementById('repeat-interval').value) || 1,
             daysOfWeek: selectedDays,
             dayOfMonth: parseInt(document.getElementById('repeat-day-of-month').value) || 1,
+            monthOfYear: parseInt(document.getElementById('repeat-month-of-year').value),
+            dayOfMonthYear: parseInt(document.getElementById('repeat-yearly-day-of-month').value),
             endType: endType,
             endDate: document.getElementById('repeat-end-date').value,
             endCount: parseInt(document.getElementById('repeat-end-count').value) || 1
@@ -1547,6 +1600,8 @@ export function initTodoManager(callbacks) {
     const taskListEl = document.getElementById('task-list');
     const archiveListEl = document.getElementById('archive-list');
     const trashListEl = document.getElementById('trash-task-list');
+    const repeatingListEl = document.getElementById('repeating-waiting-list');
+    const calendarSyncListEl = document.getElementById('calendar-sync-list');
     
     // Logic สำหรับ Checkbox แยกออกมา
     const handleTaskChange = (e) => { // This handles main tasks
@@ -1607,6 +1662,13 @@ export function initTodoManager(callbacks) {
                 task.completedAt = isChecked ? Date.now() : null;
                 task.isProminent = false; // Repeating tasks should not be prominent when completed
                 // Do not touch isDeleted, deletedAt, expiryAt for repeating tasks here
+
+            if (!isChecked) {
+                task.wasRegenerated = false; // 🟢 รีเซ็ตเพื่อให้งานแสดงผลในรายการทันทีแม้จะเป็นวันอนาคต
+                // 🟢 ย้ายกลับมาไว้บนสุดของรายการ To-do เพื่อให้ผู้ใช้เห็นการเปลี่ยนแปลงชัดเจน
+                const [restoredTask] = space.tasks.splice(index, 1);
+                space.tasks.unshift(restoredTask);
+            }
 
                 if (task.subtasks) {
                     task.subtasks.forEach(sub => {
@@ -1998,6 +2060,63 @@ export function initTodoManager(callbacks) {
                 }
                 saveData();
             }
+        });
+    }
+
+    if (repeatingListEl) {
+        repeatingListEl.addEventListener('click', handleTaskClick);
+        repeatingListEl.addEventListener('click', handleProminentTaskClick);
+        repeatingListEl.addEventListener('contextmenu', handleTaskContextMenu);
+        repeatingListEl.addEventListener('change', handleTaskChange);
+        
+        attachTaskInlineEditListeners(repeatingListEl, () => getCurrentSpace(), {
+            saveData,
+            onAddMainTaskAfter: (space, index) => {
+                const newTask = { text: "", completed: false, tags: [], dueDate: null, createdAt: Date.now(), googleTaskId: null, isProminent: false, subtasks: [] };
+                space.tasks.splice(index + 1, 0, newTask);
+                saveData();
+                onRenderCallback();
+                setTimeout(() => {
+                    const items = document.querySelectorAll('#task-list .task-actual-text');
+                    const target = Array.from(items).find(el => parseInt(el.closest('li').dataset.index) === index + 1);
+                    if (target) {
+                        target.focus();
+                        const range = document.createRange();
+                        range.selectNodeContents(target);
+                        const sel = window.getSelection();
+                        sel.removeAllRanges();
+                        sel.addRange(range);
+                    }
+                }, 100);
+            },
+            onDeleteEmptyTask: (space, index, type, li) => {
+                let task;
+                if (type === 'task') {
+                    task = space.tasks[index];
+                } else {
+                    const pIdx = parseInt(li.closest('.subtask-list').dataset.parentIndex);
+                    task = space.tasks[pIdx]?.subtasks?.[index];
+                }
+                if (type === 'task') space.tasks.splice(index, 1);
+                else {
+                    const pIdx = parseInt(li.closest('.subtask-list').dataset.parentIndex);
+                    space.tasks[pIdx].subtasks.splice(index, 1);
+                }
+                saveData(); onRenderCallback();
+            },
+            onUpdate: () => onRenderCallback()
+        });
+    }
+
+    if (calendarSyncListEl) {
+        calendarSyncListEl.addEventListener('click', handleTaskClick);
+        calendarSyncListEl.addEventListener('click', handleProminentTaskClick);
+        calendarSyncListEl.addEventListener('contextmenu', handleTaskContextMenu);
+        calendarSyncListEl.addEventListener('change', handleTaskChange);
+        
+        attachTaskInlineEditListeners(calendarSyncListEl, () => getCurrentSpace(), {
+            saveData,
+            onUpdate: () => onRenderCallback()
         });
     }
 }
@@ -2489,6 +2608,11 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
     if (toggleTaskActionsBtn) {
         toggleTaskActionsBtn.innerHTML = `<span class="toggle-actions-btn circle-icon ${space.showTaskActions ? 'expanded' : ''}" style="margin: 0; pointer-events: none;"></span>`;
     }
+
+    const sortSelectUI = document.getElementById('btn-task-sort');
+    if (sortSelectUI) {
+        sortSelectUI.value = space.taskSortOrder || 'manual';
+    }
     
     const filterTags = Array.isArray(currentFilterTags) ? currentFilterTags : [];
     const isFiltered = filterTags.length > 0 || (currentSearchQuery && currentSearchQuery !== "");
@@ -2528,15 +2652,26 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
         const today = new Date().setHours(0,0,0,0);
         const taskDue = task.dueDate ? new Date(task.dueDate).setHours(0,0,0,0) : null;
         const isRepeating = task.repeatConfig && task.repeatConfig.isRepeating;
+        
+        // 🟢 แก้ไข: งานในอนาคตจะถูกซ่อนก็ต่อเมื่อ "เคยทำสำเร็จไปแล้วอย่างน้อย 1 ครั้ง" 
+        // หากเป็นงานใหม่ที่เพิ่งสร้าง (wasRegenerated ยังไม่มีค่า) จะต้องแสดงออกมาให้เห็น
+  // งานที่ทำซ้ำและยังไม่ถึงกำหนดจะถูกซ่อนจาก To-Do List หลัก
         if (!task.completed && !task.isDeleted && taskDue && taskDue > today && !task.isProminent && isRepeating) return;
 
         const isRepeatingComplete = task.completed && task.repeatConfig && task.repeatConfig.isRepeating;
-        const nextDate = isRepeatingComplete ? calculateNextDate(task.dueDate, task.repeatConfig, task) : null;
+        const isUpcomingRepeating = !task.completed && !task.isDeleted && taskDue && taskDue > today && isRepeating;
+
+        let nextDueDateForDisplay = null;
+        if (isUpcomingRepeating || isRepeatingComplete) {
+            nextDueDateForDisplay = calculateNextDate(task.dueDate, task.repeatConfig, task);
+        }
+
+        const isRepeatingWaiting = isRepeatingComplete || isUpcomingRepeating;
 
         const liContent = generateTaskHTML(task, index, {
             // ... (existing options)
-            showSpaceBadge: false, spaceId: space.id, isProminentHidden, isFiltered,
-            showActions: space.showTaskActions, isTrash: task.isDeleted, addingSubtaskToIndex, nextDueDate: nextDate
+            showSpaceBadge: false, spaceId: space.id, isProminentHidden, isFiltered, showActions: space.showTaskActions,
+            isTrash: task.isDeleted, addingSubtaskToIndex, nextDueDate: nextDueDateForDisplay
         });
         
         if (task.isDeleted) { trashHTML += liContent; trashCount++; }
@@ -2544,7 +2679,7 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
             console.log(`[renderTasks] Task ${task.text} (ID: ${task.id}) is being added to Synced Calendar Tasks. Completed: ${task.completed}, Calendar ID: ${task.calendarEventId}`);
             calendarSyncHTML += liContent; calendarSyncCount++;
         }
-        else if (isRepeatingComplete) { repeatingHTML += liContent; repeatingCount++; }
+        else if (isRepeatingWaiting) { repeatingHTML += liContent; repeatingCount++; }
         else if (task.completed) { archiveHTML += liContent; archiveCount++; }
         else { todoHTML += liContent; todoCount++; }
     });
