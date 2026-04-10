@@ -1,5 +1,5 @@
 import { initializeApp } from "./lib/firebase-app.js";
-import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "./lib/firebase-firestore.js";
+import { getFirestore, doc, setDoc, getDoc, onSnapshot, enableIndexedDbPersistence } from "./lib/firebase-firestore.js";
 import { getCurrentSpace, saveData, getSpaces, setSpaces, setOnSaveFirebaseHook, getGlobalLaunchers, setGlobalLaunchers, getLauncherTags, setLauncherTags } from "./storage.js";
 import { isAnyEditableElementFocused } from "../features/todoManager.js";
 
@@ -16,6 +16,15 @@ const firebaseConfig = {
 // Initialize Firebase
 export const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+
+enableIndexedDbPersistence(db).catch((err) => {
+    if (err.code == 'failed-precondition') {
+        console.warn('Multiple tabs open, offline mode works in one tab only.');
+    } else if (err.code == 'unimplemented') {
+        console.warn('Browser does not support offline mode.');
+    }
+});
+
 const docRef = doc(db, "data", "mynotes");
 const docRefSpaces = doc(db, "data", "myspaces");
 const docRefConfig = doc(db, "data", "globalConfig");
@@ -132,6 +141,10 @@ export function initFirebaseSync() {
 
     // 1. Listen: รับข้อมูลจาก Firebase มาอัปเดตหน้าจอ
     onSnapshot(docRef, (snapshot) => {
+        const source = snapshot.metadata.fromCache ? "Local Cache" : "Server";
+        if (snapshot.metadata.fromCache) {
+            console.log(`ℹ️ Notes data loaded from: ${source}`);
+        }
         const data = snapshot.data();
         if (data && data.content !== undefined) {
             // ตรวจสอบเพื่อป้องกัน Infinite Loop และ Cursor กระโดด
@@ -146,6 +159,10 @@ export function initFirebaseSync() {
 
     // 🟢 5. Listen: รับข้อมูล Shortcuts (Launchers) จาก Cloud
     onSnapshot(docRefConfig, (snapshot) => {
+        const source = snapshot.metadata.fromCache ? "Local Cache" : "Server";
+        if (snapshot.metadata.fromCache) {
+            console.log(`ℹ️ Config data loaded from: ${source}`);
+        }
         const data = snapshot.data();
         if (data) {
             let needsRender = false;
@@ -170,6 +187,10 @@ export function initFirebaseSync() {
         // ป้องกันการทับข้อมูลขณะผู้ใช้กำลังพิมพ์งานหรือชื่อ Space
         if (isAnyEditableElementFocused()) return;
 
+        const source = snapshot.metadata.fromCache ? "Local Cache" : "Server";
+        if (snapshot.metadata.fromCache) {
+            console.log(`ℹ️ Spaces data loaded from: ${source}`);
+        }
         const data = snapshot.data();
         if (data && data.spaces) {
             const localSpaces = getSpaces();
