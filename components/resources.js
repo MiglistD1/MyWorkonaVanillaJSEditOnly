@@ -2,6 +2,7 @@
 
 import Sortable from '../sortable.esm.js';
 import { getSpaces, getCurrentSpaceId, saveData, getCurrentSpace, getAppSettings } from '../core/storage.js';
+import { mergeArrays } from '../core/firebaseSync.js';
 import { svgEdit, svgTrashRed, dragHandleSvg, svgSideView, svgArchive, svgUnarchive, svgRestore } from '../core/icons.js';
 import { openOrFocusTab, generateMiniTagsBtn, getFaviconUrl, getTrashCountdownText } from '../core/ui-helpers.js';
 

@@ -162,7 +162,30 @@ export async function forcePullNote() {
 }
 
 /**
- * 🚀 เริ่มต้นระบบ Real-time Sync สำหรับ Note
+ * 🟢 Helper: Merge two arrays of objects based on a unique key, prioritizing cloud data.
+ */
+export function mergeArrays(cloudArray, localArray, uniqueKey) {
+    const mergedMap = new Map();
+
+    // Start with local data
+    (localArray || []).forEach(item => {
+        if (item && item[uniqueKey] !== undefined) {
+            mergedMap.set(item[uniqueKey], item);
+        }
+    });
+
+    // Overwrite/Add with cloud data (prioritize cloud version)
+    (cloudArray || []).forEach(item => {
+        if (item && item[uniqueKey] !== undefined) {
+            mergedMap.set(item[uniqueKey], item);
+        }
+    });
+
+    return Array.from(mergedMap.values());
+}
+
+/**
+ * � เริ่มต้นระบบ Real-time Sync สำหรับ Note
  */
 export function initFirebaseSync() {
     const workspaceNote = document.getElementById('workspace-note');
@@ -222,13 +245,46 @@ export function initFirebaseSync() {
         }
         const data = snapshot.data();
         if (data && data.spaces) {
+            const cloudSpaces = data.spaces;
             const localSpaces = getSpaces();
-            // ตรวจสอบความแตกต่างของข้อมูลเพื่อป้องกัน Infinite Loop
-            if (JSON.stringify(localSpaces) !== JSON.stringify(data.spaces)) {
-                setSpaces(data.spaces);
-                // เรียกใช้ฟังก์ชันวาดหน้าจอใหม่จาก Global (นิยามใน dashboard.js)
-                if (window.renderAll) window.renderAll();
-                updateSyncStatusUI('synced');
+            const rawDiff = JSON.stringify(localSpaces) !== JSON.stringify(cloudSpaces);
+
+            if (rawDiff) {
+                // 🟢 ตรวจสอบ Conflict เฉพาะใน Tasks และ Resources (รวมถึง Drive Files)
+                const hasConflict = cloudSpaces.some(cloudSpace => {
+                    const localSpace = localSpaces.find(s => s.id === cloudSpace.id);
+                    if (!localSpace) return false; 
+
+                    const tasksDiff = JSON.stringify(cloudSpace.tasks) !== JSON.stringify(localSpace.tasks);
+                    const resDiff = JSON.stringify(cloudSpace.resources) !== JSON.stringify(localSpace.resources);
+                    const driveDiff = JSON.stringify(cloudSpace.driveFiles) !== JSON.stringify(localSpace.driveFiles);
+
+                    return tasksDiff || resDiff || driveDiff;
+                });
+
+                if (hasConflict) {
+                    if (confirm("พบข้อมูล [To-do / Resources] บนคลาวด์ไม่ตรงกับในเครื่อง คุณต้องการรวมข้อมูล (Merge) หรือไม่?")) {
+                        const mergedSpaces = cloudSpaces.map(cloudSpace => {
+                            const localSpace = localSpaces.find(s => s.id === cloudSpace.id);
+                            if (!localSpace) return cloudSpace;
+
+                            return {
+                                ...cloudSpace,
+                                tasks: mergeArrays(cloudSpace.tasks, localSpace.tasks, 'text'),
+                                resources: mergeArrays(cloudSpace.resources, localSpace.resources, 'url'),
+                                driveFiles: mergeArrays(cloudSpace.driveFiles, localSpace.driveFiles, 'url')
+                            };
+                        });
+                        setSpaces(mergedSpaces);
+                        if (window.renderAll) window.renderAll();
+                        setDoc(docRefSpaces, { spaces: mergedSpaces }, { merge: true });
+                        updateSyncStatusUI('synced');
+                    }
+                } else {
+                    setSpaces(cloudSpaces);
+                    if (window.renderAll) window.renderAll();
+                    updateSyncStatusUI('synced');
+                }
             }
         }
     });
