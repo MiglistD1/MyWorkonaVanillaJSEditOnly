@@ -1,4 +1,6 @@
 import { initFocusTimer } from './features/focusTimer.js';
+import { initFirebaseSync } from "./core/firebaseSync.js";
+
 import { initScheduleMode } from './features/scheduleMode.js';
 import { initSidebar, renderSidebar } from './components/sidebar.js';
 import { initTabs } from './components/tabs.js';
@@ -140,6 +142,7 @@ document.addEventListener('DOMContentLoaded', () => {
         initGoogleKeep();
         initCustomLaunchers();
         initDashboardQuickNote();
+        initFirebaseSync();
         initRewardSystem();
 
         const unarchiveBtn = document.getElementById('btn-unarchive-from-banner');
@@ -274,7 +277,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btnImportData?.addEventListener('click', () => fileImportInput?.click());
 
         fileImportInput?.addEventListener('change', (e) => {
-            const file = e.target.files[0];
+            const file = e.target.files?.[0];
             if (!file) return;
             const reader = new FileReader();
             reader.onload = (event) => {

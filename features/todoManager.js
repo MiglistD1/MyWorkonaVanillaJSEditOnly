@@ -3,8 +3,6 @@ import { svgEdit, svgTrashRed, svgRepeat } from '../core/icons.js';
 import { getCurrentSpace, saveData, getShortDate, getAppSettings, setCurrentSpaceId, getSpaces, getFilterTags, loadData, getGlobalLaunchers, getLauncherTags, getCurrentSpaceId, getFilterMode } from '../core/storage.js';
 import { generateMiniTagsBtn, generateTaskHTML, attachSubtaskEventListeners, attachTaskInlineEditListeners, handleTagAutocomplete, applySyntaxHighlighting } from '../core/ui-helpers.js';
 
-import { saveToDrive, getAuthToken } from '../core/driveSync.js';
-import { svgRefresh, svgSpinner } from '../core/icons.js';
 import { checkAndResetHabits, renderHabitList } from './habitSheet.js';
 import { createCalendarEvent, updateCalendarEvent, deleteCalendarEvent } from '../core/calendarSync.js';
 
@@ -34,31 +32,6 @@ function sortSpaceTasks(space) {
         }
         return 0;
     });
-}
-
-/** ☁️ ฟังก์ชันสำหรับสั่ง Sync ข้อมูลขึ้น Google Drive อัตโนมัติ (Background Auto-Sync) */
-async function triggerCloudSave() {
-    // ตรวจสอบสถานะการล็อกอินแบบเงียบๆ (ไม่เด้งหน้าต่างถาม)
-    const token = await getAuthToken(false);
-    if (!token) return; // ถ้าไม่ได้ล็อกอิน Drive ไว้ ก็ไม่ต้องทำอะไรต่อ
-
-    // เตรียมข้อมูลชุดเดียวกับที่ระบบ Restore (loadFromDrive) ต้องการ
-    const fullAppData = {
-        mySpacesData: getSpaces(),
-        appSettings: getAppSettings(),
-        lastSpaceId: getCurrentSpaceId(),
-        globalLaunchers: getGlobalLaunchers(),
-        launcherTags: getLauncherTags()
-    };
-
-    // ระบบ Debounce: หน่วงเวลา 5 วินาทีก่อนเซฟ เพื่อรวบรวมการแก้ไขหลายๆ อย่างไว้ในครั้งเดียว
-    if (window._driveSyncTimeout) clearTimeout(window._driveSyncTimeout);
-    window._driveSyncTimeout = setTimeout(() => {
-        // เรียกใช้ฟังก์ชันที่เตรียมไว้ใน window (หรือจะเรียกจาก import ก็ได้)
-        window.saveToDrive(fullAppData).then(success => {
-            if (success) console.log("☁️ Auto-synced tasks to Google Drive");
-        });
-    }, 5000);
 }
 
 /** 🔄 Helper: Calculate next due date with End Conditions */
@@ -1002,7 +975,27 @@ export function initTodoManager(callbacks) {
     document.getElementById('btn-undo-note').addEventListener('mousedown', (e) => { e.preventDefault(); document.execCommand('undo', false, null); getCurrentSpace().note = document.getElementById('workspace-note').innerHTML; saveData(); });
     document.querySelectorAll('.note-toolbar select').forEach(el => { el.addEventListener('change', (e) => { document.execCommand(e.target.dataset.cmd, false, e.target.value); getCurrentSpace().note = document.getElementById('workspace-note').innerHTML; saveData(); }); });
     
-    workspaceNote.addEventListener('input', (e) => { getCurrentSpace().note = e.target.innerHTML; saveData(); });
+    workspaceNote.addEventListener('input', (e) => { 
+        const content = e.target.innerHTML;
+        getCurrentSpace().note = content; 
+        saveData(); 
+        // Sync local changes to Firestore
+        setDoc(docRef, { content: content }, { merge: true });
+    });
+
+    // Setup real-time listener from Firestore
+    onSnapshot(docRef, (snapshot) => {
+        const data = snapshot.data();
+        if (data && data.content !== undefined) {
+            // Update UI only if content is different to avoid infinite loops and cursor jumping
+            if (workspaceNote && workspaceNote.innerHTML !== data.content) {
+                workspaceNote.innerHTML = data.content;
+                const space = getCurrentSpace();
+                if (space) space.note = data.content;
+            }
+        }
+    });
+
 
     // 🟢 Smart Checkbox Logic for Workspace Note
     const CHECKBOX_HTML = '<label class="google-task-checkbox" contenteditable="false" style="display:inline-flex; align-items:center; margin-right:8px; vertical-align:middle;"><input type="checkbox"> <div class="checkmark-circle"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg></div></label>&nbsp;';
@@ -1313,7 +1306,6 @@ export function initTodoManager(callbacks) {
                 }
                 saveData();
                 onRenderCallback();
-                triggerCloudSave();
             }
         }
         // Permanent Delete Task
@@ -1328,7 +1320,6 @@ export function initTodoManager(callbacks) {
                 }
                 space.tasks.splice(idx, 1);
                 saveData(); onRenderCallback();
-                triggerCloudSave();
             }
         }
         // 🟢 NEW: Permanent Delete Subtask
@@ -1346,7 +1337,6 @@ export function initTodoManager(callbacks) {
                 space.tasks[pIdx].subtasks.splice(sIdx, 1);
                 saveData();
                 onRenderCallback();
-                triggerCloudSave();
             }
         }
 
@@ -1397,7 +1387,6 @@ export function initTodoManager(callbacks) {
                 // สร้างเป็น Main Task ใหม่ (ไม่มีงานย่อยติดไป)
                 space.tasks.push({ ...sub, subtasks: [], createdAt: Date.now() });
                 saveData(); // Save data locally
-                triggerCloudSave(); // Trigger cloud save after converting
                 onRenderCallback(); // Rerender UI
             }
         }
@@ -1715,7 +1704,6 @@ export function initTodoManager(callbacks) {
             }
 
             saveData(true); // บันทึกทันที
-            triggerCloudSave(); // ☁️ ซิงค์ไปที่ Cloud หลังเปลี่ยนสถานะงาน
 
             // 🟢 เอาการหน่วงเวลาออกตามคำขอเพื่อให้ UI ลื่นไหลขึ้น
             onRenderCallback(); 
@@ -2278,7 +2266,6 @@ async function addTask() {
         input.value = ''; input.disabled = false; input.placeholder = "Type a task..."; input.focus();
         dateInput.value = ''; updateDateInputLabel(dateInput);
         saveData(); 
-        triggerCloudSave(); // ☁️ ซิงค์ไปที่ Cloud หลังเพิ่มงานใหม่
         onRenderCallback(); 
     } 
 }
@@ -2382,7 +2369,6 @@ async function saveEditedTask() {
     document.getElementById('task-edit-modal').style.display = 'none';
     btnSave.innerText = "Save"; btnSave.disabled = false;
     saveData(); 
-    triggerCloudSave(); // ☁️ ซิงค์ไปที่ Cloud หลังแก้ไขเสร็จ
     if (_fromCommandCenter) {
         setCurrentSpaceId(0); // Reset to Command Center
         if (window.renderDefaultDashboard) window.renderDefaultDashboard(); // 🟢 แก้ไข: เรียกผ่าน window เพื่อป้องกัน Reference Error
@@ -2473,7 +2459,6 @@ async function saveTaskLink() {
     if (task) {
         task.linkData = { url, isSideview };
         saveData();
-        triggerCloudSave(); // ☁️ ซิงค์ไปที่ Cloud
         document.getElementById('task-link-modal').style.display = 'none';
         if (editingLinkSpaceId === 0 || window._isModalOpenedFromCommandCenter) {
             import('./defaultDashboard.js').then(m => m.renderDefaultDashboard());
