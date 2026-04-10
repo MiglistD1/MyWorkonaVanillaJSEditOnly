@@ -1,6 +1,8 @@
 // core/calendarSync.js
 
 const CALENDAR_API_BASE = 'https://www.googleapis.com/calendar/v3/calendars/primary/events';
+import { getAuth, signInWithPopup, GoogleAuthProvider } from "./lib/firebase-auth.js";
+import { app } from "./firebaseSync.js";
 
 /** 🔑 Hybrid token provider for Extension (Identity API) and Web (Firebase Auth) */
 export async function getAuthToken(interactive = true) {
@@ -20,7 +22,7 @@ export async function getAuthToken(interactive = true) {
     // 2. Web App Environment (Firebase Auth)
     try {
         // Dynamic import to avoid loading Firebase Auth in the extension environment
-        const { getAuth, signInWithPopup, GoogleAuthProvider } = await import('./lib/firebase-auth.js');
+        // const { getAuth, signInWithPopup, GoogleAuthProvider } = await import('./lib/firebase-auth.js'); // Already imported
         const auth = getAuth();
         
         if (!auth.currentUser && !interactive) return null;
@@ -47,7 +49,7 @@ export async function clearAuthToken(tokenToClear) {
         return new Promise(resolve => chrome.identity.removeCachedAuthToken({ token: tokenToClear }, resolve));
     } else {
         try {
-            const { getAuth, signOut } = await import('./lib/firebase-auth.js');
+            const { signOut } = await import('./lib/firebase-auth.js'); // getAuth already imported
             await signOut(getAuth());
         } catch (e) { console.error("SignOut Error:", e); }
     }
