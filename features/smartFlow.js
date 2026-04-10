@@ -343,7 +343,10 @@ export async function initSmartFlow() {
                 flowState.isPaused = ft.isPaused;
             }
 
-            if (needsRender) renderFlowList();
+            if (needsRender) {
+                const container = document.getElementById('smart-flow-container');
+                if (container) renderSmartFlow(container);
+            }
         }
     });
 
@@ -399,6 +402,7 @@ function checkAndResetFlowItems() {
  */
 export function renderSmartFlow(container) {
     if (!container) return;
+    if (isAnyEditableElementFocused()) return;
     
     // Create basic structure if not exists
     container.innerHTML = `
@@ -682,6 +686,7 @@ function renderFlowList() {
     const archivedListEl = document.getElementById('smart-flow-archived-list');
     const archivedContainer = document.getElementById('sf-archived-container');
     if (!listEl) return;
+    if (isAnyEditableElementFocused()) return;
     console.log("renderFlowList() called."); // Added for debugging
 
     checkAndResetFlowItems(); // 🟢 รีเซ็ตสถานะก่อนวาดรายการ
@@ -881,11 +886,13 @@ function renderFlowList() {
 
                 if (unarchiveBtn) {
                     item.isArchived = false;
-                    saveFlow().then(() => renderSmartFlow(document.getElementById('smart-flow-container')));
+                    renderSmartFlow(document.getElementById('smart-flow-container'));
+                    saveFlow();
                 } else if (deleteBtn) {
                     if (confirm("Delete this step permanently?")) {
                         flowItems = flowItems.filter(fi => fi.id !== id);
-                        saveFlow().then(() => renderSmartFlow(document.getElementById('smart-flow-container')));
+                        renderSmartFlow(document.getElementById('smart-flow-container'));
+                        saveFlow();
                     }
                 }
             };
@@ -1318,16 +1325,19 @@ function attachFlowEvents(listEl) {
         if (deleteBtn) {
             if (confirm("Delete this workflow step?")) {
                 flowItems = flowItems.filter(fi => fi.id !== id);
-                saveFlow().then(renderFlowList);
+                renderFlowList();
+                saveFlow();
             }
         } else if (archiveBtn) {
             item.isArchived = true;
-            saveFlow().then(() => renderSmartFlow(document.getElementById('smart-flow-container')));
+            renderSmartFlow(document.getElementById('smart-flow-container'));
+            saveFlow();
         } else if (resetBtn) {
             // 🟢 ล้างสถานะให้กลับมาเป็นงานใหม่ พร้อมกดซ้ำได้ทันที
             item.isCompleted = false;
             if (item.repeatConfig) item.repeatConfig.lastCompletedDate = null;
-            saveFlow().then(renderFlowList);
+            renderFlowList();
+            saveFlow();
         } else if (noteBtn) {
             // 🟢 Requirement 1: แก้ไข Note ได้ตลอดเวลาจากเมนู 3 จุด
             const spaces = getSpaces();
@@ -1532,7 +1542,8 @@ async function processFlowCompletion(item, shouldClaimRewards, e) {
         playSuccessSound();
     }
 
-    saveFlow().then(renderFlowList);
+    renderFlowList();
+    saveFlow();
 }
 
 /**
@@ -1608,6 +1619,7 @@ async function showPostTransitionConfirmPopup(item) {
         // ✔ ปุ่มสำเร็จ
         document.getElementById('sf-btn-res-success').onclick = async (e) => {
             await processFlowCompletion(item, true, e);
+            renderFlowList();
             closeResultPopup();
             resolve(true);
         };
@@ -2478,7 +2490,8 @@ function duplicateFlowItem(originalId) {
     if (duplicatedItem.repeatConfig) duplicatedItem.repeatConfig.lastCompletedDate = null; // รีเซ็ตวันที่ทำล่าสุด
 
     flowItems.splice(originalItemIndex + 1, 0, duplicatedItem); // แทรก Step ที่คัดลอกไว้ต่อจาก Step ต้นฉบับ
-    saveFlow().then(renderFlowList);
+    renderFlowList();
+    saveFlow();
 }
 
 /**
