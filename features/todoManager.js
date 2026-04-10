@@ -1281,7 +1281,6 @@ export function initTodoManager(callbacks) {
             const task = space.tasks[idx];
             task.isDeleted = true;
             task.deletedAt = Date.now();
-            playTrashSound();
             const days = getAppSettings().autoDeleteDays || 30;
             task.expiryAt = task.deletedAt + (days * 24 * 60 * 60 * 1000);
             task.completed = false; // เอากลับมาเป็นงานที่ยังไม่เสร็จเผื่อกู้คืน

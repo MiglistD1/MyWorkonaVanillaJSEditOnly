@@ -40,9 +40,11 @@ export function initFirebaseSync() {
     // 2. Push: เมื่อเราพิมพ์ ให้ส่งขึ้น Firebase ทันที
     workspaceNote.addEventListener('input', (e) => {
         const content = e.target.innerHTML;
-        const space = getCurrentSpace();
-        if (space) space.note = content;
-        saveData(); // Save Local Storage
-        setDoc(docRef, { content: content }, { merge: true }); // Sync to Cloud
+        // Only sync to cloud if the content has actually changed to avoid unnecessary writes
+        if (getCurrentSpace()?.note !== content) {
+            getCurrentSpace().note = content;
+            saveData(); // Save Local Storage
+            setDoc(docRef, { content: content }, { merge: true }); // Sync to Cloud
+        }
     });
 }
