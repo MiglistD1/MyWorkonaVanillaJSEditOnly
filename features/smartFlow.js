@@ -1,8 +1,26 @@
+import { initializeApp } from "../core/lib/firebase-app.js";
+import { getFirestore, doc, setDoc, onSnapshot } from "../core/lib/firebase-firestore.js";
 import { getSpaces, saveData, getAppSettings, getCurrentSpace } from '../core/storage.js';
 import Sortable from '../sortable.esm.js';
 import { renderSidebar } from '../components/sidebar.js';
 import { svgArchive, svgUnarchive, svgTrashRed } from '../core/icons.js';
 import { handleTagAutocomplete, applySyntaxHighlighting } from '../core/ui-helpers.js';
+import { isAnyEditableElementFocused } from './todoManager.js';
+
+// Firebase config
+const firebaseConfig = {
+    apiKey: "AIzaSyCVX63Zj9RIJmHEfVCN5g3uP8dojeXniPg",
+    authDomain: "myworkona-realtime.firebaseapp.com",
+    projectId: "myworkona-realtime",
+    storageBucket: "myworkona-realtime.firebasestorage.app",
+    messagingSenderId: "659357151725",
+    appId: "1:659357151725:web:024039ffc44a290f98b7e4"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const docRefSmartFlow = doc(db, "data", "smartflow");
 
 const svgMenu = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.6;"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>`;
 
@@ -304,6 +322,34 @@ export async function initSmartFlow() {
         flowState.isPaused = res.smartFlowFocusTimer.isPaused;
     }
 
+    // 🟢 ระบบ Real-time Listener สำหรับ Smart Flow
+    onSnapshot(docRefSmartFlow, (snapshot) => {
+        // ป้องกันการวาดทับขณะผู้ใช้กำลังพิมพ์ชื่อ Step หรือโน้ต
+        if (isAnyEditableElementFocused()) return;
+
+        const data = snapshot.data();
+        if (data) {
+            let needsRender = false;
+
+            // ตรวจสอบความเปลี่ยนแปลงของรายการ Step
+            if (JSON.stringify(flowItems) !== JSON.stringify(data.smartFlowItems)) {
+                flowItems = data.smartFlowItems || [];
+                needsRender = true;
+            }
+
+            // อัปเดตสถานะ Focus Timer (ซิงค์ปุ่ม Start/Stop/Time ข้ามเครื่อง)
+            if (data.smartFlowFocusTimer) {
+                const ft = data.smartFlowFocusTimer;
+                flowState.focusMode = ft.focusMode;
+                flowState.isFocusRunning = ft.isFocusRunning;
+                flowState.focusTimeLeft = ft.focusTimeLeft;
+                flowState.isPaused = ft.isPaused;
+            }
+
+            if (needsRender) renderFlowList();
+        }
+    });
+
     initSmartFlowSettingsModal(); // Initialize the settings modal once
     initSmartFlowDependenciesModal(); // Initialize the dependencies modal
     isFlowDataLoaded = true;
@@ -329,6 +375,9 @@ export async function saveFlow() {
     } else {
         Object.keys(data).forEach(key => localStorage.setItem(key, JSON.stringify(data[key])));
     }
+
+    // 🟢 ซิงค์ข้อมูล Smart Flow ไปยัง Firestore แบบ Real-time
+    await setDoc(docRefSmartFlow, data, { merge: true });
 }
 
 /**

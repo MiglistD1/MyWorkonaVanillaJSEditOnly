@@ -2,13 +2,54 @@
 
 const CALENDAR_API_BASE = 'https://www.googleapis.com/calendar/v3/calendars/primary/events';
 
-/** 🗑️ ล้าง Token ออกจากระบบ (ย้ายมาจาก driveSync เดิมเพื่อใช้กับ Calendar) */
-export async function clearAuthToken(tokenToClear, forceConsentNextTime = false) {
-    localStorage.removeItem('google_access_token');
-    if (forceConsentNextTime) localStorage.setItem('google_auth_force_consent', 'true');
+/** 🔑 Hybrid token provider for Extension (Identity API) and Web (Firebase Auth) */
+export async function getAuthToken(interactive = true) {
+    // 1. Chrome Extension Environment (Manifest V3)
+    if (typeof chrome !== 'undefined' && chrome.identity) {
+        return new Promise((resolve) => {
+            chrome.identity.getAuthToken({ interactive }, (token) => {
+                if (chrome.runtime.lastError) {
+                    console.warn("Identity API Error:", chrome.runtime.lastError.message);
+                    return resolve(null);
+                }
+                resolve(token);
+            });
+        });
+    }
 
+    // 2. Web App Environment (Firebase Auth)
+    try {
+        // Dynamic import to avoid loading Firebase Auth in the extension environment
+        const { getAuth, signInWithPopup, GoogleAuthProvider } = await import('./lib/firebase-auth.js');
+        const auth = getAuth();
+        
+        if (!auth.currentUser && !interactive) return null;
+
+        const provider = new GoogleAuthProvider();
+        // Essential scope for Calendar access
+        provider.addScope('https://www.googleapis.com/auth/calendar.events');
+
+        // Note: For web apps, we trigger popup if a fresh access token is needed
+        if (interactive || !auth.currentUser) {
+            const result = await signInWithPopup(auth, provider);
+            const credential = GoogleAuthProvider.credentialFromResult(result);
+            return credential.accessToken;
+        }
+    } catch (error) {
+        console.error("Firebase Auth Error:", error);
+    }
+    return null;
+}
+
+/** 🗑️ ล้าง Token ออกจากระบบ (ย้ายมาจาก driveSync เดิมเพื่อใช้กับ Calendar) */
+export async function clearAuthToken(tokenToClear) {
     if (typeof chrome !== 'undefined' && chrome.identity && tokenToClear) {
         return new Promise(resolve => chrome.identity.removeCachedAuthToken({ token: tokenToClear }, resolve));
+    } else {
+        try {
+            const { getAuth, signOut } = await import('./lib/firebase-auth.js');
+            await signOut(getAuth());
+        } catch (e) { console.error("SignOut Error:", e); }
     }
 }
 
@@ -44,7 +85,7 @@ async function calendarFetch(url, token, options = {}) {
                 }
 
                 // ล้าง Token ทั้งหมด และส่ง flag 'forceConsent' เพื่อให้รอบหน้าเด้งหน้าต่างเลือกสิทธิ์ใหม่
-                await clearAuthToken(token || localStorage.getItem('google_access_token'), true);
+                await clearAuthToken(token);
             }
             return null;
         }
@@ -72,15 +113,10 @@ export async function createCalendarEvent(task, token) {
         start: { date: startStr },
         end: { date: endStr }
     };
-    return await calendarFetch(CALENDAR_API_BASE, token, {
+    const result = await calendarFetch(CALENDAR_API_BASE, token, {
         method: 'POST',
         body: JSON.stringify(body)
     });
-    if (result && result.id) {
-        console.log("Google Calendar API: Event created successfully with ID:", result.id, "for task:", task.text);
-    } else {
-        console.error("Google Calendar API: Failed to create event. Response:", result);
-    }
     return result;
 }
 

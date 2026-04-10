@@ -1,3 +1,6 @@
+let firebaseSaveHook = null;
+export const setOnSaveFirebaseHook = (cb) => { firebaseSaveHook = cb; };
+
 let spaces = [];
 let currentSpaceId = 1;
 let sharedSpaceId = null;
@@ -165,6 +168,10 @@ export function saveData(immediate = false) {
         // ⏱️ อัปเดต Timestamp ทุกครั้งก่อนบันทึกจริง เพื่อระบุว่าข้อมูลก้อนนี้คือเวอร์ชันล่าสุด
         appSettings.lastUpdated = Date.now();
         const data = { 'mySpacesData': spaces, 'lastSpaceId': currentSpaceId, 'appSettings': appSettings, 'globalLaunchers': globalLaunchers, 'launcherTags': launcherTags };
+        
+        // 🟢 เรียกใช้ Firebase Hook ถ้ามีการลงทะเบียนไว้
+        if (firebaseSaveHook) firebaseSaveHook(data);
+        
         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
             saveDataItem(data); 
         } else {

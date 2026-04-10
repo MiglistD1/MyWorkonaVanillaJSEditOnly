@@ -110,7 +110,7 @@ export function applyAppSettings() {
                 width: auto !important;
                 align-items: center !important;
             }
-            .topbar-nav-group .btn-icon, #btn-drive-sync {
+            .topbar-nav-group .btn-icon {
                 width: 30px !important; height: 30px !important;
                 padding: 0 !important; 
                 opacity: 1 !important;
@@ -128,6 +128,10 @@ export function applyAppSettings() {
             #drive-sync-container, .drive-sync-wrapper { order: 3 !important; margin: 0 !important; display: flex !important; width: 30px !important; height: 30px !important; }
             #drive-sync-container { margin-left: 8px !important; }
             #btn-drive-sync span { display: none !important; } /* ซ่อนข้อความ Connected เหลือแค่ไอคอน */
+
+            /* 🟢 ปรับแต่ง Firebase Sync เมื่ออยู่ในกลุ่ม Navigation มือถือ */
+            #firebase-sync-container { margin-right: 0 !important; }
+            #btn-firebase-sync-trigger { width: 30px !important; height: 30px !important; }
 
             /* 🟢 เมื่อเปิด Sidebar: ดัน Topbar ขึ้นมาข้างบนสุด และย้ายปุ่มไปกองที่ขอบซ้าย */
             #spacebar:not(.collapsed) ~ .workspace .topbar {

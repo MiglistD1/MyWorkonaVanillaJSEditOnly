@@ -1,5 +1,5 @@
 import { initFocusTimer } from './features/focusTimer.js';
-import { initFirebaseSync } from "./core/firebaseSync.js";
+import { initFirebaseSync, forcePushNote, forcePullNote } from "./core/firebaseSync.js";
 
 import { initScheduleMode } from './features/scheduleMode.js';
 import { initSidebar, renderSidebar } from './components/sidebar.js';
@@ -112,6 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Make the smart tab opener globally available for other modules
         window.openOrFocusTab = openOrFocusTab;
         window.handleSpaceChange = handleSpaceChange;
+        window.renderAll = renderAll;
         
         // Initialize Core Modules
         applyAppSettings();
@@ -144,6 +145,27 @@ document.addEventListener('DOMContentLoaded', () => {
         initDashboardQuickNote();
         initFirebaseSync();
         initRewardSystem();
+
+        // 🛰️ Firebase Sync Manual Actions
+        const syncTrigger = document.getElementById('btn-firebase-sync-trigger');
+        const syncPopup = document.getElementById('firebase-sync-popup');
+
+        if (syncTrigger && syncPopup) {
+            syncTrigger.onclick = (e) => {
+                e.stopPropagation();
+                const isHidden = syncPopup.style.display === 'none';
+                syncPopup.style.display = isHidden ? 'flex' : 'none';
+            };
+            
+            document.addEventListener('click', (e) => {
+                if (!syncPopup.contains(e.target) && e.target !== syncTrigger) {
+                    syncPopup.style.display = 'none';
+                }
+            });
+        }
+
+        document.getElementById('btn-firebase-push')?.addEventListener('click', () => { forcePushNote(); if(syncPopup) syncPopup.style.display = 'none'; });
+        document.getElementById('btn-firebase-pull')?.addEventListener('click', () => { forcePullNote(); if(syncPopup) syncPopup.style.display = 'none'; });
 
         const unarchiveBtn = document.getElementById('btn-unarchive-from-banner');
         if (unarchiveBtn) {

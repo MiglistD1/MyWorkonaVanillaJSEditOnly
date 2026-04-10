@@ -149,9 +149,29 @@
 
       <h1 class="workspace-title" id="current-space-title">Loading...</h1>
       <div id="global-launchers-bar" class="launchers-bar"></div>
-        <!-- ☁️ Drive Sync Button (Back to Topbar) -->
-      <div id="drive-sync-container" style="display: flex; align-items: center; gap: 10px;">
-        <button id="btn-drive-sync" class="btn-icon" title="Sync with Google Drive"></button>
+      
+      <!-- 🛰️ Firebase Real-time Sync Section -->
+      <div id="firebase-sync-container" style="position: relative; display: flex; align-items: center; margin-right: 10px;">
+        <button id="btn-firebase-sync-trigger" class="btn-icon" title="Cloud Sync Settings" style="background: var(--bg-body); border: 1px solid var(--border-color); border-radius: 8px; width: 32px; height: 32px; padding: 0;">
+          <svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
+        </button>
+        <div id="firebase-sync-popup" class="dropdown-menu" style="display: none; top: 115%; right: 0; min-width: 140px; padding: 12px; flex-direction: column; gap: 10px; align-items: center;">
+          <div style="font-size: 10px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; width: 100%; text-align: center; border-bottom: 1px solid var(--border-color); padding-bottom: 6px;">Sync Status</div>
+          <div id="sync-status-indicator" style="display: flex; align-items: center; justify-content: center; width: 24px; height: 24px;">
+            <!-- Synced State (Default) -->
+            <svg id="sync-icon-synced" class="svg-icon" style="color: #10b981; width: 20px; height: 20px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            <!-- Syncing State (Hidden) -->
+            <svg id="sync-icon-syncing" class="svg-icon spin" style="display:none; width: 20px; height: 20px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg>
+            <!-- Offline State (Hidden) -->
+            <svg id="sync-icon-offline" class="svg-icon" style="display:none; color: #ef4444; width: 20px; height: 20px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+          </div>
+          <div id="firebase-last-sync-time" style="font-size: 9px; color: var(--text-muted); margin-top: -5px; text-align: center; width: 100%;">Last Synced: Never</div>
+          <div style="width: 100%; height: 1px; background: var(--border-color); opacity: 0.5;"></div>
+          <div style="display: flex; gap: 8px; width: 100%;">
+            <button id="btn-firebase-push" class="btn btn-outline" title="Force Push to Cloud" style="flex: 1; justify-content: center; padding: 6px;"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg> Push</button>
+            <button id="btn-firebase-pull" class="btn btn-outline" title="Force Pull from Cloud" style="flex: 1; justify-content: center; padding: 6px;"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg> Pull</button>
+          </div>
+        </div>
       </div>
       <div id="utility-group" class="utility-group">
         <div class="search-container"><svg class="svg-icon-sm" style="color:var(--text-muted);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg><input type="text" id="quick-search-input" placeholder="Search..."></div>

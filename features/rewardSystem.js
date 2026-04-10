@@ -1,6 +1,23 @@
+import { initializeApp } from "../core/lib/firebase-app.js";
+import { getFirestore, doc, setDoc, onSnapshot } from "../core/lib/firebase-firestore.js";
 import { svgTrashRed, svgPencil } from '../core/icons.js';
 import { getSpaces, saveData, getThaiUnit, getUnitCharFromThai } from '../core/storage.js';
 import { saveFlow, flowState, getFlowItems } from './smartFlow.js';
+
+// Firebase config
+const firebaseConfig = {
+    apiKey: "AIzaSyCVX63Zj9RIJmHEfVCN5g3uP8dojeXniPg",
+    authDomain: "myworkona-realtime.firebaseapp.com",
+    projectId: "myworkona-realtime",
+    storageBucket: "myworkona-realtime.firebasestorage.app",
+    messagingSenderId: "659357151725",
+    appId: "1:659357151725:web:024039ffc44a290f98b7e4"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const docRefRewards = doc(db, "data", "myrewards");
 
 let rewardData = {
     lootList: [],
@@ -89,6 +106,8 @@ async function saveRewardData() {
         } else {
             localStorage.setItem('questRewardData', JSON.stringify(rewardData));
         }
+        // 🟢 ซิงค์ข้อมูลรางวัลไปยัง Firestore แบบ Real-time
+        await setDoc(docRefRewards, rewardData, { merge: true });
     } catch (e) {
         console.error("Failed to save reward data", e);
     }
@@ -115,6 +134,25 @@ async function forceSyncToGoogle() {
 
 export function initRewardSystem() {
     loadRewardData();
+
+    // 🟢 ระบบ Real-time Listener สำหรับข้อมูลรางวัล
+    onSnapshot(docRefRewards, (snapshot) => {
+        const data = snapshot.data();
+        if (data) {
+            // ตรวจสอบความแตกต่างเพื่อป้องกัน Infinite Loop
+            if (JSON.stringify(rewardData) !== JSON.stringify(data)) {
+                // อัปเดตข้อมูลรางวัลในตัวแปรหลัก
+                Object.assign(rewardData, data);
+                
+                // หากหน้าต่างรางวัลเปิดอยู่ ให้สั่งวาดเนื้อหาใหม่ทันที
+                const modal = document.getElementById('reward-modal');
+                if (modal && modal.style.display === 'flex') {
+                    renderRewardContent();
+                }
+            }
+        }
+    });
+
     // 🟢 1. ส่งออกข้อมูลเพื่อให้ระบบ Autocomplete ใน ui-helpers.js ดึงไปใช้แสดง Popup
     window.getRewardSystemData = () => rewardData;
 

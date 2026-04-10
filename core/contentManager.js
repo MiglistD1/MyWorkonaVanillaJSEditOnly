@@ -19,6 +19,18 @@ export function renderMainContent() {
   const globalSettings = getAppSettings();
   const mainGrid = document.getElementById('main-grid');
   const isMobile = window.innerWidth <= 768;
+    // 🟢 ย้ายปุ่ม Cloud Sync ตามโหมดมือถือ (ก่อน Reward Button)
+  const syncContainer = document.getElementById('firebase-sync-container');
+  const navGroup = document.querySelector('.topbar-nav-group');
+  const rewardsBtn = document.getElementById('btn-open-rewards-topbar');
+  const utilityGroup = document.getElementById('utility-group');
+  const topbar = document.querySelector('.topbar');
+
+  if (isMobile && syncContainer && navGroup && rewardsBtn) {
+      navGroup.insertBefore(syncContainer, rewardsBtn);
+  } else if (!isMobile && syncContainer && utilityGroup && topbar) {
+      topbar.insertBefore(syncContainer, utilityGroup);
+  }
   const tagBar = document.getElementById('tag-bar-container');
   const defaultContainer = document.getElementById('default-dashboard-container');
   const sBar = document.getElementById('schedule-mode-bar');
@@ -196,6 +208,7 @@ export function initContentManager() {
             spacebar.classList.remove('collapsed');
             updateToggleBtnUI();
         }
+        renderMainContent(); // บังคับเช็คการย้ายปุ่มเมื่อ resize ข้าม breakpoint
         prevWidth = currentWidth;
     });
 
