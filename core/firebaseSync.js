@@ -44,10 +44,10 @@ function debounce(func, delay) {
  * 🛰️ Debounced function for syncing Note content to Firebase
  */
 const debouncedNoteSync = debounce(async (content) => {
-    updateSyncStatusUI('syncing');
+    updateSyncStatusUI('syncing', 'Syncing...');
     try {
         await setDoc(docRef, { content: content }, { merge: true });
-        updateSyncStatusUI('synced');
+        updateSyncStatusUI('synced', 'WebApp -> Firebase');
     } catch (error) {
         console.error("Error syncing note to Firebase:", error);
         updateSyncStatusUI('offline');
@@ -55,7 +55,7 @@ const debouncedNoteSync = debounce(async (content) => {
 }, 1000);
 
 // UI Elements for Sync Status
-export function updateSyncStatusUI(state) {
+export function updateSyncStatusUI(state, detail = "") {
     const syncedIcon = document.getElementById('sync-icon-synced');
     const syncingIcon = document.getElementById('sync-icon-syncing');
     const offlineIcon = document.getElementById('sync-icon-offline');
@@ -86,6 +86,8 @@ export function updateSyncStatusUI(state) {
         triggerBtn.style.borderColor = color;
         triggerBtn.style.borderWidth = '2px';
         triggerBtn.style.boxShadow = `0 0 10px rgba(245, 158, 11, 0.4)`;
+
+        if (lastSyncEl && detail) lastSyncEl.innerText = detail;
     } else if (displayState === 'synced') {
         cloudSvg.classList.remove('spin');
         if (isAutoSync) {
@@ -103,11 +105,18 @@ export function updateSyncStatusUI(state) {
         }
         
         // ⏱️ Update Last Synced Timestamp
-        if (lastSyncEl && state) {
+        if (lastSyncEl && state === 'synced') {
             const now = new Date();
             const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            const dateStr = now.toLocaleDateString([], { day: '2-digit', month: 'short' });
-            lastSyncEl.innerText = `Last Synced: ${dateStr}, ${timeStr}`;
+            const dateStr = now.toLocaleDateString([], { month: 'short', day: '2-digit' });
+            let msg = `Last Synced: ${dateStr}, ${timeStr}`;
+            if (detail) msg += ` (${detail})`;
+            lastSyncEl.innerText = msg;
+
+            // 🟢 บันทึกประวัติการซิงค์ (เฉพาะรายการที่สำเร็จและมีรายละเอียด)
+            if (detail && detail !== 'Syncing...') {
+                addToSyncHistory(`${dateStr}, ${timeStr} - ${detail}`);
+            }
         }
     } else if (displayState === 'offline') {
         cloudSvg.classList.remove('spin');
@@ -120,7 +129,55 @@ export function updateSyncStatusUI(state) {
 }
 
 /**
- * 🛰️ Force Push current Note to Cloud
+ * 🟢 Helper: บันทึกประวัติการซิงค์ลงใน Storage (แยกส่วนเพื่อป้องกัน Sync Loop)
+ */
+async function addToSyncHistory(entry) {
+    const history = await getSyncHistory();
+    history.unshift(entry);
+    if (history.length > 5) history.pop();
+    
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        chrome.storage.local.set({ syncHistory: history });
+    } else {
+        localStorage.setItem('syncHistory', JSON.stringify(history));
+    }
+    renderSyncHistoryUI();
+}
+
+async function getSyncHistory() {
+    return new Promise(resolve => {
+        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+            chrome.storage.local.get(['syncHistory'], (res) => resolve(res.syncHistory || []));
+        } else {
+            try {
+                resolve(JSON.parse(localStorage.getItem('syncHistory') || '[]'));
+            } catch(e) { resolve([]); }
+        }
+    });
+}
+
+/**
+ * 🟢 Helper: วาดรายการประวัติการซิงค์ใน UI
+ */
+export async function renderSyncHistoryUI() {
+    const container = document.getElementById('sync-history-content');
+    const clearBtn = document.getElementById('btn-clear-sync-history');
+    if (!container) return;
+    const history = await getSyncHistory();
+
+    if (history.length === 0) {
+        container.innerHTML = '<div style="text-align:center; opacity:0.5;">No history yet</div>';
+        if (clearBtn) clearBtn.style.display = 'none';
+    } else {
+        container.innerHTML = history.map(entry => 
+            `<div style="padding: 2px 0; border-bottom: 1px solid rgba(0,0,0,0.03); width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">• ${entry}</div>`
+        ).join('');
+        if (clearBtn) clearBtn.style.display = 'flex';
+    }
+}
+
+/**
+ * �️ Force Push current Note to Cloud
  */
 export async function forcePushNote() {
     const workspaceNote = document.getElementById('workspace-note');
@@ -130,7 +187,7 @@ export async function forcePushNote() {
     updateSyncStatusUI('syncing');
     try {
         await setDoc(docRef, { content: content }, { merge: true });
-        updateSyncStatusUI('synced');
+        updateSyncStatusUI('synced', 'WebApp -> Firebase');
     } catch (error) {
         console.error("Force Push failed:", error);
         updateSyncStatusUI('offline');
@@ -153,7 +210,7 @@ export async function forcePullNote() {
             const space = getCurrentSpace();
             if (space) space.note = data.content;
             saveData(true);
-            updateSyncStatusUI('synced');
+            updateSyncStatusUI('synced', 'Firebase -> WebApp');
         }
     } catch (error) {
         console.error("Force Pull failed:", error);
@@ -191,6 +248,35 @@ export function initFirebaseSync() {
     const workspaceNote = document.getElementById('workspace-note');
     if (!workspaceNote) return;
 
+    // 🟢 ระบบเปิด/ปิดประวัติการซิงค์
+    const historyBtn = document.getElementById('btn-view-sync-history');
+    const historyList = document.getElementById('sync-history-list');
+    if (historyBtn && historyList) {
+        // 🟢 ระบบล้างประวัติ
+        const clearBtn = document.getElementById('btn-clear-sync-history');
+        if (clearBtn) {
+            clearBtn.onclick = async (e) => {
+                e.stopPropagation();
+                if (confirm("ล้างประวัติการซิงค์ทั้งหมดหรือไม่?")) {
+                    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+                        chrome.storage.local.set({ syncHistory: [] }, () => renderSyncHistoryUI());
+                    } else {
+                        localStorage.setItem('syncHistory', JSON.stringify([]));
+                        renderSyncHistoryUI();
+                    }
+                }
+            };
+        }
+
+        historyBtn.onclick = (e) => {
+            e.stopPropagation();
+            const isHidden = historyList.style.display === 'none';
+            historyList.style.display = isHidden ? 'flex' : 'none';
+            historyBtn.innerText = isHidden ? 'Hide History' : 'View History';
+            if (isHidden) renderSyncHistoryUI();
+        };
+    }
+
     // 1. Listen: รับข้อมูลจาก Firebase มาอัปเดตหน้าจอ
     onSnapshot(docRef, (snapshot) => {
         const source = snapshot.metadata.fromCache ? "Local Cache" : "Server";
@@ -204,7 +290,7 @@ export function initFirebaseSync() {
                 workspaceNote.innerHTML = data.content;
                 const space = getCurrentSpace();
                 if (space) space.note = data.content;
-                updateSyncStatusUI('synced');
+                updateSyncStatusUI('synced', 'Firebase -> WebApp');
             }
         }
     });
@@ -229,7 +315,7 @@ export function initFirebaseSync() {
             
             if (needsRender && window.renderAll) {
                 window.renderAll();
-                updateSyncStatusUI('synced');
+                updateSyncStatusUI('synced', 'Firebase -> WebApp');
             }
         }
     });
@@ -278,12 +364,12 @@ export function initFirebaseSync() {
                         setSpaces(mergedSpaces);
                         if (window.renderAll) window.renderAll();
                         setDoc(docRefSpaces, { spaces: mergedSpaces }, { merge: true });
-                        updateSyncStatusUI('synced');
+                        updateSyncStatusUI('synced', 'Merged -> Firebase');
                     }
                 } else {
                     setSpaces(cloudSpaces);
                     if (window.renderAll) window.renderAll();
-                    updateSyncStatusUI('synced');
+                    updateSyncStatusUI('synced', 'Firebase -> WebApp');
                 }
             }
         }
@@ -316,7 +402,7 @@ export function initFirebaseSync() {
                 setDoc(docRefSpaces, { spaces: data.mySpacesData }, { merge: true }),
                 setDoc(docRefConfig, { launchers: data.globalLaunchers, launcherTags: data.launcherTags }, { merge: true })
             ]);
-            updateSyncStatusUI('synced');
+            updateSyncStatusUI('synced', 'WebApp -> Firebase');
         } catch (error) {
             console.error("Firebase Background Sync Error:", error);
             updateSyncStatusUI('offline');

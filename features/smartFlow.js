@@ -48,9 +48,9 @@ let flowItems = [];
 export const getFlowItems = () => flowItems;
 let editingFlowItemId = null;
 let refreshInterval = null;
-let isCreatingNewStep = false; // 🟢 ตัวเช็คว่ากำลังสร้าง Step ใหม่ (เพื่อใช้ลบออกหากกดยกเลิก)
-let isFlowDataLoaded = false; // 🟢 ตัวเช็คสถานะการโหลด
-let editingFlowItemTags = []; // ตัวแปรชั่วคราวสำหรับเก็บ Tag ที่เลือกใน Modal
+let isCreatingNewStep = false;
+let isFlowDataLoaded = false;
+let editingFlowItemTags = [];
 let confirmingFlowItemId = null; // 🟢 สำหรับจำว่างานไหนกำลังอยู่ในโหมดเลือกผลลัพธ์
 
 /**
@@ -324,9 +324,6 @@ export async function initSmartFlow() {
 
     // 🟢 ระบบ Real-time Listener สำหรับ Smart Flow
     onSnapshot(docRefSmartFlow, (snapshot) => {
-        // ป้องกันการวาดทับขณะผู้ใช้กำลังพิมพ์ชื่อ Step หรือโน้ต
-        if (isAnyEditableElementFocused()) return;
-
         const data = snapshot.data();
         if (data) {
             let needsRender = false;
@@ -685,6 +682,7 @@ function renderFlowList() {
     const archivedListEl = document.getElementById('smart-flow-archived-list');
     const archivedContainer = document.getElementById('sf-archived-container');
     if (!listEl) return;
+    console.log("renderFlowList() called."); // Added for debugging
 
     checkAndResetFlowItems(); // 🟢 รีเซ็ตสถานะก่อนวาดรายการ
 
