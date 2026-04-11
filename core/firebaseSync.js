@@ -1,6 +1,6 @@
 import { initializeApp } from "./lib/firebase-app.js";
 import { getFirestore, doc, setDoc, getDoc, onSnapshot, enableIndexedDbPersistence } from "./lib/firebase-firestore.js";
-import { getCurrentSpace, saveData, getSpaces, setSpaces, setOnSaveFirebaseHook, getGlobalLaunchers, setGlobalLaunchers, getLauncherTags, setLauncherTags, getAppSettings } from "./storage.js";
+import { getCurrentSpace, saveData, getSpaces, setSpaces, setOnSaveFirebaseHook, getGlobalLaunchers, setGlobalLaunchers, getLauncherTags, setLauncherTags, getAppSettings, getLocalSettings } from "./storage.js";
 import { isAnyEditableElementFocused } from "../features/todoManager.js";
 
 // Firebase config
@@ -73,7 +73,7 @@ export function updateSyncStatusUI(state, detail = "") {
 
     // 🛰️ Update Trigger Button (Cloud Icon) effect
     const cloudSvg = triggerBtn.querySelector('svg');
-    const isAutoSync = getAppSettings().firebaseAutoSync;
+    const isAutoSync = getLocalSettings().firebaseAutoSync;
     
     // เพิ่ม Transition เพื่อความนุ่มนวล
     triggerBtn.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
@@ -308,7 +308,7 @@ export function initFirebaseSync() {
 
     // 1. Listen: รับข้อมูลจาก Firebase มาอัปเดตหน้าจอ
     onSnapshot(docRef, (snapshot) => {
-        if (!getAppSettings().firebaseAutoSync) return;
+        if (!getLocalSettings().firebaseAutoSync) return;
         const source = snapshot.metadata.fromCache ? "Local Cache" : "Server";
         if (snapshot.metadata.fromCache) {
             console.log(`ℹ️ Notes data loaded from: ${source}`);
@@ -327,7 +327,7 @@ export function initFirebaseSync() {
 
     // 🟢 5. Listen: รับข้อมูล Shortcuts (Launchers) จาก Cloud
     onSnapshot(docRefConfig, (snapshot) => {
-        if (!getAppSettings().firebaseAutoSync) return;
+        if (!getLocalSettings().firebaseAutoSync) return;
         const source = snapshot.metadata.fromCache ? "Local Cache" : "Server";
         if (snapshot.metadata.fromCache) {
             console.log(`ℹ️ Config data loaded from: ${source}`);
@@ -354,7 +354,7 @@ export function initFirebaseSync() {
     // 🟢 3. Listen: รับข้อมูล Spaces/Tasks จาก Cloud
     onSnapshot(docRefSpaces, (snapshot) => {
         // 🛑 ตรวจสอบ Auto Sync และสถานะการพิมพ์
-        if (!getAppSettings().firebaseAutoSync || isAnyEditableElementFocused()) return;
+        if (!getLocalSettings().firebaseAutoSync || isAnyEditableElementFocused()) return;
 
         const source = snapshot.metadata.fromCache ? "Local Cache" : "Server";
         if (snapshot.metadata.fromCache) {
@@ -379,7 +379,7 @@ export function initFirebaseSync() {
         const content = e.target.innerHTML;
         
         // 🟢 Check Auto Sync state before automatic push
-        if (!getAppSettings().firebaseAutoSync) return;
+        if (!getLocalSettings().firebaseAutoSync) return;
 
         // Only sync to cloud if the content has actually changed to avoid unnecessary writes
         if (getCurrentSpace()?.note !== content) {
@@ -391,8 +391,8 @@ export function initFirebaseSync() {
 
     // 🟢 4. Push: เมื่อมีการเปลี่ยนสถานะงาน (Add, Delete, Check, Sort)
     setOnSaveFirebaseHook(async (data) => {
-        // 🟢 Check Auto Sync state before background sync
-        if (!getAppSettings().firebaseAutoSync) return;
+        // 🟢 Check Auto Sync state before background sync (Device-specific)
+        if (!getLocalSettings().firebaseAutoSync) return;
 
         updateSyncStatusUI('syncing');
         // ส่งข้อมูล Spaces ทั้งหมดขึ้นไป (รวมถึง Tasks ภายในนั้น)

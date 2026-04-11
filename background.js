@@ -36,9 +36,15 @@ chrome.alarms.onAlarm.addListener((alarm) => {
       if (settings && settings.autoExportDays > 0) {
         const now = Date.now();
         const lastExport = settings.lastExportTimestamp || 0;
-        const interval = settings.autoExportDays * 24 * 60 * 60 * 1000;
 
-        if (now - lastExport >= interval) {
+        // คำนวณเวลาเป้าหมาย (วันที่ล่าสุด + จำนวนวัน และตั้งเวลาตาม Settings)
+        const [h, m] = (settings.autoExportTime || "00:00").split(':').map(Number);
+        const lastDate = new Date(lastExport);
+        const nextDate = new Date(lastDate);
+        nextDate.setDate(lastDate.getDate() + settings.autoExportDays);
+        nextExportDate.setHours(h, m, 0, 0);
+
+        if (now >= nextDate.getTime()) {
           chrome.storage.local.get(null, (allData) => {
             const jsonStr = JSON.stringify(allData, null, 2);
             const dataUrl = 'data:application/json;charset=utf-8,' + encodeURIComponent(jsonStr);

@@ -52,8 +52,8 @@ let appSettings = {
   folderThemes: {}, // Stores { folderName: { color, fontSize } }
   lockedFolders: [], // Stores folder names that should stay expanded on refresh
   exportSubfolder: "MyBackups",
-  firebaseAutoSync: false,
   autoExportDays: 0,
+  autoExportTime: "00:00",
   exportTarget: "computer", // 'computer' or 'mobile'
   autoDeleteDays: 30, // ค่าเริ่มต้น 30 วัน
   lastExportTimestamp: 0,
@@ -68,6 +68,12 @@ let appSettings = {
   },
   lastUpdated: 0, // 🟢 เก็บเวลาล่าสุดที่มีการแก้ไขข้อมูล
   focusedTask: null // 🟢 { spaceId, createdAt } เก็บงานที่กำลังโฟกัสอยู่เพียงหนึ่งเดียว
+};
+
+// 🏠 Device-Specific Settings (ไม่ซิงค์ข้ามเครื่อง, ไม่อยู่ในไฟล์ Backup)
+let localSettings = {
+    firebaseAutoSync: false,
+    autoSyncSessionExpiry: 0
 };
 
 // URL Params Logic
@@ -125,6 +131,7 @@ export async function loadDataItem(keys) {
 export const getSpaces = () => spaces;
 export const getCurrentSpaceId = () => currentSpaceId;
 export const getAppSettings = () => appSettings;
+export const getLocalSettings = () => localSettings; // 🟢 Getter ใหม่
 export const getGlobalLaunchers = () => globalLaunchers;
 
 export const getLauncherTags = () => launcherTags;
@@ -165,11 +172,14 @@ let saveTimeout;
 export function saveData(immediate = false) { 
     // Debounce: Wait 500ms, if called again, cancel the old one (reduces frequent saves when typing notes)
     if (saveTimeout) clearTimeout(saveTimeout);
-    const performSave = () => {
+    const performSave = async () => {
         // ⏱️ อัปเดต Timestamp ทุกครั้งก่อนบันทึกจริง เพื่อระบุว่าข้อมูลก้อนนี้คือเวอร์ชันล่าสุด
         appSettings.lastUpdated = Date.now();
         const data = { 'mySpacesData': spaces, 'lastSpaceId': currentSpaceId, 'appSettings': appSettings, 'globalLaunchers': globalLaunchers, 'launcherTags': launcherTags };
         
+        // 🏠 บันทึก Local Settings แยกต่างหาก (ไม่ส่งเข้า Firebase Hook)
+        await saveDataItem('myLocalDeviceSettings', localSettings);
+
         // 🟢 เรียกใช้ Firebase Hook ถ้ามีการลงทะเบียนไว้
         if (firebaseSaveHook) firebaseSaveHook(data);
         
@@ -188,10 +198,15 @@ export function saveData(immediate = false) {
 }
  
 export async function loadData(onLoadComplete) {
-  const keys = ['mySpacesData', 'lastSpaceId', 'appSettings', 'globalLaunchers', 'launcherTags'];
+  const keys = ['mySpacesData', 'lastSpaceId', 'appSettings', 'globalLaunchers', 'launcherTags', 'myLocalDeviceSettings'];
   const loadedData = await loadDataItem(keys);
  
   const processResult = (res) => {
+    // 🏠 โหลดข้อมูลเฉพาะเครื่อง
+    if (res && res.myLocalDeviceSettings) {
+        localSettings = { ...localSettings, ...res.myLocalDeviceSettings };
+    }
+
     // Add check for res to prevent undefined
     if (res && res.mySpacesData && res.mySpacesData.length > 0) {
       spaces = res.mySpacesData;

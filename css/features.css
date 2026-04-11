@@ -603,3 +603,41 @@ $.hl-reward[data-type="t"]::before { content: "⏳"; }$
 .btn-lock-space.is-locked { color: #ef4444 !important; opacity: 1 !important; }
 .btn-lock-space:not(.is-locked) { color: #10b981 !important; opacity: 0.4; }
 .btn-lock-space:hover { opacity: 1 !important; transform: scale(1.2); }
+
+/* --- Data Management UI Fix --- */
+#export-target {
+    width: 220px !important; 
+    min-width: 220px !important;
+    height: 38px !important;
+    padding-right: 30px !important;
+    text-overflow: clip;
+}
+
+#auto-export-days {
+    width: 140px !important; /* ปรับให้กระชับขึ้นตามคำขอ */
+    min-width: 140px !important;
+    height: 38px !important;
+    padding-right: 30px !important; /* เว้นที่ให้ลูกศร dropdown */
+    text-overflow: clip; /* ป้องกันการใช้ ... กลางข้อความ */
+    margin-bottom: 0 !important; /* ลบ margin ออกเพราะใช้ flex wrapper แทน */
+}
+
+#btn-set-data-management {
+    margin-top: 0 !important;
+    transition: all 0.3s ease;
+}
+
+/* ปรับขนาดปุ่ม Export และ Import ให้สมดุลกับ Dropdown ตัวหลัก (220px) */
+#btn-manual-export, 
+#btn-import-data {
+    width: 220px !important;
+    justify-content: center; /* จัดไอคอนและข้อความให้อยู่กลางปุ่ม */
+}
+
+/* ลบส่วน Merge Mode และองค์ประกอบที่เกี่ยวข้องออกถาวร */
+#drive-merge-mode, 
+label[for="drive-merge-mode"],
+.switch:has(#drive-merge-mode),
+#drive-merge-mode-label {
+    display: none !important;
+}

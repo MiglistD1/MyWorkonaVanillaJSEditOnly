@@ -1,7 +1,7 @@
 import { getSpaces, saveData, getAppSettings, setCurrentSpaceId, getFilterTags, loadData } from '../core/storage.js';
 import Sortable from '../sortable.esm.js';
 import { svgRefresh } from '../core/icons.js';
-import { openTaskEditModal, openTaskLinkModal, isAnyEditableElementFocused, toggleTaskFocus, playTaskCompletedSound } from './todoManager.js'; 
+import { openTaskEditModal, openTaskLinkModal, isAnyEditableElementFocused, toggleTaskFocus, playTaskCompletedSound, calculateNextDate } from './todoManager.js'; 
 import { handleMiniTagClick } from '../components/modals.js';
 import { generateTaskHTML, attachSubtaskEventListeners, attachTaskInlineEditListeners, handleTagAutocomplete, applySyntaxHighlighting } from '../core/ui-helpers.js';
 
@@ -249,7 +249,21 @@ function renderTaskGroups(allSpaces) {
         // 🟢 จัดเรียงตามคำสั่งของ Space ก่อนกรอง
         if (space.taskSortOrder && space.taskSortOrder !== 'manual') sortSpaceTasks(space);
 
-        let displayTasks = tasks.filter(t => t && !t.completed && !t.isDeleted);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        let displayTasks = tasks.filter(t => {
+            if (!t || t.completed || t.isDeleted) return false;
+            
+            // 🟢 ซ่อนงานทำซ้ำในอนาคตที่ไม่ได้ติดธง และไม่ใช่การกู้คืน (wasRegenerated !== false)
+            if (t.repeatConfig?.isRepeating && !t.isProminent && t.dueDate && t.wasRegenerated !== false) {
+                const taskDue = new Date(t.dueDate);
+                taskDue.setHours(0, 0, 0, 0);
+                if (taskDue > today) return false;
+            }
+            return true;
+        });
+
         if (masterTodoListState.showOnlyFlagged) {
             displayTasks = displayTasks.filter(t => t && t.isProminent);
         }
@@ -455,6 +469,29 @@ export function initMasterEvents() {
                     task.completed = isChecked;
                     task.completedAt = isChecked ? Date.now() : null;
                     task.isProminent = false;
+
+                    // 🔄 Repeating Task Logic: สร้างงานงวดถัดไปอัตโนมัติ (ซิงค์พฤติกรรมกับ todoManager.js)
+                    if (isChecked && task.repeatConfig?.isRepeating && task.dueDate && !task.wasRegenerated) {
+                        const nextDate = calculateNextDate(task.dueDate, task.repeatConfig, task);
+                        if (nextDate) {
+                            task.wasRegenerated = true; // มาร์คงานเดิมว่าสร้างงวดใหม่ไปแล้ว
+                            const clonedTask = JSON.parse(JSON.stringify(task));
+                            clonedTask.completed = false;
+                            clonedTask.completedAt = null;
+                            clonedTask.isDeleted = false;
+                            clonedTask.createdAt = Date.now();
+                            delete clonedTask.wasRegenerated; // 🟢 ล้าง Flag เพื่อให้หายไปจาก Master List ตามเงื่อนไขวันที่
+                            clonedTask.calendarEventId = null;
+                            clonedTask.dueDate = nextDate;
+                            clonedTask.occurrenceCount = (task.occurrenceCount || 1) + 1;
+                            space.tasks.push(clonedTask);
+                        }
+                    }
+                    if (!isChecked && task.repeatConfig?.isRepeating) {
+                        task.wasRegenerated = false;
+                        const futureTaskIdx = space.tasks.findIndex(t => t !== task && t.text === task.text && !t.completed && t.repeatConfig?.isRepeating && t.createdAt > task.createdAt);
+                        if (futureTaskIdx > -1) space.tasks.splice(futureTaskIdx, 1);
+                    }
                 } else {
                     if (isChecked) {
                         task.isDeleted = true;
@@ -465,6 +502,10 @@ export function initMasterEvents() {
                     } else {
                         task.completed = false;
                         task.isDeleted = false;
+                        
+                        // 🟢 ย้ายกลับมาไว้บนสุดเพื่อให้ผู้ใช้เห็นผลทันทีใน Command Center
+                        const [restoredTask] = space.tasks.splice(idx, 1);
+                        space.tasks.unshift(restoredTask);
                     }
                 }
                 

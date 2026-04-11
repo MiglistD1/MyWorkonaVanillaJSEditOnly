@@ -18,7 +18,8 @@ import { openOrFocusTab } from './core/ui-helpers.js';
 import { initDashboardQuickNote } from './features/dashboardQuickNote.js';
 import { 
   getAppSettings, saveData, loadData, getSpaces,
-  getCurrentSpaceId, setCurrentSpaceId, getFilterTags, setFilterTags, setSearchQuery, getCurrentSpace, getFilterMode, setFilterMode
+  getCurrentSpaceId, setCurrentSpaceId, getFilterTags, setFilterTags, setSearchQuery, getCurrentSpace, getFilterMode, setFilterMode, getLocalSettings,
+  getShortDate
 } from './core/storage.js';
 
 let sessionReminderActive = true; // 🟢 ตัวแปรสำหรับคุมการแจ้งเตือนในเซสชั่นปัจจุบัน
@@ -83,10 +84,15 @@ function updateArchivedStateUI() {
 document.addEventListener('DOMContentLoaded', () => {
     loadData(() => {
         const appSettings = getAppSettings();
+        const lSettings = getLocalSettings();
         
-        // 🟢 Reset Auto Sync to false on every load as requested
-        appSettings.firebaseAutoSync = false;
-        saveData(true);
+        // ⏱️ Device-Specific Auto Sync Persistence Logic
+        const now = Date.now();
+        if (!lSettings.autoSyncSessionExpiry || now > lSettings.autoSyncSessionExpiry) {
+            lSettings.firebaseAutoSync = false;
+            lSettings.autoSyncSessionExpiry = 0;
+            saveData(true);
+        }
 
         // 🎨 Fix for tagBar.js: ทำให้ตัวแปร isDarkMode เข้าถึงได้จากทุกสคริปต์
         window.isDarkMode = !!appSettings.isDarkMode;
@@ -157,12 +163,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const syncTrigger = document.getElementById('btn-firebase-sync-trigger');
         const syncPopup = document.getElementById('firebase-sync-popup');
         const autoSyncChk = document.getElementById('chk-firebase-auto-sync');
+        const sessionAreaId = 'sf-auto-sync-persistence-area';
 
         if (syncTrigger && syncPopup) {
             syncTrigger.onclick = (e) => {
                 e.stopPropagation();
                 const isHidden = syncPopup.style.display === 'none';
                 syncPopup.style.display = isHidden ? 'flex' : 'none';
+                if (isHidden) updateExpiryUI(); // 🟢 อัปเดตเวลาที่เหลือเมื่อเปิดหน้าต่าง
             };
             
             document.addEventListener('click', (e) => {
@@ -171,13 +179,81 @@ document.addEventListener('DOMContentLoaded', () => {
                     syncPopup.style.display = 'none';
                 }
             });
+
+            // 🟢 Session Persistence UI Injection
+            if (!document.getElementById(sessionAreaId)) {
+                const area = document.createElement('div');
+                area.id = sessionAreaId;
+                area.style.cssText = 'margin-top: 15px; padding-top: 12px; border-top: 1px dashed var(--border-color); display: flex; flex-direction: column; gap: 8px;';
+                area.innerHTML = `
+                <style>
+                    #sf-auto-sync-custom-hrs::-webkit-outer-spin-button, #sf-auto-sync-custom-hrs::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+                    #sf-auto-sync-custom-hrs { -moz-appearance: textfield; }
+                </style>
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:10px; font-weight:800; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">Stay Active After Refresh</span>
+                        <span id="sf-auto-sync-timer-label" style="font-size:10px; font-weight:700; color:var(--primary-color);"></span>
+                    </div>
+                    <div style="display:flex; gap:5px; align-items:center;">
+                        <div style="flex:1; position:relative; display:flex; align-items:center; height:30px;">
+                        <input type="text" id="sf-auto-sync-custom-val" placeholder="30m or 1h" style="width:100%; height:100%; padding:0 10px; font-size:13px; font-weight:800; border-radius:6px; border:1.5px solid var(--border-color); background:var(--bg-card); color:var(--text-main); outline:none; box-sizing:border-box;">
+                        </div>
+                        <button class="btn btn-primary" id="btn-sf-set-session" style="height:30px; padding:0 12px; font-size:10px; border-radius:6px; font-weight:800; justify-content:center;">Set</button>
+                        <button class="btn btn-outline" id="btn-sf-clear-session" style="height:30px; padding:0 10px; font-size:10px; color:#ef4444; border-color:#fecaca; border-radius:6px; font-weight:800; justify-content:center;">Off</button>
+                    </div>
+                `;
+                syncPopup.appendChild(area);
+
+                const setBtn = area.querySelector('#btn-sf-set-session');
+                const clearBtn = area.querySelector('#btn-sf-clear-session');
+                const valInput = area.querySelector('#sf-auto-sync-custom-val');
+
+                setBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    const raw = valInput.value.toLowerCase().trim();
+                    let ms = 0;
+                    if (raw.endsWith('m')) ms = parseFloat(raw) * 60 * 1000;
+                    else if (raw.endsWith('h')) ms = parseFloat(raw) * 60 * 60 * 1000;
+                    else ms = parseFloat(raw) * 60 * 60 * 1000; // default to hours
+
+                    if (ms > 0) {
+                        lSettings.autoSyncSessionExpiry = Date.now() + ms;
+                        saveData(true);
+                        updateExpiryUI();
+                        setBtn.classList.add('flash-confirm');
+                        setTimeout(() => setBtn.classList.remove('flash-confirm'), 500);
+                    }
+                };
+
+                clearBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    lSettings.autoSyncSessionExpiry = 0;
+                    saveData(true);
+                    updateExpiryUI();
+                    valInput.value = '';
+                };
+            }
+        }
+
+        function updateExpiryUI() {
+            const label = document.getElementById('sf-auto-sync-timer-label');
+            if (!label) return;
+            const expiry = lSettings.autoSyncSessionExpiry || 0;
+            if (expiry > Date.now()) {
+                const diff = expiry - Date.now();
+                const hrs = Math.floor(diff / (1000 * 60 * 60));
+                const mins = Math.round((diff % (1000 * 60 * 60)) / (1000 * 60));
+                label.innerText = `Active for ${hrs}h ${mins}m`;
+            } else {
+                label.innerText = "Reset on Refresh";
+            }
         }
 
         const muteReminderWrapper = document.getElementById('wrapper-mute-reminder');
         const muteReminderChk = document.getElementById('chk-mute-sync-reminder');
         const updateReminderUI = () => {
             if (!muteReminderWrapper || !muteReminderChk) return;
-            if (!appSettings.firebaseAutoSync) {
+            if (!lSettings.firebaseAutoSync) {
                 muteReminderWrapper.style.display = 'flex';
                 muteReminderChk.checked = sessionReminderActive;
             } else {
@@ -186,7 +262,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         if (autoSyncChk) {
-            autoSyncChk.checked = !!appSettings.firebaseAutoSync;
+            autoSyncChk.checked = !!lSettings.firebaseAutoSync;
             autoSyncChk.onchange = async () => {
                 if (autoSyncChk.checked) {
                     isActivatingAutoSync = true;
@@ -194,14 +270,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     isActivatingAutoSync = false;
                     
                     if (success) {
-                        appSettings.firebaseAutoSync = true;
+                        lSettings.firebaseAutoSync = true;
                         // 🛑 เอา syncPopup.style.display = 'none' ออกตามคำขอ เพื่อให้ผู้ใช้เห็นว่าสวิตช์ ON แล้วจริงๆ
                     } else {
                         autoSyncChk.checked = false;
-                        appSettings.firebaseAutoSync = false;
+                        lSettings.firebaseAutoSync = false;
                     }
                 } else {
-                    appSettings.firebaseAutoSync = false;
+                    lSettings.firebaseAutoSync = false;
                 }
                 saveData(true);
                 updateSyncStatusUI(); 
@@ -263,37 +339,121 @@ document.addEventListener('DOMContentLoaded', () => {
         // Advanced Data Management Logic
         const subfolderInput = document.getElementById('export-subfolder');
         const autoExportSelect = document.getElementById('auto-export-days');
-        const mergeCheck = document.getElementById('drive-merge-mode'); // 🟢 เพิ่มตัวเลือก Merge
         const targetSelect = document.getElementById('export-target'); // 🟢 เพิ่มตัวเลือกอุปกรณ์
         const btnManualExport = document.getElementById('btn-manual-export');
         const btnImportData = document.getElementById('btn-import-data');
         const fileImportInput = document.getElementById('file-import-data');
 
-        const updateExportUI = () => {
+        // 🔐 ฟังก์ชันอัปเดตสถานะแม่กุญแจ
+        window.updateLockButton = () => {
+            const btn = document.getElementById('btn-set-data-management');
+            if (!btn) return;
+            const days = parseInt(autoExportSelect.value, 10);
+            const isSet = days > 0;
+            
+            if (isSet) {
+                // 🔒 แม่กุญแจปิด (สีแดง) - แสดงว่าได้ตั้งค่าไว้แล้ว
+                btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>`;
+                btn.style.borderColor = "#ef4444";
+                btn.style.background = "rgba(239, 68, 68, 0.05)";
+                btn.title = `Auto-export active (Every ${days} days)`;
+            } else {
+                // 🔓 แม่กุญแจเปิด (สีเขียว) - ยังไม่ล็อค / ปิดการทำงาน
+                btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path></svg>`;
+                btn.style.borderColor = "#10b981";
+                btn.style.background = "rgba(16, 185, 129, 0.05)";
+                btn.title = "Auto-export disabled";
+            }
+        };
+
+        window.updateExportUI = () => {
             const target = targetSelect?.value || appSettings.exportTarget || "computer";
             if (btnManualExport) {
                 btnManualExport.innerHTML = target === "computer" 
-                    ? "💻 Export (Laptop)" 
-                    : "📱 Export (Mobile)";
+                    ? "💻 Export (PC / Laptop)"
+                    : "📱 Export (Mobile Device)";
+            }
+            if (window.updateLockButton) window.updateLockButton();
+
+            // 📅 จัดการแสดงผลปุ่มดูข้อมูลเวลาสำรองข้อมูลรอบถัดไป
+            const btnInfo = document.getElementById('btn-show-next-export');
+            if (btnInfo) {
+                const days = parseInt(autoExportSelect?.value || appSettings.autoExportDays || 0, 10);
+                btnInfo.style.display = days > 0 ? 'flex' : 'none';
             }
         };
 
         if (subfolderInput) subfolderInput.value = appSettings.exportSubfolder || "MyBackups";
-        if (autoExportSelect) autoExportSelect.value = appSettings.autoExportDays || 0;
+        if (autoExportSelect) {
+            autoExportSelect.value = appSettings.autoExportDays || 0;
+            autoExportSelect.addEventListener('change', updateExportUI);
+        }
         if (targetSelect) targetSelect.value = appSettings.exportTarget || "computer";
-        updateExportUI();
 
-        const saveDataManagementSettings = () => {
+        const saveDataManagementSettings = (e) => {
+            if(e) e.preventDefault();
             appSettings.exportSubfolder = subfolderInput.value.trim() || "MyBackups";
             appSettings.autoExportDays = parseInt(autoExportSelect.value, 10);
+            appSettings.autoExportTime = document.getElementById('auto-export-time')?.value || "00:00";
             if (targetSelect) appSettings.exportTarget = targetSelect.value;
-            saveData();
+            saveData(true);
             updateExportUI();
+
+            const btn = document.getElementById('btn-set-data-management');
+            if (btn) {
+                btn.classList.add('flash-confirm');
+                setTimeout(() => btn.classList.remove('flash-confirm'), 500);
+            }
         };
 
-        subfolderInput?.addEventListener('change', saveDataManagementSettings);
-        autoExportSelect?.addEventListener('change', saveDataManagementSettings);
-        targetSelect?.addEventListener('change', saveDataManagementSettings);
+        if (autoExportSelect && !document.getElementById('btn-set-data-management')) {
+            // สร้าง Wrapper เพื่อให้ Dropdown และปุ่มอยู่บรรทัดเดียวกัน
+            const wrapper = document.createElement('div');
+            wrapper.style.cssText = 'display:flex; align-items:center; gap:8px; margin-top:4px;';
+            autoExportSelect.parentNode.insertBefore(wrapper, autoExportSelect);
+            wrapper.appendChild(autoExportSelect);
+
+            // 🟢 เพิ่มช่องเลือกเวลา (Time Input)
+            const timeInput = document.createElement('input');
+            timeInput.type = 'time';
+            timeInput.id = 'auto-export-time';
+            timeInput.className = 'settings-input';
+            timeInput.style.cssText = 'width: 115px; height: 38px; padding: 0 6px; border-radius: 8px; font-size: 11px; font-weight: 700; flex-shrink: 0;';
+            timeInput.value = appSettings.autoExportTime || "00:00";
+            wrapper.appendChild(timeInput);
+
+            const btnSet = document.createElement('button');
+            btnSet.id = 'btn-set-data-management';
+            btnSet.className = 'btn btn-outline';
+            btnSet.style.cssText = 'padding:0; width:38px; height:38px; display:flex; align-items:center; justify-content:center; border-radius:8px; flex-shrink:0;';
+            btnSet.onclick = saveDataManagementSettings;
+            wrapper.appendChild(btnSet);
+
+            // 🕒 ปุ่มดูเวลา Export รอบถัดไป
+            const btnInfo = document.createElement('button');
+            btnInfo.id = 'btn-show-next-export';
+            btnInfo.className = 'btn btn-outline';
+            btnInfo.style.cssText = 'padding:0; width:38px; height:38px; display:none; align-items:center; justify-content:center; border-radius:8px; flex-shrink:0;';
+            btnInfo.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>`;
+            btnInfo.onclick = () => {
+                const days = parseInt(autoExportSelect.value, 10);
+                const lastExport = appSettings.lastExportTimestamp || 0;
+                const timeStr = document.getElementById('auto-export-time')?.value || appSettings.autoExportTime || "00:00";
+                const [h, m] = timeStr.split(':').map(Number);
+
+                if (lastExport > 0) {
+                    const lastDate = new Date(lastExport);
+                    const nextDate = new Date(lastDate);
+                    nextDate.setDate(lastDate.getDate() + days);
+                    nextDate.setHours(h, m, 0, 0);
+                    alert(`📅 Next Auto-Backup scheduled for:\n${getShortDate(nextDate)} at ${timeStr}`);
+                } else {
+                    alert(`📅 First auto-backup is scheduled for today/tomorrow at ${timeStr}.\nIt will trigger after you perform a manual export or the time arrives.`);
+                }
+            };
+            wrapper.appendChild(btnInfo);
+        }
+        updateExportUI();
 
         btnManualExport?.addEventListener('click', () => {
             const performExport = (allData) => {
@@ -544,12 +704,12 @@ document.addEventListener('DOMContentLoaded', () => {
         updateArchivedStateUI();
 
         // 🟢 Step 3: Auto Sync Reminder Logic (Dismissible for this session)
-        if (!appSettings.firebaseAutoSync) {
+        if (!lSettings.firebaseAutoSync) {
             const msg = "คุณยังไม่ได้เปิด Auto Sync อย่าลืมเปิดหากต้องการให้ข้อมูลบันทึกลงคลาวด์อัตโนมัตินะครับ\n\n(คุณสามารถปิดการเตือนนี้ได้ที่สวิตช์ 'Reminders' ในเมนู Cloud Sync ครับ)";
             
             const triggerReminder = () => {
                 // ตรวจสอบทั้งสถานะการตั้งค่า และสถานะที่ผู้ใช้กดปิดไว้ในเซสชั่น
-                if (sessionReminderActive && !appSettings.firebaseAutoSync) {
+                if (sessionReminderActive && !lSettings.firebaseAutoSync) {
                     if (typeof window.showToast === 'function') {
                         window.showToast(msg);
                     } else {

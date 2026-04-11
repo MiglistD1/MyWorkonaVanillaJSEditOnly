@@ -763,12 +763,15 @@ export function setupSettingsModal(onRender) {
         const targetSelect = document.getElementById('export-target');
         const subfolderInput = document.getElementById('export-subfolder');
         const autoExportSelect = document.getElementById('auto-export-days');
-        const mergeCheck = document.getElementById('drive-merge-mode');
+        const autoExportTime = document.getElementById('auto-export-time');
 
         if (targetSelect) targetSelect.value = appSettings.exportTarget || "computer";
         if (subfolderInput) subfolderInput.value = appSettings.exportSubfolder || "MyBackups";
         if (autoExportSelect) autoExportSelect.value = appSettings.autoExportDays || 0;
-        if (mergeCheck) mergeCheck.checked = appSettings.mergeDriveData !== false;
+        if (autoExportTime) autoExportTime.value = appSettings.autoExportTime || "00:00";
+        
+        // 🟢 อัปเดตสถานะแม่กุญแจและข้อความปุ่มทันทีที่เปิดหน้า Modal
+        if (window.updateExportUI) window.updateExportUI();
 
         document.getElementById('setting-bg-card').value = appSettings.bgCard || "#ffffff";
         document.getElementById('setting-text-main').value = appSettings.textMain || "#111111";
@@ -800,6 +803,17 @@ export function setupSettingsModal(onRender) {
         appSettings.fontSize = parseInt(document.getElementById('setting-font-size').value) || 15;
         appSettings.spacebarFontSize = parseInt(document.getElementById('setting-spacebar-font-size').value) || 13;
         appSettings.autoDeleteDays = parseInt(document.getElementById('setting-auto-delete-days').value) || 30;
+
+        // 🟢 เพิ่มการเซฟส่วน Data Management เข้าไปด้วยเพื่อป้องกันค่าหลุด
+        const autoExportSelect = document.getElementById('auto-export-days');
+        const targetSelect = document.getElementById('export-target');
+        const subfolderInput = document.getElementById('export-subfolder');
+        const autoExportTime = document.getElementById('auto-export-time');
+        if (autoExportSelect) appSettings.autoExportDays = parseInt(autoExportSelect.value, 10);
+        if (autoExportTime) appSettings.autoExportTime = autoExportTime.value;
+        if (targetSelect) appSettings.exportTarget = targetSelect.value;
+        if (subfolderInput) appSettings.exportSubfolder = subfolderInput.value.trim() || "MyBackups";
+
         document.getElementById('settings-modal').style.display = 'none';
         saveData();
         applyAppSettings();

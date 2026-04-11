@@ -1666,6 +1666,15 @@ export function initTodoManager(callbacks) {
 
             if (!isChecked) {
                 task.wasRegenerated = false; // 🟢 รีเซ็ตเพื่อให้งานแสดงผลในรายการทันทีแม้จะเป็นวันอนาคต
+                
+                // 🟢 NEW: ตามไปลบ "งานงวดหน้า" ที่ระบบสร้างขึ้นอัตโนมัติ เพื่อป้องกันงานซ้ำซ้อนเมื่อเอาติ๊กออก
+                const futureTaskIdx = space.tasks.findIndex(t => 
+                    t !== task && t.text === task.text && !t.completed && t.repeatConfig?.isRepeating && t.createdAt > task.createdAt
+                );
+                if (futureTaskIdx > -1) {
+                    space.tasks.splice(futureTaskIdx, 1);
+                }
+
                 // 🟢 ย้ายกลับมาไว้บนสุดของรายการ To-do เพื่อให้ผู้ใช้เห็นการเปลี่ยนแปลงชัดเจน
                 const [restoredTask] = space.tasks.splice(index, 1);
                 space.tasks.unshift(restoredTask);
@@ -1738,7 +1747,7 @@ export function initTodoManager(callbacks) {
                     clonedTask.deletedAt = null;
                     clonedTask.expiryAt = null;
                     clonedTask.createdAt = Date.now();
-                    clonedTask.wasRegenerated = false; // งานตัวใหม่ต้องพร้อมสำหรับการทำซ้ำรอบถัดไป
+                    delete clonedTask.wasRegenerated; // 🟢 ล้าง Flag เพื่อให้งานถูกเก็บไว้ในส่วน Recurring จนกว่าจะถึงกำหนด
                     clonedTask.calendarEventId = null; // New task needs its own event
                     clonedTask.dueDate = nextDate;
                     clonedTask.occurrenceCount = (task.occurrenceCount || 1) + 1; // 🟢 เพิ่มตัวนับครั้งที่ทำ
@@ -2654,20 +2663,17 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
         const taskDue = task.dueDate ? new Date(task.dueDate).setHours(0,0,0,0) : null;
         const isRepeating = task.repeatConfig && task.repeatConfig.isRepeating;
         
-        // 🟢 แก้ไข: งานในอนาคตจะถูกซ่อนก็ต่อเมื่อ "เคยทำสำเร็จไปแล้วอย่างน้อย 1 ครั้ง" 
-        // หากเป็นงานใหม่ที่เพิ่งสร้าง (wasRegenerated ยังไม่มีค่า) จะต้องแสดงออกมาให้เห็น
-  // งานที่ทำซ้ำและยังไม่ถึงกำหนดจะถูกซ่อนจาก To-Do List หลัก
-        if (!task.completed && !task.isDeleted && taskDue && taskDue > today && !task.isProminent && isRepeating) return;
+        // 🟢 งานทำซ้ำงวดถัดไปที่ยังไม่ถึงกำหนด ให้ซ่อนไว้ในระบบ (Data) ห้ามนำมาวาดใน UI จนกว่าจะถึงวันจริงหรือติดธง
+        // วิธีนี้จะแก้ปัญหา "งานโผล่มา 2 ส่วน" โดยจะเหลือแค่รายการที่คุณเพิ่งทำเสร็จเท่านั้นที่โชว์ในกลุ่ม Recurring
+        const isUpcomingRepeating = !task.completed && !task.isDeleted && taskDue && taskDue > today && isRepeating && task.wasRegenerated !== false && !task.isProminent;
+        if (isUpcomingRepeating) return; 
 
-        const isRepeatingComplete = task.completed && task.repeatConfig && task.repeatConfig.isRepeating;
-        const isUpcomingRepeating = !task.completed && !task.isDeleted && taskDue && taskDue > today && isRepeating;
+        const isRepeatingComplete = task.completed && isRepeating;
+        
+        // 🟢 คำนวณวันที่ถัดไปเฉพาะสำหรับรายการที่ทำเสร็จแล้ว เพื่อแสดงผลใน Badge (เช่น Done -> Next: Feb 4)
+        let nextDueDateForDisplay = isRepeatingComplete ? calculateNextDate(task.dueDate, task.repeatConfig, task) : null;
 
-        let nextDueDateForDisplay = null;
-        if (isUpcomingRepeating || isRepeatingComplete) {
-            nextDueDateForDisplay = calculateNextDate(task.dueDate, task.repeatConfig, task);
-        }
-
-        const isRepeatingWaiting = isRepeatingComplete || isUpcomingRepeating;
+        const isRepeatingWaiting = isRepeatingComplete;
 
         const liContent = generateTaskHTML(task, index, {
             // ... (existing options)
