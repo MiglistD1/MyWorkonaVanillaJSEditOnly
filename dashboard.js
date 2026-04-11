@@ -36,7 +36,7 @@ function handleSpaceChange(newId, isNewSpace) {
     setSearchQuery("");
     resetUndoStack();
     document.getElementById('quick-search-input').value = "";
-    saveData();
+    saveData(true); // 🟢 บันทึกทันทีเพื่อให้เครื่องอื่นเปลี่ยน Space ตามได้เร็วขึ้น
     renderAll();
     updateArchivedStateUI();
 
@@ -96,18 +96,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // 🎨 Fix for tagBar.js: ทำให้ตัวแปร isDarkMode เข้าถึงได้จากทุกสคริปต์
         window.isDarkMode = !!appSettings.isDarkMode;
-
-        // 1. Requirement: Collapse all folders on refresh except locked ones
-        const allSpaces = getSpaces();
-        const spaces = allSpaces.filter(s => !s.isDeleted);
-        const allFolders = new Set(['General']);
-        spaces.forEach(s => { if(s.folder) allFolders.add(s.folder); });
-        const locked = appSettings.lockedFolders || [];
-
-        const curSpace = allSpaces.find(s => s.id === getCurrentSpaceId());
-        const activeFolder = curSpace ? (curSpace.folder || 'General') : null;
-        // กรองโฟลเดอร์ที่จะพับ: ต้องไม่ใช่ General, ไม่อยู่ในรายการ Locked และไม่ใช่โฟลเดอร์ที่กำลังใช้งาน
-        appSettings.collapsedFolders = Array.from(allFolders).filter(f => f !== 'General' && !locked.includes(f) && f !== activeFolder);
 
         setFilterTags([]);
         setSearchQuery("");

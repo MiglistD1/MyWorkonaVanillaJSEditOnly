@@ -175,7 +175,13 @@ export function saveData(immediate = false) {
     const performSave = async () => {
         // ⏱️ อัปเดต Timestamp ทุกครั้งก่อนบันทึกจริง เพื่อระบุว่าข้อมูลก้อนนี้คือเวอร์ชันล่าสุด
         appSettings.lastUpdated = Date.now();
-        const data = { 'mySpacesData': spaces, 'lastSpaceId': currentSpaceId, 'appSettings': appSettings, 'globalLaunchers': globalLaunchers, 'launcherTags': launcherTags };
+        const data = { 
+            'mySpacesData': spaces,     // 🟢 ซิงค์รายการ Space ทั้งหมด (รวมที่สร้างใหม่)
+            'lastSpaceId': currentSpaceId, // 🟢 ซิงค์ตำแหน่ง Space ล่าสุดที่เปิด
+            'appSettings': appSettings,   // 🟢 รวมสถานะการพับโฟลเดอร์ (collapsedFolders)
+            'globalLaunchers': globalLaunchers, 
+            'launcherTags': launcherTags 
+        };
         
         // 🏠 บันทึก Local Settings แยกต่างหาก (ไม่ส่งเข้า Firebase Hook)
         await saveDataItem('myLocalDeviceSettings', localSettings);
