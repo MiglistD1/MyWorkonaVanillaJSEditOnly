@@ -799,7 +799,7 @@ export function initMasterEvents() {
                 else if (delSubBtn) {
                     const pIdx = parseInt(delSubBtn.dataset.parentIndex);
                     const space = getSpaces().find(s => s.id === spaceId);
-                    if (confirm("Delete subtask?") && space) {
+                if (space && space.tasks[pIdx]?.subtasks) {
                         space.tasks[pIdx].subtasks.splice(taskIndex, 1);
                         saveData(); onRefresh();
                     }

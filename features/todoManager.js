@@ -1263,6 +1263,18 @@ export function initTodoManager(callbacks) {
             return;
         }
 
+        // 🔘 Delete Subtask Button
+        if (e.target.closest('.delete-subtask-btn')) {
+            const btn = e.target.closest('.delete-subtask-btn');
+            const pIdx = parseInt(btn.getAttribute('data-parent-index'));
+            const sIdx = parseInt(btn.getAttribute('data-sub-index'));
+            if (space.tasks[pIdx]?.subtasks) {
+                space.tasks[pIdx].subtasks.splice(sIdx, 1);
+                saveData();
+                onRenderCallback();
+            }
+            return;
+        }
 
         // 🔘 Toggle Subtask Specific Controls
         const subtaskMenuBtn = e.target.closest('.toggle-subtask-controls-btn');
@@ -1303,6 +1315,19 @@ export function initTodoManager(callbacks) {
             if (task) {
                 task.completed = true;
                 saveData(); onRenderCallback();
+            }
+            return;
+        }
+
+        // 🔘 Delete Subtask Button
+        if (e.target.closest('.delete-subtask-btn')) {
+            const btn = e.target.closest('.delete-subtask-btn');
+            const pIdx = parseInt(btn.getAttribute('data-parent-index'));
+            const sIdx = parseInt(btn.getAttribute('data-sub-index'));
+            if (space.tasks[pIdx]?.subtasks) {
+                space.tasks[pIdx].subtasks.splice(sIdx, 1);
+                saveData();
+                onRenderCallback();
             }
             return;
         }
@@ -1781,6 +1806,7 @@ export function initTodoManager(callbacks) {
             if (value && space.tasks[pIdx]) {
                 if (!space.tasks[pIdx].subtasks) space.tasks[pIdx].subtasks = [];
                 space.tasks[pIdx].subtasks.push({ id: Date.now(), text: value, completed: false });
+                input.value = ''; // 🟢 ล้างข้อความในช่องพิมพ์ทันทีเพื่อป้องกันการส่งซ้ำ
                 saveData();
                 // We keep addingSubtaskToIndex as pIdx to trigger the next input rendering
             } else {
@@ -2603,12 +2629,13 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
     const archiveContainer = document.getElementById('archived-tasks-details');
 
     if (!taskListUI) return;
-    // 🟢 ป้องกันการวาดทับขณะกำลังพิมพ์งานหลักหรืองานย่อย เพื่อไม่ให้คีย์บอร์ดหุบและเสียโฟกัส
-    if (document.activeElement && (
-        document.activeElement.classList.contains('task-actual-text') || 
-        document.activeElement.classList.contains('subtask-add-input') || 
-        document.activeElement.classList.contains('subtask-inline-input')
-    )) return; 
+    // 🟢 ป้องกันการวาดทับขณะกำลังพิมพ์ เพื่อไม่ให้คีย์บอร์ดหุบและเสียโฟกัส
+    // ยกเว้นกรณีที่กำลังกดยืนยัน (isSubmitting) เพื่อให้หน้าจออัปเดตรายการใหม่ทันที
+    if (document.activeElement && document.activeElement.dataset.isSubmitting !== "true") {
+        if (document.activeElement.classList.contains('task-actual-text') || 
+            document.activeElement.classList.contains('subtask-add-input') || 
+            document.activeElement.classList.contains('subtask-inline-input')) return;
+    }
 
     taskListUI.innerHTML = ''; 
     if (archiveListUI) archiveListUI.innerHTML = ''; 

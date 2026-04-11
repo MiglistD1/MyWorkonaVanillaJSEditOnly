@@ -449,33 +449,6 @@ export function generateTaskHTML(task, index, {
 export function attachSubtaskEventListeners(container, space, onRenderCallback, googleApiCallbacks = {}, onUpdate) {
     if (!container) return;
 
-    // 0. Handle More Actions Toggle (Mobile & Desktop)
-    container.addEventListener('click', (e) => {
-        const toggleBtn = e.target.closest('.toggle-actions-btn');
-        if (toggleBtn) {
-            e.preventDefault();
-            e.stopPropagation();
-            const actionGroup = toggleBtn.closest('.item-action-group');
-            const actions = actionGroup?.querySelector('.collapsible-actions');
-            if (actions) {
-                actions.style.display = 'flex';
-                toggleBtn.style.display = 'none';
-            }
-            return;
-        }
-
-        const closeBtn = e.target.closest('.close-actions-btn');
-        if (closeBtn) {
-            e.preventDefault();
-            const actions = closeBtn.closest('.collapsible-actions');
-            const toggleBtn = actions?.parentElement.querySelector('.toggle-actions-btn');
-            if (actions && toggleBtn) {
-                actions.style.display = 'none';
-                toggleBtn.style.display = 'flex';
-            }
-        }
-    });
-
     // 1. Handle Status Toggling (Checkbox)
     container.addEventListener('change', (e) => {
         if (e.target.classList.contains('subtask-check-box')) {
@@ -525,41 +498,6 @@ export function attachSubtaskEventListeners(container, space, onRenderCallback, 
             }
         }
     });
-
-    // 3. Handle Add Subtask via Enter or Blur (Mobile Optimization)
-    const handleAddSubtask = (input) => {
-        if (input.dataset.processed === "true") return;
-        const text = input.value.trim();
-        const pIdx = parseInt(input.getAttribute('data-parent'));
-
-        if (text && space.tasks[pIdx]) {
-            input.dataset.processed = "true";
-            if (!space.tasks[pIdx].subtasks) space.tasks[pIdx].subtasks = [];
-            space.tasks[pIdx].subtasks.push({
-                id: Date.now(),
-                text: text,
-                completed: false,
-                createdAt: Date.now()
-            });
-            if (onUpdate) onUpdate();
-        } else if (!text && input.dataset.processed !== "true") {
-            input.dataset.processed = "true";
-            if (onUpdate) onUpdate();
-        }
-    };
-
-    container.addEventListener('keydown', (e) => {
-        if (e.target.classList.contains('subtask-add-input') && e.key === 'Enter') {
-            e.preventDefault();
-            handleAddSubtask(e.target);
-        }
-    });
-
-    container.addEventListener('blur', (e) => {
-        if (e.target.classList.contains('subtask-add-input')) {
-            handleAddSubtask(e.target);
-        }
-    }, true); // Use capture for blur delegation
 }
 
 /**
@@ -567,33 +505,6 @@ export function attachSubtaskEventListeners(container, space, onRenderCallback, 
  */
 export function attachTaskInlineEditListeners(container, getSpaceFn, callbacks = {}) {
     const { fetchGoogleAPI, getGoogleAuthToken, getCurrentGoogleListId, saveData, onUpdate } = callbacks;
-
-    // 0. Handle More Actions Toggle for Main Tasks
-    container.addEventListener('click', (e) => {
-        const toggleBtn = e.target.closest('.toggle-actions-btn');
-        if (toggleBtn) {
-            e.preventDefault();
-            e.stopPropagation();
-            const actionGroup = toggleBtn.closest('.item-action-group');
-            const actions = actionGroup?.querySelector('.collapsible-actions');
-            if (actions) {
-                actions.style.display = 'flex';
-                toggleBtn.style.display = 'none';
-            }
-            return;
-        }
-
-        const closeBtn = e.target.closest('.close-actions-btn');
-        if (closeBtn) {
-            e.preventDefault();
-            const actions = closeBtn.closest('.collapsible-actions');
-            const toggleBtn = actions?.parentElement.querySelector('.toggle-actions-btn');
-            if (actions && toggleBtn) {
-                actions.style.display = 'none';
-                toggleBtn.style.display = 'flex';
-            }
-        }
-    });
 
     // 🟢 0. Handle Autocomplete during inline typing
     container.addEventListener('input', (e) => {
