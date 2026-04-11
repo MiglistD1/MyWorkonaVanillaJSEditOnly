@@ -453,6 +453,10 @@ export function initMasterEvents() {
             const space = spaces.find(s => s.id === spaceId);
             if (!space) return;
 
+            // 🟢 แสดงสถานะ Syncing บนปุ่ม
+            const checkboxWrapper = target.closest('.google-task-checkbox');
+            if (checkboxWrapper) checkboxWrapper.classList.add('is-syncing');
+
             // 1. Immediate UI Feedback (แอนิเมชั่นขีดฆ่า)
             if (isChecked) {
                 li.classList.add('completed-hold');

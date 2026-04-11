@@ -40,6 +40,13 @@ function debounce(func, delay) {
     };
 }
 
+// 🔒 Global Lock เพื่อป้องกัน Infinite Loop ระหว่าง Pull และ Push
+let isProcessingRemoteUpdate = false;
+
+// ⏱️ ตัวแปรสำหรับจำ Version ล่าสุดที่ได้รับจาก Server เพื่อตรวจจับ Conflict
+let lastSyncedServerTime = 0;
+let isConflictDetected = false;
+
 /**
  * 🛰️ Debounced function for syncing Note content to Firebase
  */
@@ -89,6 +96,9 @@ export function updateSyncStatusUI(state, detail = "") {
 
         if (lastSyncEl && detail) lastSyncEl.innerText = detail;
     } else if (displayState === 'synced') {
+        // 🟢 ล้างสถานะ Syncing ออกจากปุ่ม Checkbox ทั้งหมดเมื่อซิงค์เสร็จสมบูรณ์
+        document.querySelectorAll('.google-task-checkbox.is-syncing').forEach(el => el.classList.remove('is-syncing'));
+
         cloudSvg.classList.remove('spin');
         if (isAutoSync) {
             const color = '#10b981';
@@ -119,6 +129,9 @@ export function updateSyncStatusUI(state, detail = "") {
             }
         }
     } else if (displayState === 'offline') {
+        // 🟢 ล้างสถานะออกเช่นกันหากเกิด Error เพื่อให้ปุ่มกลับมาคลิกได้ปกติ
+        document.querySelectorAll('.google-task-checkbox.is-syncing').forEach(el => el.classList.remove('is-syncing'));
+
         cloudSvg.classList.remove('spin');
         const color = '#ef4444';
         triggerBtn.style.color = color;
@@ -308,6 +321,11 @@ export function initFirebaseSync() {
 
     // 1. Listen: รับข้อมูลจาก Firebase มาอัปเดตหน้าจอ
     onSnapshot(docRef, (snapshot) => {
+        if (isConflictDetected) return; // 🛑 หยุดรับข้อมูลหากอยู่ในสถานะรอตัดสินใจ Conflict
+
+        // 🛑 ข้ามถ้าเป็นข้อมูลที่เราเพิ่งเขียนลงไปเอง (Local Echo)
+        if (snapshot.metadata.hasPendingWrites) return;
+
         if (!getLocalSettings().firebaseAutoSync) return;
         const source = snapshot.metadata.fromCache ? "Local Cache" : "Server";
         if (snapshot.metadata.fromCache) {
@@ -317,16 +335,24 @@ export function initFirebaseSync() {
         if (data && data.content !== undefined) {
             // ตรวจสอบเพื่อป้องกัน Infinite Loop และ Cursor กระโดด
             if (workspaceNote.innerHTML !== data.content) {
+                isProcessingRemoteUpdate = true;
                 workspaceNote.innerHTML = data.content;
                 const space = getCurrentSpace();
                 if (space) space.note = data.content;
                 updateSyncStatusUI('synced', 'Firebase -> WebApp');
+                
+                // ปลดล็อกหลังจาก UI อัปเดตเสร็จ
+                setTimeout(() => { isProcessingRemoteUpdate = false; }, 1000);
             }
         }
     });
 
     // 🟢 5. Listen: รับข้อมูล Shortcuts (Launchers) จาก Cloud
     onSnapshot(docRefConfig, (snapshot) => {
+        if (isConflictDetected) return;
+
+        if (snapshot.metadata.hasPendingWrites) return;
+
         if (!getLocalSettings().firebaseAutoSync) return;
         const source = snapshot.metadata.fromCache ? "Local Cache" : "Server";
         if (snapshot.metadata.fromCache) {
@@ -345,14 +371,20 @@ export function initFirebaseSync() {
             }
             
             if (needsRender && window.renderAll) {
+                isProcessingRemoteUpdate = true;
                 window.renderAll();
                 updateSyncStatusUI('synced', 'Firebase -> WebApp');
+                setTimeout(() => { isProcessingRemoteUpdate = false; }, 1000);
             }
         }
     });
 
     // 🟢 3. Listen: รับข้อมูล Spaces/Tasks จาก Cloud
     onSnapshot(docRefSpaces, (snapshot) => {
+        if (isConflictDetected) return;
+
+        if (snapshot.metadata.hasPendingWrites) return;
+
         // 🛑 ตรวจสอบ Auto Sync และสถานะการพิมพ์
         if (!getLocalSettings().firebaseAutoSync || isAnyEditableElementFocused()) return;
 
@@ -367,19 +399,21 @@ export function initFirebaseSync() {
             
             // 🟢 ในโหมด Auto Sync เมื่อข้อมูลคลาวด์เปลี่ยน ให้อัปเดตลงเครื่องทันที (Passive Update)
             if (JSON.stringify(localSpaces) !== JSON.stringify(cloudSpaces)) {
+                isProcessingRemoteUpdate = true;
                 setSpaces(cloudSpaces);
                 if (window.renderAll) window.renderAll();
                 updateSyncStatusUI('synced', 'Firebase -> WebApp');
+                setTimeout(() => { isProcessingRemoteUpdate = false; }, 1000);
             }
         }
     });
 
     // 2. Push: เมื่อเราพิมพ์ ให้ส่งขึ้น Firebase ทันที
     workspaceNote.addEventListener('input', (e) => {
+        // 🟢 ตรวจสอบทั้งสถานะ Auto Sync และสถานะการรับข้อมูลจาก Server
+        if (!getLocalSettings().firebaseAutoSync || isProcessingRemoteUpdate || isConflictDetected) return;
+
         const content = e.target.innerHTML;
-        
-        // 🟢 Check Auto Sync state before automatic push
-        if (!getLocalSettings().firebaseAutoSync) return;
 
         // Only sync to cloud if the content has actually changed to avoid unnecessary writes
         if (getCurrentSpace()?.note !== content) {
@@ -576,4 +610,52 @@ export async function handleAutoSyncActivation() {
         updateSyncStatusUI('offline');
         return false;
     }
+}
+
+/**
+ * 🛡️ ฟังก์ชันจัดการเมื่อเกิดข้อมูลขัดแย้ง (Conflict Resolution UI)
+ */
+async function handleSyncConflict(cloudSpaces, cloudSettings, cloudLaunchers, cloudLauncherTags) {
+    isConflictDetected = true;
+    updateSyncStatusUI('offline', 'Conflict Detected!');
+
+    const choice = await showSyncChoiceModal("⚠️ พบข้อมูลขัดแย้ง (Concurrent Edit)", [
+        { id: 'pull', label: 'ใช้ข้อมูล Cloud', desc: 'ยอมรับการเปลี่ยนแปลงจากเครื่องอื่น (งานที่กำลังพิมพ์จะหายไป)', icon: '☁️' },
+        { id: 'merge', label: 'Merge', desc: 'พยายามรวมข้อมูลงานเข้าด้วยกัน', icon: '🧬' },
+        { id: 'push', label: 'ใช้ข้อมูลเครื่องนี้', desc: 'บังคับใช้ข้อมูลที่กำลังพิมพ์อยู่ทับ Cloud', icon: '💻' }
+    ]);
+
+    if (choice === 'pull') {
+        setSpaces(cloudSpaces);
+        setGlobalLaunchers(cloudLaunchers);
+        setLauncherTags(cloudLauncherTags);
+        lastSyncedServerTime = cloudSettings.lastUpdated;
+    } else if (choice === 'merge') {
+        const localSpaces = getSpaces();
+        const allIds = new Set([...localSpaces.map(s => s.id), ...cloudSpaces.map(s => s.id)]);
+        const mergedSpaces = Array.from(allIds).map(id => {
+            const local = localSpaces.find(s => s.id === id);
+            const cloud = cloudSpaces.find(s => s.id === id);
+            if (!local) return cloud;
+            if (!cloud) return local;
+            return {
+                ...cloud,
+                tasks: mergeArrays(cloud.tasks, local.tasks, 'text'),
+                resources: mergeArrays(cloud.resources, local.resources, 'url')
+            };
+        });
+        setSpaces(mergedSpaces);
+        // บันทึกกลับขึ้น Cloud ทันทีหลัง Merge
+        await setDoc(docRefSpaces, { spaces: mergedSpaces }, { merge: true });
+    } else if (choice === 'push') {
+        // ปล่อยให้ระบบ Push ปกติทำงานในรอบถัดไป หรือสั่งบันทึกทันที
+        saveData(true);
+    } else {
+        // หากกดปิด Modal โดยไม่เลือก: ให้ปิด Auto Sync เพื่อความปลอดภัย
+        getLocalSettings().firebaseAutoSync = false;
+    }
+
+    isConflictDetected = false;
+    if (window.renderAll) window.renderAll();
+    updateSyncStatusUI('synced');
 }

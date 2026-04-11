@@ -88,11 +88,18 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // ⏱️ Device-Specific Auto Sync Persistence Logic
         const now = Date.now();
-        if (!lSettings.autoSyncSessionExpiry || now > lSettings.autoSyncSessionExpiry) {
+        const expiry = lSettings.autoSyncSessionExpiry || 0;
+
+        if (expiry > now) {
+            // 🟢 ตรวจพบ Session ที่ยังไม่หมดอายุ: บังคับเปิด Auto Sync ทันที
+            lSettings.firebaseAutoSync = true;
+        } else {
+            // 🔴 ไม่มี Session หรือหมดอายุแล้ว: บังคับปิด Auto Sync (กฎความปลอดภัยพื้นฐาน)
             lSettings.firebaseAutoSync = false;
             lSettings.autoSyncSessionExpiry = 0;
-            saveData(true);
         }
+        saveData(true);
+        updateSyncStatusUI(); // 🛰️ อัปเดตสีไอคอน Cloud ทันทีตามสถานะใหม่
 
         // 🎨 Fix for tagBar.js: ทำให้ตัวแปร isDarkMode เข้าถึงได้จากทุกสคริปต์
         window.isDarkMode = !!appSettings.isDarkMode;

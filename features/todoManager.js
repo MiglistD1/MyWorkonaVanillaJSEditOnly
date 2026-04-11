@@ -1627,7 +1627,6 @@ export function initTodoManager(callbacks) {
                     window.processRewardScanner(subtask.text, false, { x: e.clientX, y: e.clientY }, 'task', space.id);
                 }
                 saveData(true);
-                triggerCloudSave();
                 // หน่วงเวลา Re-render เพื่อให้เห็น Animation
                 setTimeout(() => onRenderCallback(), isChecked ? 800 : 0);
             }
@@ -1638,6 +1637,10 @@ export function initTodoManager(callbacks) {
             const isChecked = e.target.checked;
             const index = parseInt(e.target.getAttribute('data-index'));
             const taskItem = e.target.closest('.task-item');
+            
+            // 🟢 แสดงสถานะ Syncing บนปุ่ม
+            const checkboxWrapper = e.target.closest('.google-task-checkbox');
+            if (checkboxWrapper) checkboxWrapper.classList.add('is-syncing');
 
             // Animation 4: Hold & Vanish Effect
             if (isChecked && taskItem) {

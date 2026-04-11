@@ -664,6 +664,21 @@ $.hl-reward[data-type="t"]::before { content: "⏳"; }$
     }
 }
 
+/* 🟢 สถานะแอนิเมชั่นขณะกำลังซิงค์ข้อมูลบน Checkbox */
+.google-task-checkbox.is-syncing .checkmark-circle {
+    border-color: #f59e0b !important; /* สีส้มแจ้งเตือนการซิงค์ */
+    border-style: dashed !important;
+    animation: sf-checkbox-spin 1s linear infinite !important;
+    background-color: transparent !important;
+}
+.google-task-checkbox.is-syncing .checkmark-circle svg {
+    opacity: 0.2 !important; /* จางเครื่องหมายถูกลงขณะซิงค์ */
+}
+@keyframes sf-checkbox-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
 /* ลบส่วน Merge Mode และองค์ประกอบที่เกี่ยวข้องออกถาวร */
 #drive-merge-mode, 
 label[for="drive-merge-mode"],

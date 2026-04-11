@@ -94,12 +94,15 @@ if (typeof window !== 'undefined') {
 export async function saveDataItem(key, value) {
   const dataToSave = typeof key === 'object' ? key : { [key]: value };
   return new Promise(resolve => {
+    // 1. บันทึกลง localStorage เสมอเพื่อความปลอดภัย (Redundancy) สำหรับ Web App/PWA
+    for (const k in dataToSave) {
+      localStorage.setItem(k, JSON.stringify(dataToSave[k]));
+    }
+
+    // 2. บันทึกลง chrome.storage.local หากใช้งานผ่าน Extension
     if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
       chrome.storage.local.set(dataToSave, resolve);
     } else {
-      for (const k in dataToSave) {
-        localStorage.setItem(k, JSON.stringify(dataToSave[k]));
-      }
       resolve();
     }
   });

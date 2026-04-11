@@ -644,6 +644,10 @@ export function renderHabitList(space) {
         el.querySelector('.habit-checkbox').addEventListener('change', (e) => {
             const isChecked = e.target.checked;
             
+            // 🟢 แสดงสถานะ Syncing บนปุ่ม
+            const checkboxWrapper = e.target.closest('.google-task-checkbox');
+            if (checkboxWrapper) checkboxWrapper.classList.add('is-syncing');
+
             if (isChecked) el.classList.add('completed-hold'); // แสดงผลขีดฆ่าทันที
 
             // 🌟 Quest Loot Scanner
