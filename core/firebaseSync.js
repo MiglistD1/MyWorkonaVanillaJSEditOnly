@@ -279,6 +279,7 @@ export function initFirebaseSync() {
 
     // 1. Listen: รับข้อมูลจาก Firebase มาอัปเดตหน้าจอ
     onSnapshot(docRef, (snapshot) => {
+        if (!getAppSettings().firebaseAutoSync) return;
         const source = snapshot.metadata.fromCache ? "Local Cache" : "Server";
         if (snapshot.metadata.fromCache) {
             console.log(`ℹ️ Notes data loaded from: ${source}`);
@@ -297,6 +298,7 @@ export function initFirebaseSync() {
 
     // 🟢 5. Listen: รับข้อมูล Shortcuts (Launchers) จาก Cloud
     onSnapshot(docRefConfig, (snapshot) => {
+        if (!getAppSettings().firebaseAutoSync) return;
         const source = snapshot.metadata.fromCache ? "Local Cache" : "Server";
         if (snapshot.metadata.fromCache) {
             console.log(`ℹ️ Config data loaded from: ${source}`);
@@ -322,8 +324,8 @@ export function initFirebaseSync() {
 
     // 🟢 3. Listen: รับข้อมูล Spaces/Tasks จาก Cloud
     onSnapshot(docRefSpaces, (snapshot) => {
-        // ป้องกันการทับข้อมูลขณะผู้ใช้กำลังพิมพ์งานหรือชื่อ Space
-        if (isAnyEditableElementFocused()) return;
+        // 🛑 ตรวจสอบ Auto Sync และสถานะการพิมพ์
+        if (!getAppSettings().firebaseAutoSync || isAnyEditableElementFocused()) return;
 
         const source = snapshot.metadata.fromCache ? "Local Cache" : "Server";
         if (snapshot.metadata.fromCache) {
@@ -333,44 +335,12 @@ export function initFirebaseSync() {
         if (data && data.spaces) {
             const cloudSpaces = data.spaces;
             const localSpaces = getSpaces();
-            const rawDiff = JSON.stringify(localSpaces) !== JSON.stringify(cloudSpaces);
-
-            if (rawDiff) {
-                // 🟢 ตรวจสอบ Conflict เฉพาะใน Tasks และ Resources (รวมถึง Drive Files)
-                const hasConflict = cloudSpaces.some(cloudSpace => {
-                    const localSpace = localSpaces.find(s => s.id === cloudSpace.id);
-                    if (!localSpace) return false; 
-
-                    const tasksDiff = JSON.stringify(cloudSpace.tasks) !== JSON.stringify(localSpace.tasks);
-                    const resDiff = JSON.stringify(cloudSpace.resources) !== JSON.stringify(localSpace.resources);
-                    const driveDiff = JSON.stringify(cloudSpace.driveFiles) !== JSON.stringify(localSpace.driveFiles);
-
-                    return tasksDiff || resDiff || driveDiff;
-                });
-
-                if (hasConflict) {
-                    if (confirm("พบข้อมูล [To-do / Resources] บนคลาวด์ไม่ตรงกับในเครื่อง คุณต้องการรวมข้อมูล (Merge) หรือไม่?")) {
-                        const mergedSpaces = cloudSpaces.map(cloudSpace => {
-                            const localSpace = localSpaces.find(s => s.id === cloudSpace.id);
-                            if (!localSpace) return cloudSpace;
-
-                            return {
-                                ...cloudSpace,
-                                tasks: mergeArrays(cloudSpace.tasks, localSpace.tasks, 'text'),
-                                resources: mergeArrays(cloudSpace.resources, localSpace.resources, 'url'),
-                                driveFiles: mergeArrays(cloudSpace.driveFiles, localSpace.driveFiles, 'url')
-                            };
-                        });
-                        setSpaces(mergedSpaces);
-                        if (window.renderAll) window.renderAll();
-                        setDoc(docRefSpaces, { spaces: mergedSpaces }, { merge: true });
-                        updateSyncStatusUI('synced', 'Merged -> Firebase');
-                    }
-                } else {
-                    setSpaces(cloudSpaces);
-                    if (window.renderAll) window.renderAll();
-                    updateSyncStatusUI('synced', 'Firebase -> WebApp');
-                }
+            
+            // 🟢 ในโหมด Auto Sync เมื่อข้อมูลคลาวด์เปลี่ยน ให้อัปเดตลงเครื่องทันที (Passive Update)
+            if (JSON.stringify(localSpaces) !== JSON.stringify(cloudSpaces)) {
+                setSpaces(cloudSpaces);
+                if (window.renderAll) window.renderAll();
+                updateSyncStatusUI('synced', 'Firebase -> WebApp');
             }
         }
     });
@@ -408,4 +378,173 @@ export function initFirebaseSync() {
             updateSyncStatusUI('offline');
         }
     });
+}
+
+/**
+ * 🎨 Helper: แสดงหน้าต่างเลือกตัวเลือกแบบเรืองแสงสำหรับ Auto Sync
+ */
+async function showSyncChoiceModal(title, choices) {
+    const modalId = 'sf-sync-reconcile-modal';
+    let modal = document.getElementById(modalId);
+    if (modal) modal.remove();
+
+    // 🎨 สร้าง Style ชั่วคราวสำหรับปุ่มที่ถูกเลือก
+    const styleId = 'sf-sync-modal-style';
+    if (!document.getElementById(styleId)) {
+        const style = document.createElement('style');
+        style.id = styleId;
+        style.innerHTML = `
+            .sf-sync-choice-btn.selected-pull { border-color: #10b981 !important; background: rgba(16, 185, 129, 0.1) !important; transform: translateY(-1px); }
+            .sf-sync-choice-btn.selected-push { border-color: #3b82f6 !important; background: rgba(59, 130, 246, 0.1) !important; transform: translateY(-1px); }
+            .sf-sync-choice-btn.selected-merge { border-color: #f59e0b !important; background: rgba(245, 158, 11, 0.1) !important; transform: translateY(-1px); }
+            .sf-sync-choice-btn.selected-overwrite { border-color: #ef4444 !important; background: rgba(239, 68, 68, 0.1) !important; transform: translateY(-1px); }
+            
+            .sf-sync-choice-btn .choice-icon { width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; opacity: 0.6; transition: all 0.2s ease; }
+            .sf-sync-choice-btn.selected-pull .choice-icon, .sf-sync-choice-btn.selected-push .choice-icon, .sf-sync-choice-btn.selected-merge .choice-icon { opacity: 1; transform: scale(1.1); }
+            
+            .sf-sync-choice-btn .choice-label-text { font-weight: 700; font-size: 12px; color: var(--text-main); }
+            .sf-sync-choice-btn.selected-pull .choice-label-text { color: #059669 !important; }
+            .sf-sync-choice-btn.selected-push .choice-label-text { color: #2563eb !important; }
+        `;
+        document.head.appendChild(style);
+    }
+
+    const modalHTML = `
+        <div class="modal-overlay" id="${modalId}" style="display:flex; z-index:21000; background:rgba(0,0,0,0.4); backdrop-filter:blur(4px);">
+            <div class="modal-content" style="width:280px; padding:16px; text-align:center; border-radius:14px; box-shadow: 0 10px 30px rgba(0,0,0,0.25); background:var(--bg-card); border:1px solid var(--border-color);">
+                <div style="margin-bottom:10px; display:flex; justify-content:center; color:var(--primary-color); opacity:0.8;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg></div>
+                <h3 style="margin:0; font-weight:800; font-size:14px; color:var(--text-main); letter-spacing:-0.2px;">${title}</h3>
+                <div id="sf-sync-choices-container" style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; margin-top:16px;">
+                    ${choices.map(c => `
+                        <button class="sf-sync-choice-btn" data-id="${c.id}" style="display:flex; flex-direction:column; align-items:center; gap:6px; padding:10px 6px; border:1px solid var(--border-color); border-radius:10px; background:var(--bg-body); cursor:pointer; transition:all 0.2s ease; outline:none;">
+                            <div class="choice-icon">${c.icon}</div>
+                            <div class="choice-label-text">${c.label}</div>
+                            <div style="font-size:10px; color:var(--text-muted); line-height:1.2; font-weight:500;">${c.desc}</div>
+                        </button>
+                    `).join('')}
+                </div>
+                <div style="margin-top:25px; text-align:center;">
+                    <button id="btn-sync-cancel" style="background:none; border:none; color:var(--text-muted); font-size:12px; cursor:pointer; text-decoration:underline; opacity:0.6; transition:opacity 0.2s;">ยกเลิกและปิด Auto Sync</button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    modal = document.getElementById(modalId);
+
+    return new Promise((resolve) => {
+        const btns = modal.querySelectorAll('.sf-sync-choice-btn');
+        btns.forEach(btn => {
+            btn.onclick = () => {
+                const choiceId = btn.dataset.id;
+                // ล้างคลาสเก่าและใส่คลาสใหม่ตามประเภทเพื่อแสดงสีที่ถูกต้อง
+                btns.forEach(b => b.className = 'sf-sync-choice-btn');
+                btn.classList.add(`selected-${choiceId}`);
+                
+                setTimeout(() => {
+                    modal.remove();
+                    resolve(btn.dataset.id);
+                }, 500); // หน่วงเวลาให้เห็นแสง
+            };
+        });
+
+        document.getElementById('btn-sync-cancel').onclick = () => {
+            modal.remove();
+            resolve(null);
+        };
+    });
+}
+
+/**
+ * 🛰️ ขั้นตอนการเปิดใช้งาน Auto Sync ครั้งแรก (Manual Reconcilation Flow)
+ */
+export async function handleAutoSyncActivation() {
+    const localSpaces = getSpaces();
+    
+    // 1. ให้ผู้ใช้เลือกทิศทางการซิงค์ตั้งต้นผ่าน Custom Modal
+    const direction = await showSyncChoiceModal("เลือกทิศทางการซิงค์ตั้งต้น", [
+        { id: 'pull', label: 'Pull', desc: 'ดึงข้อมูล Cloud มาทับเครื่อง', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7 7 7-7"/></svg>' },
+        { id: 'push', label: 'Push', desc: 'ส่งข้อมูลเครื่องไปทับ Cloud', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7-7 7 7"/></svg>' }
+    ]);
+    
+    if (!direction) return false;
+
+    updateSyncStatusUI('syncing', 'Checking conflicts...');
+    try {
+        const snapshot = await getDoc(docRefSpaces);
+        const cloudData = snapshot.data();
+        const cloudSpaces = cloudData?.spaces || [];
+
+        // 2. ตรวจสอบ Conflict เฉพาะ To-do และ Resources
+        let hasConflict = false;
+        const allIds = new Set([...localSpaces.map(s => s.id), ...cloudSpaces.map(s => s.id)]);
+        
+        for (const id of allIds) {
+            const local = localSpaces.find(s => s.id === id);
+            const cloud = cloudSpaces.find(s => s.id === id);
+            if (!local || !cloud) { hasConflict = true; break; }
+
+            const tasksMatch = JSON.stringify(local.tasks) === JSON.stringify(cloud.tasks);
+            const resMatch = JSON.stringify(local.resources) === JSON.stringify(cloud.resources);
+            const driveMatch = JSON.stringify(local.driveFiles) === JSON.stringify(cloud.driveFiles);
+
+            if (!tasksMatch || !resMatch || !driveMatch) { hasConflict = true; break; }
+        }
+
+        let finalSpaces = [];
+        if (hasConflict) {
+            // 3. ระบบถามเรื่องการ Merge ผ่าน Custom Modal
+            const resolveMethod = await showSyncChoiceModal("พบข้อมูลบางส่วนไม่ตรงกัน", [
+                { id: 'merge', label: 'Merge', desc: 'ผสานข้อมูล (ปลอดภัย)', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>' },
+                { id: 'overwrite', label: 'Overwrite', desc: `เขียนทับตามโหมด ${direction}`, icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>' }
+            ]);
+            
+            if (resolveMethod === 'merge') {
+                finalSpaces = Array.from(allIds).map(id => {
+                    const local = localSpaces.find(s => s.id === id);
+                    const cloud = cloudSpaces.find(s => s.id === id);
+                    if (!local) return cloud;
+                    if (!cloud) return local;
+                    return {
+                        ...cloud,
+                        tasks: mergeArrays(cloud.tasks, local.tasks, 'text'),
+                        resources: mergeArrays(cloud.resources, local.resources, 'url'),
+                        driveFiles: mergeArrays(cloud.driveFiles, local.driveFiles, 'url')
+                    };
+                });
+                setSpaces(finalSpaces);
+                await setDoc(docRefSpaces, { spaces: finalSpaces }, { merge: true });
+                updateSyncStatusUI('synced', 'Merged -> Firebase');
+            } else if (resolveMethod === 'overwrite') {
+                // Overwrite Logic
+                if (direction === 'pull') {
+                    finalSpaces = cloudSpaces;
+                    setSpaces(finalSpaces);
+                    updateSyncStatusUI('synced', 'Firebase -> WebApp');
+                } else {
+                    finalSpaces = localSpaces;
+                    await setDoc(docRefSpaces, { spaces: finalSpaces }, { merge: true });
+                    updateSyncStatusUI('synced', 'WebApp -> Firebase');
+                }
+            } else {
+                return false; // User cancelled
+            }
+        } else {
+            // กรณีข้อมูลตรงกันแล้ว แค่จัดเตรียมสถานะ
+            if (direction === 'pull') {
+                setSpaces(cloudSpaces);
+                updateSyncStatusUI('synced', 'Firebase -> WebApp');
+            } else {
+                await setDoc(docRefSpaces, { spaces: localSpaces }, { merge: true });
+                updateSyncStatusUI('synced', 'WebApp -> Firebase');
+            }
+        }
+
+        if (window.renderAll) window.renderAll();
+        return true;
+    } catch (error) {
+        console.error("Auto Sync activation flow failed:", error);
+        updateSyncStatusUI('offline');
+        return false;
+    }
 }

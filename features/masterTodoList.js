@@ -424,121 +424,36 @@ export function initMasterEvents() {
     });
 
     if (groupContainer) {
-        // 🟢 จัดการการเปลี่ยนเงื่อนไขการเรียงใน Master View
-        groupContainer.addEventListener('change', (e) => {
-            if (e.target.classList.contains('btn-master-space-sort')) {
-                const sid = parseInt(e.target.dataset.spaceId);
-                const val = e.target.value;
-                const space = getSpaces().find(s => s.id === sid);
-                if (space) {
-                    space.taskSortOrder = val;
-                    if (val !== 'manual') sortSpaceTasks(space);
-                    saveData(true); onRefresh();
-                }
-            }
+        // 🟢 Consolidate all listeners into one unified structure to prevent conflicts
+        groupContainer.addEventListener('click', async (e) => {
+            // Empty shell listener - handled by the secondary unified listener below
         });
-
-        // 🟢 จัดการการกดปุ่มในช่อง Add Subtask (Enter เพื่อสร้างต่อ, Escape เพื่อยกเลิก)
-        groupContainer.addEventListener('keydown', (e) => {
-            const input = e.target;
-            if (!input.classList.contains('subtask-add-input')) return;
-
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                input.dataset.isSubmitting = "true"; 
-                const pIdx = parseInt(input.getAttribute('data-parent'));
-                const value = input.value.trim();
-                const space = getSpaces().find(s => s.id === masterTodoListState.addingSubtaskToSpace);
-
-                if (value && space && space.tasks[pIdx]) {
-                    if (!space.tasks[pIdx].subtasks) space.tasks[pIdx].subtasks = [];
-                    space.tasks[pIdx].subtasks.push({ id: Date.now(), text: value, completed: false });
-                    saveData();
-                    // คงค่า Index ไว้เพื่อให้สร้างช่องถัดไปในตอน Render
-                } else {
-                    masterTodoListState.addingSubtaskToIndex = null;
-                    masterTodoListState.addingSubtaskToSpace = null;
-                }
-                onRefresh();
-            } else if (e.key === 'Escape') {
-                masterTodoListState.addingSubtaskToIndex = null;
-                masterTodoListState.addingSubtaskToSpace = null;
-                onRefresh();
-            }
-        });
-
-        // 🟢 จัดการการเสียโฟกัส
-        groupContainer.addEventListener('focusout', (e) => {
-            if (!e.target.classList.contains('subtask-add-input')) return;
-            if (e.target.dataset.isSubmitting === "true") return;
-
-            setTimeout(() => {
-                if (document.activeElement && document.activeElement.classList.contains('subtask-add-input')) return;
-                masterTodoListState.addingSubtaskToIndex = null;
-                masterTodoListState.addingSubtaskToSpace = null;
-                onRefresh();
-            }, 150);
-        });
-        
-        groupContainer.addEventListener('change', (e) => {
-            if (e.target.classList.contains('master-task-checkbox')) {
-                const sid = parseInt(e.target.dataset.space);
-                const idx = parseInt(e.target.dataset.idx);
-                const isChecked = e.target.checked;
-                const taskItem = e.target.closest('.task-item');
-                const space = getSpaces().find(s => s.id === sid);
-
-                // 🌟 แสดง Animation ขีดฆ่า และเรียก Reward Scanner
-                if (isChecked && taskItem && space && space.tasks[idx]) {
-                    taskItem.classList.add('completed-hold');
-                    playTaskCompletedSound();
-                    if (window.processRewardScanner) {
-                        window.processRewardScanner(space.tasks[idx].text, false, { x: e.clientX, y: e.clientY }, 'task', space.id, { tags: space.tasks[idx].tags });
-                    }
-                }
-
-                if (space && space.tasks[idx]) {
-                    const task = space.tasks[idx];
-                    
-                    if (isChecked) {
-                        task.isDeleted = true;
-                        task.deletedAt = Date.now();
-                        const days = getAppSettings().autoDeleteDays || 30;
-                        task.expiryAt = task.deletedAt + (days * 24 * 60 * 60 * 1000);
-                        task.completed = false;
-                        task.isProminent = false;
-                    } else {
-                        task.completed = false;
-                        task.completedAt = null;
-                        task.isDeleted = false; // 🟢 กู้คืนจากถังขยะเมื่อเอาเครื่องหมายถูกออก (Restore)
-                        task.deletedAt = null;
-                        task.expiryAt = null;
-
-                        // 🟢 ย้ายไปไว้บนสุดของ Space นั้นๆ เพื่อให้เห็นผลทันทีใน Command Center
-                        const [restoredTask] = space.tasks.splice(idx, 1);
-                        space.tasks.unshift(restoredTask);
-                    }
-                    saveData(true); 
-                    onRefresh(); // 🟢 เอาการหน่วงเวลาออกเพื่อให้ทำงานทันที
-                }
-                    setTimeout(() => {
-                        if (!isAnyEditableElementFocused()) onRefresh();
-                    }, isChecked ? 800 : 0); // 800ms for completion animation, 0 for uncheck
-        }
-    });
 
         groupContainer.addEventListener('click', async (e) => {
             const target = e.target;
 
-            // 🔘 1. More Actions (Circle icon) Toggle
+            // 🔘 1. Individual Task Actions Toggle (จุดวงกลมท้ายงาน) - แก้ไขให้รองรับค่าว่าง
             const toggleBtn = target.closest('.toggle-actions-btn');
             if (toggleBtn) {
-                const container = toggleBtn.parentElement.querySelector('.collapsible-actions');
-                if (container) {
-                    const isHidden = container.style.display === 'none';
-                    container.style.display = isHidden ? 'flex' : 'none';
+                // 🟢 ปรับปรุงการหา Container ให้แม่นยำขึ้นโดยใช้ closest
+                const group = toggleBtn.closest('.item-action-group');
+                const menu = group?.querySelector('.collapsible-actions');
+                if (menu) {
+                    const isHidden = menu.style.display === 'none' || menu.style.display === '';
+                    menu.style.display = isHidden ? 'flex' : 'none';
                     toggleBtn.classList.toggle('expanded');
                 }
+                return;
+            }
+
+            // 🔘 2. Close Individual Actions (ปุ่ม ✕ ในเมนูที่กางออกมา)
+            const closeActionsBtn = target.closest('.close-actions-btn');
+            if (closeActionsBtn) {
+                const group = closeActionsBtn.closest('.item-action-group');
+                const menu = group?.querySelector('.collapsible-actions');
+                const toggle = group?.querySelector('.toggle-actions-btn');
+                if (menu) menu.style.display = 'none';
+                if (toggle) toggle.classList.remove('expanded');
                 return;
             }
 
@@ -579,7 +494,7 @@ export function initMasterEvents() {
             */
 
             // 🔘 Toggle Subtask Specific Controls (Master View)
-            const subtaskMenuBtn = target.closest('.toggle-subtask-controls-btn');
+            const subtaskMenuBtn = target.closest('.toggle-subtask-controls-btn'); 
             if (subtaskMenuBtn) {
                 const idx = parseInt(subtaskMenuBtn.dataset.index);
                 const sid = parseInt(subtaskMenuBtn.dataset.spaceId);
@@ -692,157 +607,93 @@ export function initMasterEvents() {
                 return;
             }
 
+            // 🔘 6. Space Prominent Visibility & Other Controls
             const visibilityBtn = target.closest('.btn-master-space-toggle-prominent');
             if (visibilityBtn) {
+                e.preventDefault();
+                e.stopPropagation();
                 const sid = parseInt(visibilityBtn.dataset.spaceId);
                 const space = getSpaces().find(s => s.id === sid);
                 if (space) { space.hideProminentTasks = !space.hideProminentTasks; saveData(); onRefresh(); }
                 return;
             }
+
             const gotoBtn = target.closest('.btn-master-goto-space');
             if (gotoBtn) {
+                e.preventDefault();
+                e.stopPropagation();
                 const sid = parseInt(gotoBtn.dataset.spaceId);
                 const sidebarItem = document.querySelector(`#spacebar .space-item[data-id="${sid}"]`);
                 if (sidebarItem) sidebarItem.click();
                 return;
             }
+
+            // 🔘 7. Task Item General Logic (Flag, Edit, Delete)
             const taskItem = target.closest('li[data-type]');
             if (!taskItem) return;
             const spaceId = parseInt(taskItem.dataset.spaceId);
             const taskIndex = parseInt(taskItem.dataset.index);
+            
+            // Handle Flagging (Prominent)
             if (target.closest('.btn-prominent-task')) {
                 const btn = target.closest('.btn-prominent-task');
                 const pIdxAttr = btn.getAttribute('data-parent-index');
                 const pIdx = pIdxAttr !== null ? parseInt(pIdxAttr) : null;
-
                 const space = getSpaces().find(s => s.id === spaceId);
-                let task;
-                if (pIdx !== null) {
-                    task = space.tasks[pIdx]?.subtasks?.[taskIndex];
-                    if (task) {
-                        task.isProminent = !task.isProminent;
-                        saveData(); onRefresh();
-                    }
-                    return;
-                }
-
-                task = space.tasks[taskIndex];
-                if (task.isProminent) {
-                    task.isProminent = false;
-                    const settings = getAppSettings();
-                    if (settings.focusedTask && settings.focusedTask.spaceId === spaceId && settings.focusedTask.createdAt === task.createdAt) {
-                        settings.focusedTask = null;
-                    }
-
-                    if (typeof task.originalIndex === 'number') {
-                        const [movedTask] = space.tasks.splice(taskIndex, 1);
-                        space.tasks.splice(Math.min(task.originalIndex, space.tasks.length), 0, movedTask);
-                        delete task.originalIndex;
-                    }
-                } else {
-                    task.isProminent = true; 
-                    task.originalIndex = taskIndex;
-                    const [movedTask] = space.tasks.splice(taskIndex, 1);
-                    
-                    // 🟢 FIFO Flagging: ค้นหาตำแหน่งสุดท้ายของกลุ่มงานที่ติดธงอยู่แล้ว
-                    let lastProminentIdx = -1;
-                    for (let i = 0; i < space.tasks.length; i++) {
-                        if (space.tasks[i].isProminent) {
-                            lastProminentIdx = i;
-                        } else {
-                            break;
+                let task = (pIdx !== null) ? space.tasks[pIdx]?.subtasks?.[taskIndex] : space.tasks[taskIndex];
+                
+                if (task) {
+                    if (task.isProminent) {
+                        task.isProminent = false;
+                        const settings = getAppSettings();
+                        if (settings.focusedTask?.spaceId === spaceId && settings.focusedTask?.createdAt === task.createdAt) {
+                            settings.focusedTask = null;
                         }
+                        if (typeof task.originalIndex === 'number') {
+                            const [movedTask] = space.tasks.splice(taskIndex, 1);
+                            space.tasks.splice(Math.min(task.originalIndex, space.tasks.length), 0, movedTask);
+                            delete task.originalIndex;
+                        }
+                    } else {
+                        task.isProminent = true; 
+                        task.originalIndex = taskIndex;
+                        const [movedTask] = space.tasks.splice(taskIndex, 1);
+                        let lastProminentIdx = -1;
+                        for (let i = 0; i < space.tasks.length; i++) {
+                            if (space.tasks[i].isProminent) lastProminentIdx = i;
+                            else break;
+                        }
+                        space.tasks.splice(lastProminentIdx + 1, 0, movedTask);
                     }
-                    // แทรกต่อท้ายกลุ่มงานที่ติดธงล่าสุด
-                    space.tasks.splice(lastProminentIdx + 1, 0, movedTask);
-                }
-                saveData(); onRefresh(); return;
-            }
-            
-            // 🟢 NEW: Context Menu for Focus (Right-click on Flag) in Master View
-            const flagBtn = target.closest('.btn-prominent-task[data-focus-trigger="true"]');
-            if (flagBtn) {
-                e.preventDefault(); // Prevent default browser context menu
-                e.stopPropagation();
-
-                // Close any existing custom menu
-                const existingMenu = document.getElementById('task-focus-context-menu');
-                if (existingMenu) existingMenu.remove();
-
-                const taskItemEl = flagBtn.closest('.task-item');
-                if (!taskItemEl) return;
-
-                const spaceId = parseInt(taskItemEl.dataset.spaceId);
-                const taskIndex = parseInt(taskItemEl.dataset.index);
-
-                const space = getSpaces().find(s => s.id === spaceId);
-                const task = space.tasks[taskIndex];
-                if (!task) return;
-
-                const settings = getAppSettings();
-                const isFocused = settings.focusedTask &&
-                                  settings.focusedTask.spaceId === spaceId &&
-                                  settings.focusedTask.createdAt === task.createdAt;
-
-                const menu = document.createElement('div');
-                menu.id = 'task-focus-context-menu';
-                menu.className = 'sf-sub-popup'; // Reusing existing popup style
-                menu.style.cssText = `
-                    position: fixed;
-                    top: ${e.clientY}px;
-                    left: ${e.clientX}px;
-                    min-width: 150px;
-                    padding: 4px;
-                    z-index: 9999;
-                    display: flex;
-                    flex-direction: column;
-                `;
-
-                menu.innerHTML = `
-                    <button class="menu-item" id="ctx-toggle-focus" style="display:flex; align-items:center; width:100%; padding:6px 10px; border:none; background:transparent; cursor:pointer; font-size:13px; color:var(--text-main); text-align:left; border-radius:4px;">
-                        <svg class="svg-icon-sm" style="margin-right:8px;"><use href="#icon-${isFocused ? 'eye-off' : 'target'}"></use></svg> ${isFocused ? 'Stop Focusing' : 'Focus this task'}
-                    </button>
-                `;
-
-                document.body.appendChild(menu);
-
-                // Position adjustment to keep it in viewport
-                const menuRect = menu.getBoundingClientRect();
-                if (menuRect.right > window.innerWidth) menu.style.left = `${e.clientX - menuRect.width}px`;
-                if (menuRect.bottom > window.innerHeight) menu.style.top = `${e.clientY - menuRect.height}px`;
-
-                document.getElementById('ctx-toggle-focus').addEventListener('click', () => {
-                    toggleTaskFocus(spaceId, taskIndex, false, null); // Call the shared function
-                    menu.remove();
-                });
-                document.addEventListener('click', () => menu.remove(), { once: true }); // Close on outside click
-                return; // Stop further click processing
-            }
-            // 🟢 แก้ไข: จัดการปุ่มแก้ไขและลบให้ครอบคลุมถึง Subtask
-            const editSubBtn = target.closest('.edit-subtask-btn');
-            const delSubBtn = target.closest('.delete-subtask-btn');
-
-            if ( target.closest('.edit-task-btn') || target.closest('.delete-task-btn') || editSubBtn || delSubBtn) {
-                setCurrentSpaceId(spaceId); window._isModalOpenedFromCommandCenter = true;
-            }
-            if (editSubBtn) openTaskEditModal(parseInt(editSubBtn.dataset.parentIndex), true, parseInt(editSubBtn.dataset.id));
-            else if (target.closest('.edit-task-btn')) openTaskEditModal(taskIndex, true);
-            else if (delSubBtn) {
-                const pIdx = parseInt(delSubBtn.dataset.parentIndex);
-                const space = getSpaces().find(s => s.id === spaceId);
-                if (confirm("Delete subtask?") && space) {
-                    space.tasks[pIdx].subtasks.splice(taskIndex, 1);
                     saveData(); onRefresh();
                 }
+                return;
             }
-            else if (target.closest('.delete-task-btn')) {
-                if (confirm("Delete this task?")) {
+
+            // Handle Edit & Delete
+            const editSubBtn = target.closest('.edit-subtask-btn');
+            const delSubBtn = target.closest('.delete-subtask-btn');
+            const isEdit = target.closest('.edit-task-btn');
+            const isDelete = target.closest('.delete-task-btn');
+
+            if (isEdit || isDelete || editSubBtn || delSubBtn) {
+                setCurrentSpaceId(spaceId); window._isModalOpenedFromCommandCenter = true;
+                if (editSubBtn) openTaskEditModal(parseInt(editSubBtn.dataset.parentIndex), true, parseInt(editSubBtn.dataset.id));
+                else if (isEdit) openTaskEditModal(taskIndex, true);
+                else if (delSubBtn) {
+                    const pIdx = parseInt(delSubBtn.dataset.parentIndex);
                     const space = getSpaces().find(s => s.id === spaceId);
-                    if (space) { 
-                        const task = space.tasks[taskIndex];
-                        space.tasks.splice(taskIndex, 1); saveData(); setCurrentSpaceId(0); onRefresh(); 
+                    if (confirm("Delete subtask?") && space) {
+                        space.tasks[pIdx].subtasks.splice(taskIndex, 1);
+                        saveData(); onRefresh();
                     }
-                } else setCurrentSpaceId(0);
+                }
+                else if (isDelete) {
+                    if (confirm("Delete this task?")) {
+                        const space = getSpaces().find(s => s.id === spaceId);
+                        if (space) { space.tasks.splice(taskIndex, 1); saveData(); setCurrentSpaceId(0); onRefresh(); }
+                    } else setCurrentSpaceId(0);
+                }
             }
         });
 

@@ -1,5 +1,5 @@
 import { initFocusTimer } from './features/focusTimer.js';
-import { initFirebaseSync, forcePushNote, forcePullNote, updateSyncStatusUI } from "./core/firebaseSync.js";
+import { initFirebaseSync, forcePushNote, forcePullNote, updateSyncStatusUI, handleAutoSyncActivation } from "./core/firebaseSync.js";
 
 import { initScheduleMode } from './features/scheduleMode.js';
 import { initSidebar, renderSidebar } from './components/sidebar.js';
@@ -22,6 +22,7 @@ import {
 } from './core/storage.js';
 
 let sessionReminderActive = true; // 🟢 ตัวแปรสำหรับคุมการแจ้งเตือนในเซสชั่นปัจจุบัน
+let isActivatingAutoSync = false; // 🔒 ป้องกันการปิด Popup ขณะกำลังตั้งค่า
 
 
 function handleSpaceChange(newId, isNewSpace) {
@@ -165,6 +166,7 @@ document.addEventListener('DOMContentLoaded', () => {
             };
             
             document.addEventListener('click', (e) => {
+                if (isActivatingAutoSync) return; // 🛑 ห้ามปิดหน้าต่างถ้ากำลังอยู่ในขั้นตอน Reconciliation
                 if (!syncPopup.contains(e.target) && e.target !== syncTrigger) {
                     syncPopup.style.display = 'none';
                 }
@@ -185,11 +187,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (autoSyncChk) {
             autoSyncChk.checked = !!appSettings.firebaseAutoSync;
-            autoSyncChk.onchange = () => {
-                appSettings.firebaseAutoSync = autoSyncChk.checked;
-                saveData();
-                updateSyncStatusUI(); // 🟢 อัปเดตสีไอคอนก้อนเมฆทันทีเมื่อมีการสับสวิตช์
-                updateReminderUI();   // 🟢 อัปเดตการแสดงผลปุ่ม Mute
+            autoSyncChk.onchange = async () => {
+                if (autoSyncChk.checked) {
+                    isActivatingAutoSync = true;
+                    const success = await handleAutoSyncActivation();
+                    isActivatingAutoSync = false;
+                    
+                    if (success) {
+                        appSettings.firebaseAutoSync = true;
+                        // 🛑 เอา syncPopup.style.display = 'none' ออกตามคำขอ เพื่อให้ผู้ใช้เห็นว่าสวิตช์ ON แล้วจริงๆ
+                    } else {
+                        autoSyncChk.checked = false;
+                        appSettings.firebaseAutoSync = false;
+                    }
+                } else {
+                    appSettings.firebaseAutoSync = false;
+                }
+                saveData(true);
+                updateSyncStatusUI(); 
+                updateReminderUI();
             };
         }
 
