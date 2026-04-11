@@ -169,9 +169,26 @@ export async function renderSyncHistoryUI() {
         container.innerHTML = '<div style="text-align:center; opacity:0.5;">No history yet</div>';
         if (clearBtn) clearBtn.style.display = 'none';
     } else {
-        container.innerHTML = history.map(entry => 
-            `<div style="padding: 2px 0; border-bottom: 1px solid rgba(0,0,0,0.03); width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">• ${entry}</div>`
-        ).join('');
+        container.innerHTML = history.map(entry => {
+            let icon = '•';
+            let color = 'var(--text-muted)';
+            
+            // 🔵 Push: WebApp -> Firebase หรือ Merged -> Firebase
+            if (entry.includes('-> Firebase')) {
+                icon = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;"><path d="M12 5v14M5 12l7-7 7 7"/></svg>`;
+                color = '#3b82f6';
+            } 
+            // 🟢 Pull: Firebase -> WebApp
+            else if (entry.includes('Firebase ->')) {
+                icon = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;"><path d="M12 19V5M5 12l7 7 7-7"/></svg>`;
+                color = '#10b981';
+            }
+
+            return `<div style="padding: 6px 0; border-bottom: 1px solid var(--border-color); width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; display: flex; align-items: center; color: ${color};">
+                ${icon}
+                <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; font-weight: 600;">${entry}</span>
+            </div>`;
+        }).join('');
         if (clearBtn) clearBtn.style.display = 'flex';
     }
 }
@@ -275,6 +292,18 @@ export function initFirebaseSync() {
             historyBtn.innerText = isHidden ? 'Hide History' : 'View History';
             if (isHidden) renderSyncHistoryUI();
         };
+    }
+
+    // 🎨 ปรับสีปุ่ม Push/Pull ใน Popup ให้ตรงตามสีในประวัติ
+    const styleId = 'sf-sync-btn-custom-colors';
+    if (!document.getElementById(styleId)) {
+        const style = document.createElement('style');
+        style.id = styleId;
+        style.innerHTML = `
+            #btn-firebase-pull { color: #10b981 !important; font-weight: 800 !important; }
+            #btn-firebase-push { color: #3b82f6 !important; font-weight: 800 !important; }
+        `;
+        document.head.appendChild(style);
     }
 
     // 1. Listen: รับข้อมูลจาก Firebase มาอัปเดตหน้าจอ

@@ -441,7 +441,7 @@ export function renderSmartFlow(container) {
                 </button>
             </div>
         </div>
-        <div style="height: 1px; background: var(--border-color); margin: 8px 0; opacity: 0.5;"></div>
+        <div style="height: 2px; background: var(--border-color); margin: 12px 0; opacity: 0.8;"></div>
         
         <div id="sf-tag-bar-container" class="tag-bar" style="padding: 5px 0; min-height: auto; gap: 8px;"></div>
 
@@ -691,6 +691,7 @@ function renderFlowList() {
 
     checkAndResetFlowItems(); // 🟢 รีเซ็ตสถานะก่อนวาดรายการ
 
+    const isMobile = window.innerWidth <= 768;
     // ID to Index mapping for dependency display
     const idToNumMap = {};
     flowItems.forEach((item, idx) => idToNumMap[item.id] = idx + 1);
@@ -778,10 +779,15 @@ function renderFlowList() {
         }
 
         // 🟢 Requirement 2: ป้าย Habit Tracker สวยๆ
-        const habitBadge = (item.habitConfig && item.habitConfig.enabled) ? `<span class="sf-habit-indicator-badge">H</span>` : '';
+        const habitBadge = (!isMobile && item.habitConfig && item.habitConfig.enabled) ? `<span class="sf-habit-indicator-badge">H</span>` : '';
 
         // 🟢 เพิ่มป้าย Focus Mode สวยๆ
-        const focusBadge = (item.focusConfig && item.focusConfig.enabled) ? `<span class="sf-focus-indicator-badge">F${item.focusConfig.minutes || 25}</span>` : '';
+        const focusBadge = (!isMobile && item.focusConfig && item.focusConfig.enabled) ? `<span class="sf-focus-indicator-badge">F${item.focusConfig.minutes || 25}</span>` : '';
+
+        // 🟢 ปุ่ม Info สำหรับ Mobile เพื่อรวบ Badge ทั้งหมด
+        const mobileInfoBtn = (isMobile && (item.focusConfig?.enabled || item.habitConfig?.enabled || (item.tags && item.tags.length > 0)))
+            ? `<button class="btn-icon btn-sf-mobile-info" data-id="${item.id}" style="padding: 2px; color: var(--primary-color); opacity: 0.8;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>`
+            : '';
 
         // 🟢 ล้างข้อความส่วนเกินออกจาก Description เนื่องจากมี Badge แสดงผลแล้ว
         let displayDesc = (item.description || "")
@@ -812,13 +818,18 @@ function renderFlowList() {
                 ${actionBtnHtml}
 
                 <div class="smart-flow-content">
-                    <div style="display:flex; align-items:center; gap:8px;">
-                        <div class="smart-flow-title" contenteditable="true" data-id="${item.id}">${item.title}</div>
-                        ${focusBadge}
-                        ${habitBadge}
-                        ${(item.tags && item.tags.length > 0) ? `
-                            <div class="sf-item-tags-badge" title="${item.tags.join(', ')}"><svg class="svg-icon-sm" style="width:10px; height:10px;"><use href="#icon-tag"></use></svg><span>${item.tags.length}</span></div>
-                        ` : ''}
+                    <div style="display:flex; align-items:center; gap:8px; width: 100%; justify-content: space-between;">
+                        <div style="display:flex; align-items:center; gap:8px; flex: 1; min-width: 0;">
+                            <div class="smart-flow-title" contenteditable="true" data-id="${item.id}">${item.title}</div>
+                            ${focusBadge}
+                            ${habitBadge}
+                        </div>
+                        <div style="display:flex; align-items:center; flex-shrink: 0;">
+                            ${mobileInfoBtn}
+                            ${(item.tags && item.tags.length > 0) ? `
+                                ${isMobile ? '' : `<div class="sf-item-tags-badge" title="${item.tags.join(', ')}"><svg class="svg-icon-sm" style="width:10px; height:10px;"><use href="#icon-tag"></use></svg><span>${item.tags.length}</span></div>`}
+                            ` : ''}
+                        </div>
                     </div>
                     <div class="sf-timer-container" style="padding-left: 6px;">
                         ${repeatCountdownText ? `<div class="sf-countdown-timer">${repeatCountdownText}</div>` : ''}
@@ -1307,6 +1318,15 @@ function attachFlowEvents(listEl) {
     listEl.onclick = (e) => {
         const target = e.target;
         
+        // 🔘 Mobile Info Popup
+        const infoBtn = target.closest('.btn-sf-mobile-info');
+        if (infoBtn) {
+            e.stopPropagation();
+            const item = flowItems.find(fi => fi.id === infoBtn.dataset.id);
+            if (item) showSfMobileInfoPopup(infoBtn, item);
+            return;
+        }
+
         // ใช้ closest เพื่อให้กดโดนไอคอนแล้วปุ่มยังทำงานได้แม่นยำ
         const depsBtn = target.closest('.flow-opt-deps');
         const settingsBtn = target.closest('.flow-opt-settings');
@@ -1506,6 +1526,51 @@ function checkIcon() {
 
 function cancelIcon() {
     return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
+}
+
+/**
+ * 📱 แสดง Popup ข้อมูลงานสำหรับ UI มือถือ
+ */
+function showSfMobileInfoPopup(anchorEl, item) {
+    const existing = document.getElementById('sf-mobile-info-popup');
+    if (existing) existing.remove();
+
+    const popup = document.createElement('div');
+    popup.id = 'sf-mobile-info-popup';
+    popup.className = 'sf-sub-popup';
+    popup.style.width = '200px';
+    popup.style.padding = '12px';
+
+    let html = `<div style="font-weight:800; font-size:11px; margin-bottom:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">Step Details</div>`;
+    
+    if (item.focusConfig?.enabled) {
+        html += `<div style="display:flex; align-items:center; gap:8px; margin-bottom:8px; font-size:13px; font-weight:700; color:#3b82f6;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Focus: ${item.focusConfig.minutes}m</div>`;
+    }
+    if (item.habitConfig?.enabled) {
+        html += `<div style="display:flex; align-items:center; gap:8px; margin-bottom:8px; font-size:13px; font-weight:700; color:#10b981;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg> Habit Tracker On</div>`;
+    }
+    if (item.tags && item.tags.length > 0) {
+        html += `<div style="margin-top:10px; border-top:1px solid var(--border-color); padding-top:8px; display:flex; flex-wrap:wrap; gap:4px;">
+            ${item.tags.map(t => `<span class="tag-pill" style="font-size:9px; padding:1px 6px;">#${t}</span>`).join('')}
+        </div>`;
+    }
+
+    popup.innerHTML = html;
+    document.body.appendChild(popup);
+
+    const rect = anchorEl.getBoundingClientRect();
+    let top = rect.bottom + window.scrollY + 5;
+    if (top + popup.offsetHeight > window.innerHeight + window.scrollY) {
+        top = rect.top + window.scrollY - popup.offsetHeight - 5;
+    }
+
+    popup.style.top = `${top}px`;
+    popup.style.left = `${Math.max(10, rect.left + window.scrollX - 100)}px`;
+
+    setTimeout(() => {
+        const close = (e) => { if (!popup.contains(e.target)) { popup.remove(); document.removeEventListener('click', close); } };
+        document.addEventListener('click', close);
+    }, 0);
 }
 
 /**

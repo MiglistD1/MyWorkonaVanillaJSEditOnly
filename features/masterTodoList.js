@@ -259,8 +259,8 @@ function renderTaskGroups(allSpaces) {
 
         return `
             <details class="task-group-details" data-space-id="${space.id}" ${isHidden ? 'style="display:none;"' : 'open'}>
-                <summary class="task-group-summary">
-                    <div style="display:flex; align-items:center; gap:8px;">
+                <summary class="task-group-summary" style="border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-bottom: 12px; background: rgba(0,0,0,0.01);">
+                    <div style="display:flex; align-items:center; gap:8px; flex-wrap: wrap; flex: 1; min-width: 0;">
                         <span class="group-title">${space.name} (${displayTasks.length})</span>
                         <button class="btn-icon btn-master-space-toggle-prominent" data-space-id="${space.id}" title="Toggle Next Up Visibility" style="padding:2px; opacity: ${isSpaceProminentHidden ? '0.3' : '0.8'};">
                             <svg class="svg-icon-sm" style="color: ${isSpaceProminentHidden ? 'inherit' : 'var(--primary-color)'};"><use href="#icon-flag"></use></svg>
@@ -424,24 +424,95 @@ export function initMasterEvents() {
     });
 
     if (groupContainer) {
-        // 🟢 Consolidate all listeners into one unified structure to prevent conflicts
-        groupContainer.addEventListener('click', async (e) => {
-            // Empty shell listener - handled by the secondary unified listener below
+        // 🟢 Handle Checkbox Changes (Task Completion) in Master View
+        groupContainer.addEventListener('change', (e) => {
+            const target = e.target;
+            const isMain = target.classList.contains('master-task-checkbox');
+            const isSub = target.classList.contains('subtask-check-box');
+            
+            if (!isMain && !isSub) return;
+
+            const isChecked = target.checked;
+            const li = target.closest('li');
+            const spaceId = parseInt(li.dataset.spaceId);
+            const spaces = getSpaces();
+            const space = spaces.find(s => s.id === spaceId);
+            if (!space) return;
+
+            // 1. Immediate UI Feedback (แอนิเมชั่นขีดฆ่า)
+            if (isChecked) {
+                li.classList.add('completed-hold');
+                playTaskCompletedSound();
+            }
+
+            if (isMain) {
+                const idx = parseInt(target.dataset.idx);
+                const task = space.tasks[idx];
+                if (!task) return;
+
+                // 2. Logic: อิงตาม todoManager.js (งานซ้ำ/ปฏิทินแค่ Complete, งานปกติลง Trash)
+                if (task.repeatConfig?.isRepeating || task.calendarEventId) {
+                    task.completed = isChecked;
+                    task.completedAt = isChecked ? Date.now() : null;
+                    task.isProminent = false;
+                } else {
+                    if (isChecked) {
+                        task.isDeleted = true;
+                        task.deletedAt = Date.now();
+                        task.expiryAt = task.deletedAt + ((getAppSettings().autoDeleteDays || 30) * 24 * 60 * 60 * 1000);
+                        task.completed = false;
+                        task.isProminent = false;
+                    } else {
+                        task.completed = false;
+                        task.isDeleted = false;
+                    }
+                }
+                
+                // 3. Quest Loot Scanner
+                if (isChecked && window.processRewardScanner) {
+                    window.processRewardScanner(task.text, false, { x: e.clientX, y: e.clientY }, 'task', space.id, { tags: task.tags });
+                }
+            } else {
+                // Logic สำหรับ Subtask
+                const pIdx = parseInt(target.dataset.parentIndex);
+                const sIdx = parseInt(target.dataset.subIndex);
+                const subtask = space.tasks[pIdx]?.subtasks?.[sIdx];
+                if (subtask) {
+                    subtask.completed = isChecked;
+                    if (isChecked && window.processRewardScanner) {
+                        window.processRewardScanner(subtask.text, false, { x: e.clientX, y: e.clientY }, 'task', space.id);
+                    }
+                }
+            }
+
+            saveData(true);
+            // 4. Re-render dashboard after animation
+            setTimeout(() => {
+                if (window.renderDefaultDashboard) window.renderDefaultDashboard();
+            }, isChecked ? 800 : 0);
         });
 
+        // 🟢 Unified Event Delegation for all Master List actions
         groupContainer.addEventListener('click', async (e) => {
             const target = e.target;
 
-            // 🔘 1. Individual Task Actions Toggle (จุดวงกลมท้ายงาน) - แก้ไขให้รองรับค่าว่าง
+            // 🔘 1. Task Actions Toggle (The circle icon)
             const toggleBtn = target.closest('.toggle-actions-btn');
             if (toggleBtn) {
-                // 🟢 ปรับปรุงการหา Container ให้แม่นยำขึ้นโดยใช้ closest
                 const group = toggleBtn.closest('.item-action-group');
                 const menu = group?.querySelector('.collapsible-actions');
                 if (menu) {
                     const isHidden = menu.style.display === 'none' || menu.style.display === '';
-                    menu.style.display = isHidden ? 'flex' : 'none';
-                    toggleBtn.classList.toggle('expanded');
+                    if (isHidden) {
+                        // Close other menus first for a clean experience
+                        document.querySelectorAll('#master-groups-container .collapsible-actions').forEach(m => m.style.display = 'none');
+                        document.querySelectorAll('#master-groups-container .toggle-actions-btn').forEach(b => b.classList.remove('expanded'));
+                        menu.style.display = 'flex';
+                        toggleBtn.classList.add('expanded');
+                    } else {
+                        menu.style.display = 'none';
+                        toggleBtn.classList.remove('expanded');
+                    }
                 }
                 return;
             }
@@ -696,6 +767,24 @@ export function initMasterEvents() {
                 }
             }
         });
+
+        // 🔘 10. Global listener to close popups when clicking outside
+        if (!window._isSfMasterClickInitialized) {
+            document.addEventListener('click', (e) => {
+                const isMenuBtn = e.target.closest('.toggle-actions-btn');
+                const isMenu = e.target.closest('.collapsible-actions');
+                if (!isMenuBtn && !isMenu) {
+                    document.querySelectorAll('#master-groups-container .collapsible-actions').forEach(m => {
+                        if (!masterTodoListState.showMasterTaskActions) {
+                            m.style.display = 'none';
+                            const btn = m.closest('.item-action-group')?.querySelector('.toggle-actions-btn');
+                            if (btn) btn.classList.remove('expanded');
+                        }
+                    });
+                }
+            });
+            window._isSfMasterClickInitialized = true;
+        }
 
         // 🟢 เปิดใช้งาน Drag & Drop สำหรับงานในหน้า Master List (ลากข้ามกลุ่ม Space ได้)
         const initListSortable = (el) => {

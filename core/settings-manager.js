@@ -475,7 +475,23 @@ export function applyAppSettings() {
                 word-break: break-word !important;
                 white-space: normal !important;
             }
-            .group-title { min-width: 0 !important; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+            .task-item, .smart-flow-item { border-bottom: 1px solid rgba(0,0,0,0.05) !important; }
+            .group-title { width: 100% !important; display: block !important; margin-bottom: 8px !important; white-space: normal !important; font-size: 15px !important; font-weight: 800 !important; color: var(--primary-color) !important; }
+            .task-group-summary { height: auto !important; padding: 12px 15px !important; border-bottom: 2px solid var(--border-color) !important; background: rgba(0,0,0,0.02) !important; margin-bottom: 10px !important; }
+            .btn-master-space-sort { margin-left: 0 !important; }
+
+            /* 🟢 Smart Flow Compact UI (Mobile) */
+            .smart-flow-item { 
+                padding: 6px 8px !important; 
+                gap: 4px !important; 
+                min-height: 40px !important;
+            }
+            .smart-flow-number { min-width: 18px !important; margin: 0 !important; font-size: 11px !important; opacity: 0.6; }
+            .smart-flow-item .drag-handle { width: 20px !important; display: flex !important; opacity: 0.4 !important; }
+            .smart-flow-action-btn { transform: scale(0.85) !important; margin: 0 -2px !important; }
+            .smart-flow-content { padding-left: 2px !important; gap: 1px !important; flex: 1 !important; min-width: 0 !important; }
+            .smart-flow-title { font-size: 13.5px !important; }
+            .smart-flow-desc { font-size: 10px !important; opacity: 0.7; }
         }
     `;
 }
