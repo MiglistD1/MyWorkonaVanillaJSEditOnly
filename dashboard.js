@@ -409,7 +409,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (autoExportSelect && !document.getElementById('btn-set-data-management')) {
             // สร้าง Wrapper เพื่อให้ Dropdown และปุ่มอยู่บรรทัดเดียวกัน
             const wrapper = document.createElement('div');
-            wrapper.style.cssText = 'display:flex; align-items:center; gap:8px; margin-top:4px;';
+            wrapper.className = 'sf-auto-export-wrapper';
+            wrapper.style.cssText = 'display:flex; align-items:center; gap:8px; margin-top:4px; flex-wrap: wrap;';
             autoExportSelect.parentNode.insertBefore(wrapper, autoExportSelect);
             wrapper.appendChild(autoExportSelect);
 

@@ -22,20 +22,34 @@ export async function getAuthToken(interactive = true) {
     // 2. Web App Environment (Firebase Auth)
     try {
         // Dynamic import to avoid loading Firebase Auth in the extension environment
-        // const { getAuth, signInWithPopup, GoogleAuthProvider } = await import('./lib/firebase-auth.js'); // Already imported
-        const auth = getAuth();
+        const auth = getAuth(app); // 🟢 ระบุ app instance เพื่อความแม่นยำ
         
-        if (!auth.currentUser && !interactive) return null;
+        // 🟢 สำหรับ Web App: ตรวจสอบ Token ใน Session ก่อน (Firebase ไม่เก็บ Google Token ให้)
+        if (!interactive) {
+            const cachedToken = sessionStorage.getItem('google_calendar_token');
+            if (cachedToken) return cachedToken;
+            if (!auth.currentUser) return null;
+        }
 
         const provider = new GoogleAuthProvider();
         // Essential scope for Calendar access
         provider.addScope('https://www.googleapis.com/auth/calendar.events');
 
+        // 🟢 บังคับให้แสดงหน้าต่างเลือก Account และขอสิทธิ์ใหม่ทุกครั้งที่กด "Connect"
+        // ป้องกันปัญหา Firebase คืนค่า User เดิมที่ไม่มีสิทธิ์ Calendar ติดมาด้วย
+        if (interactive) {
+            provider.setCustomParameters({ prompt: 'consent' });
+        }
+
         // Note: For web apps, we trigger popup if a fresh access token is needed
         if (interactive || !auth.currentUser) {
             const result = await signInWithPopup(auth, provider);
             const credential = GoogleAuthProvider.credentialFromResult(result);
-            return credential.accessToken;
+            if (credential?.accessToken) {
+                // 🟢 เก็บ Token ไว้ใช้ในเซสชันปัจจุบัน
+                sessionStorage.setItem('google_calendar_token', credential.accessToken);
+                return credential.accessToken;
+            }
         }
     } catch (error) {
         console.error("Firebase Auth Error:", error);
@@ -49,8 +63,9 @@ export async function clearAuthToken(tokenToClear) {
         return new Promise(resolve => chrome.identity.removeCachedAuthToken({ token: tokenToClear }, resolve));
     } else {
         try {
-            const { signOut } = await import('./lib/firebase-auth.js'); // getAuth already imported
-            await signOut(getAuth());
+            sessionStorage.removeItem('google_calendar_token'); // 🟢 ล้าง Cache เมื่อออกจากระบบ
+            const { signOut } = await import('./lib/firebase-auth.js');
+            await signOut(getAuth(app));
         } catch (e) { console.error("SignOut Error:", e); }
     }
 }

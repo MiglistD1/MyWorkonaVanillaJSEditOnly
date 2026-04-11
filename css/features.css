@@ -634,6 +634,36 @@ $.hl-reward[data-type="t"]::before { content: "⏳"; }$
     justify-content: center; /* จัดไอคอนและข้อความให้อยู่กลางปุ่ม */
 }
 
+/* --- Mobile Responsiveness for Data Management --- */
+@media (max-width: 480px) {
+    #export-target,
+    #export-subfolder,
+    #btn-manual-export,
+    #btn-import-data,
+    #auto-export-days {
+        width: 100% !important;
+        min-width: 0 !important;
+        margin-bottom: 8px !important; /* เพิ่มช่องไฟแนวตั้ง */
+    }
+
+    .sf-auto-export-wrapper {
+        gap: 6px !important; /* ลดช่องไฟระหว่างไอคอน */
+        justify-content: flex-start !important;
+    }
+
+    #auto-export-time {
+        width: 100px !important; /* หดขนาดช่องเวลาลง */
+        padding: 0 4px !important;
+        font-size: 10px !important;
+    }
+
+    #btn-set-data-management,
+    #btn-show-next-export {
+        width: 36px !important; /* ย่อขนาดปุ่มแม่กุญแจและนาฬิกา */
+        height: 36px !important;
+    }
+}
+
 /* ลบส่วน Merge Mode และองค์ประกอบที่เกี่ยวข้องออกถาวร */
 #drive-merge-mode, 
 label[for="drive-merge-mode"],

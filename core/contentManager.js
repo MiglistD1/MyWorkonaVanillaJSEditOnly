@@ -26,9 +26,9 @@ export function renderMainContent() {
   const utilityGroup = document.getElementById('utility-group');
   const topbar = document.querySelector('.topbar');
 
-  if (isMobile && syncContainer && navGroup && rewardsBtn) {
+  if (isMobile && syncContainer && navGroup && rewardsBtn && syncContainer.nextElementSibling !== rewardsBtn) {
       navGroup.insertBefore(syncContainer, rewardsBtn);
-  } else if (!isMobile && syncContainer && utilityGroup && topbar) {
+  } else if (!isMobile && syncContainer && utilityGroup && topbar && syncContainer.nextElementSibling !== utilityGroup) {
       topbar.insertBefore(syncContainer, utilityGroup);
   }
   const tagBar = document.getElementById('tag-bar-container');
@@ -201,6 +201,8 @@ export function initContentManager() {
     let prevWidth = window.innerWidth;
     window.addEventListener('resize', () => {
         const currentWidth = window.innerWidth;
+        if (currentWidth === prevWidth) return; // 🟢 ป้องกันการ Re-render เมื่อความกว้างเท่าเดิม (เช่น คีย์บอร์ดมือถือเปิด/ปิด)
+
         if (currentWidth <= 1100 && prevWidth > 1100) {
             spacebar.classList.add('collapsed');
             updateToggleBtnUI();

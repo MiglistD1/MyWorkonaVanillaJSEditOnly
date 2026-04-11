@@ -457,14 +457,6 @@ function renderRewardContent() {
 
     const activeTab = container.dataset.activeTab || '1';
 
-    // 🟢 สร้างตัวเลือก Google Lists
-    let googleListOptions = `<option value="@default">Default List</option>`;
-    if (window._cachedGoogleLists) {
-        googleListOptions = window._cachedGoogleLists.map(l => 
-            `<option value="${l.id}" ${l.id === rewardData.targetListId ? 'selected' : ''}>${l.title}</option>`
-        ).join('');
-    }
-
     container.innerHTML = `
         <div class="reward-tabs">
             <button class="reward-tab-btn ${activeTab === '1' ? 'active' : ''}" data-tab="1">Inventory & Loot</button>
@@ -472,38 +464,6 @@ function renderRewardContent() {
         </div>
         
         <div class="reward-pane" style="display: ${activeTab === '1' ? 'block' : 'none'}">
-            <!-- 🟢 Google Sync Controls -->
-            <div class="customize-section" style="margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; padding: 12px; background: var(--bg-body);">
-                <div style="display: flex; align-items: center; gap: 10px;">Tasks Sync</div>
-                <div style="display: flex; gap: 4px; margin-right: 5px; align-items: center;">
-                    <button class="btn btn-outline" id="btn-toggle-sync-tools" title="Toggle Sync Tools" style="padding: 2px 6px; min-width: 24px; display: flex; align-items: center; justify-content: center;">
-                        <svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 13px; height: 13px;">
-                            <path d="m17 2 4 4-4 4"></path>
-                            <path d="M3 11v-1a4 4 0 0 1 4-4h14"></path>
-                            <path d="m7 22-4-4 4-4"></path>
-                            <path d="M21 13v1a4 4 0 0 1-4 4H3"></path>
-                        </svg>
-                    </button>
-                    ${rewardData.isSyncToolsVisible ? `
-                        <button class="btn btn-outline" id="btn-force-sync-google" title="Force Sync FROM Google (T)" style="font-weight: 800; padding: 2px 8px; font-size: 10px; color: #4285f4; border-color: #4285f4;">T</button>
-                        <button class="btn btn-outline" id="btn-force-sync-local" title="Force Sync TO Google (W)" style="font-weight: 800; padding: 2px 8px; font-size: 10px; color: #34a853; border-color: #34a853;">W</button>
-                    ` : ''}
-                </div>
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <select id="sf-loot-google-list-select" class="settings-input" style="width: 120px; padding: 2px 6px; font-size: 11px;">
-                        ${googleListOptions}
-                    </select>
-                    <label class="switch">
-                        <input type="checkbox" id="sf-loot-sync-toggle" ${rewardData.isSyncEnabled ? 'checked' : ''}>
-                        <span class="slider"></span>
-                    </label>
-                </div>
-            </div>
-            <!-- 🟢 Last Sync Status -->
-            <div style="text-align: right; font-size: 10px; color: var(--text-muted); margin-top: -10px;">
-                <span id="sf-loot-sync-status">${getTimeAgo(rewardData.lastSyncTimestamp)}</span>
-            </div>
-
             <div style="margin-bottom: 25px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
                     <label class="section-label" style="margin:0;">💰 Money Withdrawal List</label>
@@ -644,34 +604,6 @@ function renderRewardContent() {
         modalContent.style.top = `${safeY}px`;
         setupRewardDrag(modalContent);
     }
-
-    // 🟢 Event Listeners for Sync
-    const syncToggle = document.getElementById('sf-loot-sync-toggle');
-    if (syncToggle) {
-        syncToggle.onchange = () => { rewardData.isSyncEnabled = syncToggle.checked; saveRewardData(); };
-    }
-
-    const listSelect = document.getElementById('sf-loot-google-list-select');
-    if (listSelect) {
-        listSelect.onchange = () => { rewardData.targetListId = listSelect.value; saveRewardData(); };
-    }
-
-    // 🟢 Event Listener สำหรับปุ่ม O (Toggle Sync Tools)
-    const toggleSyncToolsBtn = document.getElementById('btn-toggle-sync-tools');
-    if (toggleSyncToolsBtn) {
-        toggleSyncToolsBtn.onclick = () => { rewardData.isSyncToolsVisible = !rewardData.isSyncToolsVisible; saveRewardData().then(renderRewardContent); };
-    }
-
-    // 🟢 Event Listeners for Force Sync
-    const forceT = document.getElementById('btn-force-sync-google');
-    if (forceT) {
-        forceT.onclick = () => { if(confirm("Overwrite local rewards with Google Tasks data?")) forceSyncFromGoogle(); };
-    }
-    const forceW = document.getElementById('btn-force-sync-local');
-    if (forceW) {
-        forceW.onclick = () => { if(confirm("Overwrite Google Tasks with local rewards data?")) forceSyncToGoogle(); };
-    }
-
     // Re-bind UI Event Listeners
     container.querySelectorAll('.reward-tab-btn').forEach(btn => {
         btn.onclick = () => { container.dataset.activeTab = btn.dataset.tab; renderRewardContent(); };

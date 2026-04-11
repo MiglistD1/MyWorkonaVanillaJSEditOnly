@@ -2600,7 +2600,12 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
     const archiveContainer = document.getElementById('archived-tasks-details');
 
     if (!taskListUI) return;
-    if (document.activeElement && document.activeElement.classList.contains('task-actual-text')) return; 
+    // 🟢 ป้องกันการวาดทับขณะกำลังพิมพ์งานหลักหรืองานย่อย เพื่อไม่ให้คีย์บอร์ดหุบและเสียโฟกัส
+    if (document.activeElement && (
+        document.activeElement.classList.contains('task-actual-text') || 
+        document.activeElement.classList.contains('subtask-add-input') || 
+        document.activeElement.classList.contains('subtask-inline-input')
+    )) return; 
 
     taskListUI.innerHTML = ''; 
     if (archiveListUI) archiveListUI.innerHTML = ''; 
