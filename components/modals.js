@@ -995,3 +995,52 @@ export function setupItemModals(onRender) {
         };
     }
 }
+
+/**
+ * ⚠️ Modal สำหรับจัดการความขัดแย้งของข้อมูล (Conflict Resolution)
+ */
+export async function showConflictModal(cloudDateText) {
+    const modalId = 'sf-sync-conflict-modal';
+    let modal = document.getElementById(modalId);
+    if (modal) modal.remove();
+
+    const modalHTML = `
+        <div class="modal-overlay" id="${modalId}" style="display:flex; z-index:22000; background:rgba(0,0,0,0.6); backdrop-filter:blur(5px);">
+            <div class="modal-content" style="width:320px; padding:24px; text-align:center; border-radius:16px; background:var(--bg-card); border:1px solid var(--border-color); box-shadow: 0 20px 50px rgba(0,0,0,0.3);">
+                <div style="font-size:40px; margin-bottom:15px;">🔄</div>
+                <h3 style="margin:0 0 10px 0; font-weight:800; font-size:16px;">Newer Data Found</h3>
+                <p style="font-size:13px; color:var(--text-muted); line-height:1.5; margin-bottom:20px;">
+                    พบข้อมูลที่ใหม่กว่าบน Cloud (อัปเดตเมื่อ: ${cloudDateText}) จากอุปกรณ์เครื่องอื่น คุณต้องการจัดการอย่างไร?
+                </p>
+                <div style="display:flex; flex-direction:column; gap:10px;">
+                    <button class="btn btn-primary" id="conflict-use-cloud" style="justify-content:center; padding:10px; font-weight:700;">Use Cloud Data</button>
+                    <button class="btn btn-outline" id="conflict-merge" style="justify-content:center; padding:10px; font-weight:700; border-color:#f59e0b; color:#d97706;">Merge Both (Recommended)</button>
+                    <button class="btn btn-outline" id="conflict-keep-local" style="justify-content:center; padding:10px; font-weight:700; color:#ef4444;">Keep Local Data</button>
+                </div>
+                <div style="margin-top:20px;">
+                    <button id="conflict-cancel" style="background:none; border:none; color:var(--text-muted); font-size:12px; cursor:pointer; text-decoration:underline; opacity:0.6;">Cancel & Close Auto Sync</button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+    return new Promise((resolve) => {
+        document.getElementById('conflict-use-cloud').onclick = () => {
+            document.getElementById(modalId).remove();
+            resolve('cloud');
+        };
+        document.getElementById('conflict-merge').onclick = () => {
+            document.getElementById(modalId).remove();
+            resolve('merge');
+        };
+        document.getElementById('conflict-keep-local').onclick = () => {
+            document.getElementById(modalId).remove();
+            resolve('local');
+        };
+        document.getElementById('conflict-cancel').onclick = () => {
+            document.getElementById(modalId).remove();
+            resolve(null);
+        };
+    });
+}

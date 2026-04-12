@@ -1,7 +1,7 @@
 import Sortable from '../sortable.esm.js';
 import { svgEdit, svgTrashRed, svgRepeat } from '../core/icons.js';
 import { getCurrentSpace, saveData, getShortDate, getAppSettings, setCurrentSpaceId, getSpaces, getFilterTags, loadData, getGlobalLaunchers, getLauncherTags, getCurrentSpaceId, getFilterMode } from '../core/storage.js';
-import { mergeArrays } from '../core/firebaseSync.js';
+import { mergeItems } from '../core/firebaseSync.js';
 import { generateMiniTagsBtn, generateTaskHTML, attachSubtaskEventListeners, attachTaskInlineEditListeners, handleTagAutocomplete, applySyntaxHighlighting } from '../core/ui-helpers.js';
 
 import { checkAndResetHabits, renderHabitList } from './habitSheet.js';

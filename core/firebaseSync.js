@@ -1,7 +1,8 @@
 import { initializeApp } from "./lib/firebase-app.js";
-import { getFirestore, doc, setDoc, getDoc, onSnapshot, enableIndexedDbPersistence } from "./lib/firebase-firestore.js";
-import { getCurrentSpace, saveData, getSpaces, setSpaces, setOnSaveFirebaseHook, getGlobalLaunchers, setGlobalLaunchers, getLauncherTags, setLauncherTags, getAppSettings, getLocalSettings } from "./storage.js";
+import { getFirestore, doc, collection, setDoc, getDoc, getDocs, onSnapshot, enableIndexedDbPersistence, writeBatch, query } from "./lib/firebase-firestore.js";
+import { getCurrentSpace, saveData, getSpaces, setSpaces, setOnSaveFirebaseHook, getGlobalLaunchers, setGlobalLaunchers, getLauncherTags, setLauncherTags, getAppSettings, getLocalSettings, getDeviceId } from "./storage.js";
 import { isAnyEditableElementFocused } from "../features/todoManager.js";
+import { showConflictModal } from "../components/modals.js";
 
 // Firebase config
 const firebaseConfig = {
@@ -25,9 +26,9 @@ enableIndexedDbPersistence(db).catch((err) => {
     }
 });
 
-const docRef = doc(db, "data", "mynotes");
-const docRefSpaces = doc(db, "data", "myspaces");
+
 const docRefConfig = doc(db, "data", "globalConfig");
+const colRefWorkspaces = collection(db, "workspaces");
 
 /**
  * ⏱️ Reusable debounce function to delay execution
@@ -40,19 +41,8 @@ function debounce(func, delay) {
     };
 }
 
-/**
- * 🛰️ Debounced function for syncing Note content to Firebase
- */
-const debouncedNoteSync = debounce(async (content) => {
-    updateSyncStatusUI('syncing', 'Syncing...');
-    try {
-        await setDoc(docRef, { content: content }, { merge: true });
-        updateSyncStatusUI('synced', 'WebApp -> Firebase');
-    } catch (error) {
-        console.error("Error syncing note to Firebase:", error);
-        updateSyncStatusUI('offline');
-    }
-}, 1000);
+
+
 
 // UI Elements for Sync Status
 export function updateSyncStatusUI(state, detail = "") {
@@ -242,35 +232,40 @@ export async function forcePullNote() {
 }
 
 /**
- * 🟢 Helper: Merge two arrays of objects based on a unique key, prioritizing cloud data.
+ * ️ Smart Merge: ผสานข้อมูลโดยใช้ Timestamp และสถานะ Soft Delete
+ * แก้ปัญหา "ข้อมูลผี" (Ghost data) โดยการยอมรับการลบหาก Timestamp ใหม่กว่า
  */
-export function mergeArrays(cloudArray, localArray, uniqueKey) {
+export function mergeItems(cloudArray, localArray, uniqueKey) {
     const mergedMap = new Map();
+    const allItems = [...(localArray || []), ...(cloudArray || [])];
 
-    // Start with local data
-    (localArray || []).forEach(item => {
-        if (item && item[uniqueKey] !== undefined) {
-            mergedMap.set(item[uniqueKey], item);
-        }
-    });
+    allItems.forEach(item => {
+        if (!item || item[uniqueKey] === undefined) return;
+        
+        const key = item[uniqueKey];
+        const existing = mergedMap.get(key);
 
-    // Overwrite/Add with cloud data (prioritize cloud version)
-    (cloudArray || []).forEach(item => {
-        if (item && item[uniqueKey] !== undefined) {
-            mergedMap.set(item[uniqueKey], item);
+        if (!existing) {
+            mergedMap.set(key, item);
+        } else {
+            // เปรียบเทียบเวลา: ใช้ lastUpdated หรือ deletedAt (สำหรับ Soft Delete)
+            const existingTime = existing.lastUpdated || existing.deletedAt || existing.createdAt || 0;
+            const incomingTime = item.lastUpdated || item.deletedAt || item.createdAt || 0;
+
+            // หากข้อมูลใหม่มีความใหม่กว่า (ไม่ว่าจะเป็นการแก้ไขหรือการลบ) ให้ใช้ข้อมูลนั้น
+            if (incomingTime > existingTime) {
+                mergedMap.set(key, item);
+            }
         }
     });
 
     return Array.from(mergedMap.values());
 }
 
-/**
- * � เริ่มต้นระบบ Real-time Sync สำหรับ Note
- */
-export function initFirebaseSync() {
-    const workspaceNote = document.getElementById('workspace-note');
-    if (!workspaceNote) return;
+/** 🔄 Backward Compatibility: ให้โค้ดเดิมที่เรียก mergeArrays ใช้งานชื่อใหม่ได้ทันที */
+export const mergeArrays = mergeItems;
 
+export function initFirebaseSync() {
     // 🟢 ระบบเปิด/ปิดประวัติการซิงค์
     const historyBtn = document.getElementById('btn-view-sync-history');
     const historyList = document.getElementById('sync-history-list');
@@ -312,25 +307,6 @@ export function initFirebaseSync() {
         document.head.appendChild(style);
     }
 
-    // 1. Listen: รับข้อมูลจาก Firebase มาอัปเดตหน้าจอ
-    onSnapshot(docRef, (snapshot) => {
-        if (!getLocalSettings().firebaseAutoSync) return;
-        const source = snapshot.metadata.fromCache ? "Local Cache" : "Server";
-        if (snapshot.metadata.fromCache) {
-            console.log(`ℹ️ Notes data loaded from: ${source}`);
-        }
-        const data = snapshot.data();
-        if (data && data.content !== undefined) {
-            // ตรวจสอบเพื่อป้องกัน Infinite Loop และ Cursor กระโดด
-            if (workspaceNote.innerHTML !== data.content) {
-                workspaceNote.innerHTML = data.content;
-                const space = getCurrentSpace();
-                if (space) space.note = data.content;
-                updateSyncStatusUI('synced', 'Firebase -> WebApp');
-            }
-        }
-    });
-
     // 🟢 5. Listen: รับข้อมูล Shortcuts (Launchers) จาก Cloud
     onSnapshot(docRefConfig, (snapshot) => {
         if (!getLocalSettings().firebaseAutoSync) return;
@@ -358,40 +334,37 @@ export function initFirebaseSync() {
     });
 
     // 🟢 3. Listen: รับข้อมูล Spaces/Tasks จาก Cloud
-    onSnapshot(docRefSpaces, (snapshot) => {
+    onSnapshot(query(colRefWorkspaces), (snapshot) => {
         // 🛑 ตรวจสอบ Auto Sync และสถานะการพิมพ์
         if (!getLocalSettings().firebaseAutoSync || isAnyEditableElementFocused()) return;
 
-        const source = snapshot.metadata.fromCache ? "Local Cache" : "Server";
-        if (snapshot.metadata.fromCache) {
-            console.log(`ℹ️ Spaces data loaded from: ${source}`);
-        }
-        const data = snapshot.data();
-        if (data && data.spaces) {
-            const cloudSpaces = data.spaces;
-            const localSpaces = getSpaces();
-            
-            // 🟢 ในโหมด Auto Sync เมื่อข้อมูลคลาวด์เปลี่ยน ให้อัปเดตลงเครื่องทันที (Passive Update)
-            if (JSON.stringify(localSpaces) !== JSON.stringify(cloudSpaces)) {
-                setSpaces(cloudSpaces);
+        if (!snapshot.empty) {
+            const cloudSpaces = snapshot.docs.map(d => ({ ...d.data(), id: parseInt(d.id) }));
+            let localSpaces = getSpaces();
+            let hasChanged = false;
+
+            // 🛰️ ตรวจสอบการเปลี่ยนแปลงราย Workspace
+            cloudSpaces.forEach(cloudSpace => {
+                const localIndex = localSpaces.findIndex(s => s.id === cloudSpace.id);
+                if (localIndex === -1) {
+                    localSpaces.push(cloudSpace);
+                    hasChanged = true;
+                } else {
+                    const localSpace = localSpaces[localIndex];
+                    // ใช้ Timestamp ตัดสิน: ถ้าบน Cloud ใหม่กว่า ให้เขียนทับเฉพาะอันนั้น
+                    if ((cloudSpace.lastUpdated || 0) > (localSpace.lastUpdated || 0)) {
+                        localSpaces[localIndex] = cloudSpace;
+                        hasChanged = true;
+                    }
+                }
+            });
+
+            if (hasChanged) {
+                setSpaces(localSpaces);
+                saveData(true, true); // 🟢 บันทึกแบบ Silent (isRemoteUpdate: true) เพื่อป้องกัน Loop
                 if (window.renderAll) window.renderAll();
                 updateSyncStatusUI('synced', 'Firebase -> WebApp');
             }
-        }
-    });
-
-    // 2. Push: เมื่อเราพิมพ์ ให้ส่งขึ้น Firebase ทันที
-    workspaceNote.addEventListener('input', (e) => {
-        const content = e.target.innerHTML;
-        
-        // 🟢 Check Auto Sync state before automatic push
-        if (!getLocalSettings().firebaseAutoSync) return;
-
-        // Only sync to cloud if the content has actually changed to avoid unnecessary writes
-        if (getCurrentSpace()?.note !== content) {
-            getCurrentSpace().note = content;
-            saveData(); // Save Local Storage
-            setDoc(docRef, { content: content }, { merge: true }); // Sync to Cloud
         }
     });
 
@@ -401,11 +374,18 @@ export function initFirebaseSync() {
         if (!getLocalSettings().firebaseAutoSync) return;
 
         updateSyncStatusUI('syncing');
-        // ส่งข้อมูล Spaces ทั้งหมดขึ้นไป (รวมถึง Tasks ภายในนั้น)
         try {
+            // 🟢 1. ใช้ writeBatch แยกบันทึกราย Workspace (แก้ปัญหา 1MB Limit)
+            const batch = writeBatch(db);
+            data.mySpacesData.forEach(space => {
+                const sRef = doc(db, "workspaces", String(space.id));
+                batch.set(sRef, space, { merge: true });
+            });
+            
+            // 🟢 2. บันทึกข้อมูลอื่นๆ ควบคู่ไปด้วย
             await Promise.all([
-                setDoc(docRefSpaces, { spaces: data.mySpacesData }, { merge: true }),
-                setDoc(docRefConfig, { launchers: data.globalLaunchers, launcherTags: data.launcherTags }, { merge: true })
+                batch.commit(),
+                setDoc(docRefConfig, { launchers: data.globalLaunchers, launcherTags: data.launcherTags, lastUpdated: Date.now() }, { merge: true })
             ]);
             updateSyncStatusUI('synced', 'WebApp -> Firebase');
         } catch (error) {
@@ -504,76 +484,75 @@ export async function handleAutoSyncActivation() {
     
     if (!direction) return false;
 
+    // 🟢 ตั้งค่าเป็น ON ทันทีที่เลือกทิศทางเสร็จ เพื่อให้ UI แสดงผลสีเขียวและบันทึกสถานะลงเครื่อง
+    getLocalSettings().firebaseAutoSync = true;
+    saveData(true); 
+
     updateSyncStatusUI('syncing', 'Checking conflicts...');
     try {
-        const snapshot = await getDoc(docRefSpaces);
-        const cloudData = snapshot.data();
-        const cloudSpaces = cloudData?.spaces || [];
+        const snapshot = await getDocs(query(colRefWorkspaces));
+        const cloudSpaces = snapshot.docs.map(d => ({ ...d.data(), id: parseInt(d.id) }));
 
-        // 2. ตรวจสอบ Conflict เฉพาะ To-do และ Resources
-        let hasConflict = false;
         const allIds = new Set([...localSpaces.map(s => s.id), ...cloudSpaces.map(s => s.id)]);
-        
+        let finalSpaces = [];
+        let conflictsFound = [];
+
+        // 🛰️ วนลูปตรวจสอบความขัดแย้ง "ราย Workspace"
         for (const id of allIds) {
             const local = localSpaces.find(s => s.id === id);
             const cloud = cloudSpaces.find(s => s.id === id);
-            if (!local || !cloud) { hasConflict = true; break; }
 
-            const tasksMatch = JSON.stringify(local.tasks) === JSON.stringify(cloud.tasks);
-            const resMatch = JSON.stringify(local.resources) === JSON.stringify(cloud.resources);
-            const driveMatch = JSON.stringify(local.driveFiles) === JSON.stringify(cloud.driveFiles);
+            if (!local) { finalSpaces.push(cloud); continue; }
+            if (!cloud) { finalSpaces.push(local); continue; }
 
-            if (!tasksMatch || !resMatch || !driveMatch) { hasConflict = true; break; }
+            // กรณีมีทั้งคู่: ตรวจสอบ Timestamp
+            const localTime = local.lastUpdated || 0;
+            const cloudTime = cloud.lastUpdated || 0;
+
+            // หากเวลาห่างกันเกิน 2 วินาที และข้อมูลไม่ตรงกันเป๊ะๆ ให้ถือว่าเป็น Conflict
+            if (Math.abs(localTime - cloudTime) > 2000 && JSON.stringify(local) !== JSON.stringify(cloud)) {
+                conflictsFound.push({ id, name: local.name, local, cloud, localTime, cloudTime });
+            } else {
+                // ถ้าเวลาใกล้เคียงกัน หรือข้อมูลเหมือนกัน ให้ทำ Auto-merge เงียบๆ
+                finalSpaces.push(cloudTime >= localTime ? cloud : local);
+            }
         }
 
-        let finalSpaces = [];
-        if (hasConflict) {
-            // 3. ระบบถามเรื่องการ Merge ผ่าน Custom Modal
-            const resolveMethod = await showSyncChoiceModal("พบข้อมูลบางส่วนไม่ตรงกัน", [
-                { id: 'merge', label: 'Merge', desc: 'ผสานข้อมูล (ปลอดภัย)', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>' },
-                { id: 'overwrite', label: 'Overwrite', desc: `เขียนทับตามโหมด ${direction}`, icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>' }
+        if (conflictsFound.length > 0) {
+            // 🚨 เด้ง Modal ถามเฉพาะ Workspace ที่มีปัญหาจริงๆ เท่านั้น
+            const resolveMethod = await showSyncChoiceModal(`${conflictsFound.length} Workspaces Conflict`, [
+                { id: 'merge', label: 'Smart Merge', desc: 'ผสานข้อมูลตามรายไอเทม', icon: '🧬' },
+                { id: 'overwrite', label: 'Overwrite', desc: `เน้นโหมด ${direction} ทั้งหมด`, icon: '📝' }
             ]);
-            
-            if (resolveMethod === 'merge') {
-                finalSpaces = Array.from(allIds).map(id => {
-                    const local = localSpaces.find(s => s.id === id);
-                    const cloud = cloudSpaces.find(s => s.id === id);
-                    if (!local) return cloud;
-                    if (!cloud) return local;
-                    return {
-                        ...cloud,
-                        tasks: mergeArrays(cloud.tasks, local.tasks, 'text'),
-                        resources: mergeArrays(cloud.resources, local.resources, 'url'),
-                        driveFiles: mergeArrays(cloud.driveFiles, local.driveFiles, 'url')
+
+            if (!resolveMethod) return false;
+
+            conflictsFound.forEach(conf => {
+                if (resolveMethod === 'merge') {
+                    const merged = {
+                        ...(conf.cloudTime >= conf.localTime ? conf.cloud : conf.local),
+                        tasks: mergeItems(conf.cloud.tasks || [], conf.local.tasks || [], 'createdAt'),
+                        resources: mergeItems(conf.cloud.resources, conf.local.resources, 'url'),
+                        driveFiles: mergeItems(conf.cloud.driveFiles, conf.local.driveFiles, 'url'),
+                        lastUpdated: Date.now()
                     };
-                });
-                setSpaces(finalSpaces);
-                await setDoc(docRefSpaces, { spaces: finalSpaces }, { merge: true });
-                updateSyncStatusUI('synced', 'Merged -> Firebase');
-            } else if (resolveMethod === 'overwrite') {
-                // Overwrite Logic
-                if (direction === 'pull') {
-                    finalSpaces = cloudSpaces;
-                    setSpaces(finalSpaces);
-                    updateSyncStatusUI('synced', 'Firebase -> WebApp');
+                    finalSpaces.push(merged);
                 } else {
-                    finalSpaces = localSpaces;
-                    await setDoc(docRefSpaces, { spaces: finalSpaces }, { merge: true });
-                    updateSyncStatusUI('synced', 'WebApp -> Firebase');
+                    finalSpaces.push(direction === 'pull' ? conf.cloud : conf.local);
                 }
-            } else {
-                return false; // User cancelled
-            }
-        } else {
-            // กรณีข้อมูลตรงกันแล้ว แค่จัดเตรียมสถานะ
-            if (direction === 'pull') {
-                setSpaces(cloudSpaces);
-                updateSyncStatusUI('synced', 'Firebase -> WebApp');
-            } else {
-                await setDoc(docRefSpaces, { spaces: localSpaces }, { merge: true });
-                updateSyncStatusUI('synced', 'WebApp -> Firebase');
-            }
+            });
         }
+
+        // 🚀 บันทึกผลลัพธ์สุดท้ายกลับขึ้น Cloud (ใช้ Batch)
+        setSpaces(finalSpaces);
+        saveData(true, true); // 🟢 บันทึกแบบ Silent ป้องกันการ trigger ซ้ำ
+        const batch = writeBatch(db);
+        finalSpaces.forEach(s => {
+            batch.set(doc(db, "workspaces", String(s.id)), s, { merge: true });
+        });
+        
+        await batch.commit();
+        updateSyncStatusUI('synced', direction === 'pull' ? 'Cloud Overwrite' : 'Local Push');
 
         if (window.renderAll) window.renderAll();
         return true;

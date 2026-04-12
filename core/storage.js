@@ -1,6 +1,16 @@
 let firebaseSaveHook = null;
 export const setOnSaveFirebaseHook = (cb) => { firebaseSaveHook = cb; };
 
+/** 🆔 สร้างหรือดึง Device ID ประจำเครื่อง */
+export function getDeviceId() {
+    let id = localStorage.getItem('my_workspace_device_id');
+    if (!id) {
+        id = 'dev-' + Math.random().toString(36).substr(2, 9) + '-' + Date.now();
+        localStorage.setItem('my_workspace_device_id', id);
+    }
+    return id;
+}
+
 let spaces = [];
 let currentSpaceId = 1;
 let sharedSpaceId = null;
@@ -172,25 +182,40 @@ export function setEditingItemState(type, index, parentIndex = null) {
 
 // --- Core Functions ---
 let saveTimeout;
-export function saveData(immediate = false) { 
+/**
+ * 💾 บันทึกข้อมูลลงเครื่อง
+ * @param {boolean} immediate - บันทึกทันทีไม่รอ Debounce
+ * @param {boolean} isRemoteUpdate - หากเป็น true จะไม่ส่งข้อมูลกลับขึ้น Cloud (ป้องกัน Loop)
+ */
+export function saveData(immediate = false, isRemoteUpdate = false) { 
     // Debounce: Wait 500ms, if called again, cancel the old one (reduces frequent saves when typing notes)
     if (saveTimeout) clearTimeout(saveTimeout);
     const performSave = async () => {
-        // ⏱️ อัปเดต Timestamp ทุกครั้งก่อนบันทึกจริง เพื่อระบุว่าข้อมูลก้อนนี้คือเวอร์ชันล่าสุด
-        appSettings.lastUpdated = Date.now();
+        const now = Date.now();
+        
+        // ⏱️ อัปเดต Timestamp เฉพาะเมื่อมีการแก้ไขจากเครื่องนี้เท่านั้น
+        if (!isRemoteUpdate) {
+            appSettings.lastUpdated = now;
+            const currentSpace = getCurrentSpace();
+            if (currentSpace) {
+                currentSpace.lastUpdated = now;
+            }
+        }
+
         const data = { 
             'mySpacesData': spaces,     // 🟢 ซิงค์รายการ Space ทั้งหมด (รวมที่สร้างใหม่)
             'lastSpaceId': currentSpaceId, // 🟢 ซิงค์ตำแหน่ง Space ล่าสุดที่เปิด
             'appSettings': appSettings,   // 🟢 รวมสถานะการพับโฟลเดอร์ (collapsedFolders)
             'globalLaunchers': globalLaunchers, 
-            'launcherTags': launcherTags 
+            'launcherTags': launcherTags,
+            'deviceId': getDeviceId()     // 🆔 แนบ ID เครื่องไปด้วย
         };
         
         // 🏠 บันทึก Local Settings แยกต่างหาก (ไม่ส่งเข้า Firebase Hook)
         await saveDataItem('myLocalDeviceSettings', localSettings);
 
-        // 🟢 เรียกใช้ Firebase Hook ถ้ามีการลงทะเบียนไว้
-        if (firebaseSaveHook) firebaseSaveHook(data);
+        // 🟢 เรียกใช้ Firebase Hook เฉพาะเมื่อเป็นการแก้ไขจาก Local
+        if (firebaseSaveHook && !isRemoteUpdate) firebaseSaveHook(data);
         
         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
             saveDataItem(data); 
