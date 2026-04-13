@@ -139,7 +139,7 @@ let editingSubtaskLocalId = null;
 let editingLinkTaskIdx = null;
 let editingLinkSubIdx = null;
 let editingLinkSpaceId = null;
-let addingSubtaskToIndex = null; // เก็บ Index ของงานหลักที่กำลังจะเพิ่มงานย่อย
+let addingSubtaskToTaskId = null; // เก็บ createdAt ของงานหลักที่กำลังจะเพิ่มงานย่อย
 let currentTaskRepeatConfig = { isRepeating: false, frequency: 'daily', interval: 1 };
 let currentTaskCalendarSync = false;
 let editingTaskRepeatConfig = { isRepeating: false, frequency: 'daily', interval: 1 };
@@ -509,9 +509,10 @@ export function initTodoManager(callbacks) {
                 min-width: 32px !important; 
                 justify-content: center; 
                 align-items: center;
-                color: var(--primary-color) !important;
                 cursor: grab;
             }
+            .maintask-drag-handle { color: var(--primary-color) !important; opacity: 0.9 !important; }
+            .subtask-drag-handle { color: #10b981 !important; opacity: 0.8 !important; }
             .drag-handle svg { width: 16px; height: 16px; }
         }
     `;
@@ -1426,11 +1427,12 @@ export function initTodoManager(callbacks) {
         // Add Sub-task
         if (e.target.closest('.add-subtask-btn')) {
             const idx = parseInt(e.target.closest('.add-subtask-btn').getAttribute('data-index'));
-            addingSubtaskToIndex = idx;
+            const task = space.tasks[idx];
+            if (task) addingSubtaskToTaskId = task.createdAt;
             onRenderCallback();
             // Focus input หลัง render
             setTimeout(() => {
-                const input = document.querySelector(`.subtask-add-input[data-parent="${idx}"]`);
+                const input = document.querySelector(`.subtask-add-input[data-parent="${addingSubtaskToTaskId}"]`);
                 if (input) input.focus();
             }, 10);
         }
@@ -1798,33 +1800,74 @@ export function initTodoManager(callbacks) {
 
         if (e.key === 'Enter') {
             e.preventDefault(); // Stop page refresh
+            e.stopPropagation(); // 🟢 ป้องกัน Event ไหลไปที่อื่น
             input.dataset.isSubmitting = "true"; // 🟢 มาร์คไว้ว่ากำลังบันทึก ป้องกัน Blur ล้างค่า
-            const pIdx = parseInt(input.getAttribute('data-parent'));
-            const value = input.value.trim();
+            const pId = parseFloat(input.getAttribute('data-parent'));
+            let value = input.value.trim();
             const space = getCurrentSpace();
+            const parentIdx = space.tasks.findIndex(t => t.createdAt === pId);
+            const task = space.tasks[parentIdx];
 
-            if (value && space.tasks[pIdx]) {
-                if (!space.tasks[pIdx].subtasks) space.tasks[pIdx].subtasks = [];
-                space.tasks[pIdx].subtasks.push({ id: Date.now(), text: value, completed: false });
+            let shouldCreateMain = false;
+            const lowerValue = value.toLowerCase();
+            if (lowerValue === '>m') {
+                value = ''; // ยกเลิกการสร้าง Subtask นี้
+                shouldCreateMain = true;
+            } else if (lowerValue.endsWith('>m')) {
+                value = value.slice(0, -2).trim(); // ตัด >m ออกและสร้าง Subtask ปกติก่อน
+                shouldCreateMain = true;
+            }
+
+            if (shouldCreateMain) addingSubtaskToTaskId = null; // ปิดช่องกรอก Subtask
+
+            if (value && task) {
+                if (!task.subtasks) task.subtasks = [];
+                task.subtasks.push({ id: Date.now(), text: value, completed: false });
                 input.value = ''; // 🟢 ล้างข้อความในช่องพิมพ์ทันทีเพื่อป้องกันการส่งซ้ำ
                 saveData();
-                // We keep addingSubtaskToIndex as pIdx to trigger the next input rendering
-            } else {
-                addingSubtaskToIndex = null;
+                // We keep addingSubtaskToTaskId as pId to trigger the next input rendering
+            } else if (!shouldCreateMain) {
+                addingSubtaskToTaskId = null;
             }
 
             onRenderCallback();
 
-            if (addingSubtaskToIndex !== null) {
+            if (shouldCreateMain && parentIdx !== -1) {
+                // 🟢 สร้าง Main Task ใหม่ต่อท้ายงานหลักเดิมทันที
+                const newId = Date.now();
+                const newTask = { text: "", completed: false, tags: [], dueDate: null, createdAt: newId, googleTaskId: null, isProminent: false, subtasks: [] };
+                space.tasks.splice(parentIdx + 1, 0, newTask);
+                saveData();
+                onRenderCallback();
+                
+                // Focus งานใหม่ที่เพิ่งงอกออกมา
                 setTimeout(() => {
-                    const newInput = document.querySelector(`.subtask-add-input[data-parent="${pIdx}"]`);
+                    const items = document.querySelectorAll('#task-list .task-actual-text');
+                    const target = Array.from(items).find(el => {
+                        const li = el.closest('li');
+                        const taskIdx = parseInt(li.dataset.index);
+                        const tObj = space.tasks[taskIdx];
+                        return tObj && tObj.createdAt === newId;
+                    });
+                    if (target) {
+                        target.focus();
+                        const range = document.createRange();
+                        range.selectNodeContents(target);
+                        const sel = window.getSelection();
+                        sel.removeAllRanges();
+                        sel.addRange(range);
+                    }
+                }, 100);
+            } else if (addingSubtaskToTaskId !== null) {
+                setTimeout(() => {
+                    const newInput = document.querySelector(`.subtask-add-input[data-parent="${pId}"]`);
                     if (newInput) newInput.focus();
-                }, 50);
+                }, 100); // 🟢 เพิ่มเวลาเล็กน้อยให้ DOM นิ่งและหาตำแหน่งใหม่เจอ
             }
         }
 
         if (e.key === 'Escape') {
-            addingSubtaskToIndex = null;
+            addingSubtaskToTaskId = null;
             onRenderCallback();
         }
     };
@@ -1839,7 +1882,7 @@ export function initTodoManager(callbacks) {
                 if (document.activeElement && document.activeElement.classList.contains('subtask-add-input')) {
                     return;
                 }
-                addingSubtaskToIndex = null;
+                addingSubtaskToTaskId = null;
                 onRenderCallback();
             }, 100);
         }
@@ -1883,12 +1926,12 @@ export function initTodoManager(callbacks) {
             onAddSubtaskAfter: (space, index, li) => {
                 const subList = li.closest('.subtask-list');
                 if (subList) {
-                    addingSubtaskToIndex = parseInt(subList.dataset.parentIndex);
+                    addingSubtaskToTaskId = parseFloat(subList.dataset.parentId);
                     onRenderCallback();
                     setTimeout(() => {
-                        const input = document.querySelector(`.subtask-add-input[data-parent="${addingSubtaskToIndex}"]`);
+                        const input = document.querySelector(`.subtask-add-input[data-parent="${addingSubtaskToTaskId}"]`);
                         if (input) input.focus();
-                    }, 50);
+                    }, 100);
                 }
             },
             onDeleteEmptyTask: (space, index, type, li) => {
@@ -1908,9 +1951,9 @@ export function initTodoManager(callbacks) {
             },
             onUpdate: () => {
                 onRenderCallback();
-                if (addingSubtaskToIndex !== null) {
+                if (addingSubtaskToTaskId !== null) {
                     setTimeout(() => {
-                        const input = document.querySelector(`.subtask-add-input[data-parent="${addingSubtaskToIndex}"]`);
+                        const input = document.querySelector(`.subtask-add-input[data-parent="${addingSubtaskToTaskId}"]`);
                         if (input) input.focus();
                     }, 50);
                 }
@@ -1935,7 +1978,7 @@ export function initTodoManager(callbacks) {
                 if (li && li.dataset.type === 'subtask') {
                     const subList = li.closest('.subtask-list');
                     if (subList) {
-                        addingSubtaskToIndex = parseInt(subList.dataset.parentIndex);
+                        addingSubtaskToTaskId = parseFloat(subList.dataset.parentId);
                     }
                 }
             }
@@ -1981,9 +2024,9 @@ export function initTodoManager(callbacks) {
             },
             onUpdate: () => {
                 onRenderCallback();
-                if (addingSubtaskToIndex !== null) {
+                if (addingSubtaskToTaskId !== null) {
                     setTimeout(() => {
-                        const input = document.querySelector(`.subtask-add-input[data-parent="${addingSubtaskToIndex}"]`);
+                        const input = document.querySelector(`.subtask-add-input[data-parent="${addingSubtaskToTaskId}"]`);
                         if (input) input.focus();
                     }, 50);
                 }
@@ -2111,13 +2154,19 @@ export function initTodoManager(callbacks) {
         attachTaskInlineEditListeners(repeatingListEl, () => getCurrentSpace(), {
             saveData,
             onAddMainTaskAfter: (space, index) => {
-                const newTask = { text: "", completed: false, tags: [], dueDate: null, createdAt: Date.now(), googleTaskId: null, isProminent: false, subtasks: [] };
+                const newTaskId = Date.now();
+                const newTask = { text: "", completed: false, tags: [], dueDate: null, createdAt: newTaskId, googleTaskId: null, isProminent: false, subtasks: [] };
                 space.tasks.splice(index + 1, 0, newTask);
                 saveData();
                 onRenderCallback();
                 setTimeout(() => {
                     const items = document.querySelectorAll('#task-list .task-actual-text');
-                    const target = Array.from(items).find(el => parseInt(el.closest('li').dataset.index) === index + 1);
+                    const target = Array.from(items).find(el => {
+                        const li = el.closest('li');
+                        const taskIdx = parseInt(li.dataset.index);
+                        const taskObj = space.tasks[taskIdx];
+                        return taskObj && taskObj.createdAt === newTaskId;
+                    });
                     if (target) {
                         target.focus();
                         const range = document.createRange();
@@ -2713,7 +2762,7 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
         const liContent = generateTaskHTML(task, index, {
             // ... (existing options)
             showSpaceBadge: false, spaceId: space.id, isProminentHidden, isFiltered, showActions: space.showTaskActions,
-            isTrash: task.isDeleted, addingSubtaskToIndex, nextDueDate: nextDueDateForDisplay
+            isTrash: task.isDeleted, addingSubtaskToId: addingSubtaskToTaskId, nextDueDate: nextDueDateForDisplay
         });
         
         if (task.isDeleted) { trashHTML += liContent; trashCount++; }

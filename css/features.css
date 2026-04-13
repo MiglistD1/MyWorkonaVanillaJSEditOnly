@@ -118,6 +118,17 @@
     padding-right: 4px !important; /* 🟢 ลดระยะขอบขวาลงให้กระชับขึ้น */
 }
 
+/* 🟢 สี drag icon แยกตามประเภทงาน */
+.maintask-drag-handle {
+    color: var(--primary-color) !important;
+    opacity: 0.9 !important; /* 🟢 ปรับให้เข้มขึ้นเกือบสุดและคงที่ */
+}
+
+.subtask-drag-handle {
+    color: #10b981 !important; /* 🟢 เปลี่ยนเป็นสีเขียวตามคำขอ */
+    opacity: 0.8 !important; /* 🟢 ปรับให้เข้มขึ้นเห็นชัดเจนและคงที่ */
+}
+
 /* 🟢 ป้องกันการคลุมดำข้อความขณะลากผ่าน */
 body.is-sorting-tasks .task-actual-text,
 body.is-sorting-tasks .smart-flow-title,

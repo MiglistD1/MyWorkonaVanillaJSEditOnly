@@ -142,7 +142,7 @@ export function generateTaskHTML(task, index, {
     parentIndex = null, // For subtasks
     showActions = false, // New parameter to control visibility of collapsible actions
     isTrash = false, // New parameter for Trash view
-    addingSubtaskToIndex = null,
+    addingSubtaskToId = null,
     nextDueDate = null, // New: Next date for repeating tasks
 } = {}) {
     if (!task) return '';
@@ -216,7 +216,10 @@ export function generateTaskHTML(task, index, {
     
     const prominentClass = task.isProminent ? 'prominent' : '';
     const draggableClass = (isFiltered || isSubtask) ? '' : 'draggable-item';
-    const handleHTML = isFiltered ? '' : dragHandleSvg;
+
+    // 🟢 แยกสี Icon ลากระหว่าง Main Task และ Subtask เพื่อให้เห็นความแตกต่างชัดเจน
+    const handleColorClass = isSubtask ? 'subtask-drag-handle' : 'maintask-drag-handle';
+    const handleHTML = isFiltered ? '' : dragHandleSvg.replace('class="drag-handle"', `class="drag-handle ${handleColorClass}"`);
 
     // Conditional logic for Checkboxes and Data attributes based on depth
     const checkboxClass = isSubtask ? 'subtask-check-box' : (isMasterView ? 'master-task-checkbox' : 'task-check-box');
@@ -294,17 +297,17 @@ export function generateTaskHTML(task, index, {
         }
 
         // Add "New Sub-task" input row if active
-        if (addingSubtaskToIndex === index) {
+        if (addingSubtaskToId === task.createdAt) {
             subItems += `
                 <li class="subtask-item subtask-add-row">
                     <div style="width: 18px; margin-right: 14px; opacity: 0.3;">●</div>
-                    <input type="text" class="subtask-inline-input subtask-add-input" data-parent="${index}" placeholder="New sub-task...">
+                    <input type="text" class="subtask-inline-input subtask-add-input" data-parent="${task.createdAt}" placeholder="New sub-task...">
                 </li>`;
         }
 
         // เรนเดอร์คอนเทนเนอร์เสมอเพื่อให้เป็นเป้าหมายในการวาง (Drop Target) สำหรับงานหลักที่ถูกลากเข้ามา
         const subtaskListStyle = (task.subtasksHidden && task.subtasks && task.subtasks.length > 0) ? 'display: none;' : '';
-        subtasksHTML = `<ul class="subtask-list" data-parent-index="${index}" style="${subtaskListStyle}">${subItems}</ul>`;
+        subtasksHTML = `<ul class="subtask-list" data-parent-index="${index}" data-parent-id="${task.createdAt}" style="${subtaskListStyle}">${subItems}</ul>`;
     }
 
     const hasLink = task.linkData && task.linkData.url;

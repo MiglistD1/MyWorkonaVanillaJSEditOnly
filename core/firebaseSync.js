@@ -26,6 +26,8 @@ enableIndexedDbPersistence(db).catch((err) => {
     }
 });
 
+// 🟢 ล็อคเพื่อป้องกันการเปิด Modal ซ้อนกันหากมีการอัปเดตข้อมูลรัวๆ
+let isConflictModalOpen = false;
 
 const docRefConfig = doc(db, "data", "globalConfig");
 const colRefWorkspaces = collection(db, "workspaces");
@@ -334,7 +336,7 @@ export function initFirebaseSync() {
     });
 
     // 🟢 3. Listen: รับข้อมูล Spaces/Tasks จาก Cloud
-    onSnapshot(query(colRefWorkspaces), (snapshot) => {
+    onSnapshot(query(colRefWorkspaces), async (snapshot) => {
         // 🛑 ตรวจสอบ Auto Sync และสถานะการพิมพ์
         if (!getLocalSettings().firebaseAutoSync || isAnyEditableElementFocused()) return;
 
@@ -342,22 +344,54 @@ export function initFirebaseSync() {
             const cloudSpaces = snapshot.docs.map(d => ({ ...d.data(), id: parseInt(d.id) }));
             let localSpaces = getSpaces();
             let hasChanged = false;
+            let needsReconcile = false;
 
             // 🛰️ ตรวจสอบการเปลี่ยนแปลงราย Workspace
-            cloudSpaces.forEach(cloudSpace => {
+            for (const cloudSpace of cloudSpaces) {
                 const localIndex = localSpaces.findIndex(s => s.id === cloudSpace.id);
                 if (localIndex === -1) {
                     localSpaces.push(cloudSpace);
                     hasChanged = true;
                 } else {
                     const localSpace = localSpaces[localIndex];
-                    // ใช้ Timestamp ตัดสิน: ถ้าบน Cloud ใหม่กว่า ให้เขียนทับเฉพาะอันนั้น
-                    if ((cloudSpace.lastUpdated || 0) > (localSpace.lastUpdated || 0)) {
-                        localSpaces[localIndex] = cloudSpace;
-                        hasChanged = true;
+                    const localTime = localSpace.lastUpdated || 0;
+                    const cloudTime = cloudSpace.lastUpdated || 0;
+
+                    // 🛰️ กรณีข้อมูล Cloud ใหม่กว่าข้อมูลในเครื่อง
+                    if (cloudTime > localTime) {
+                        // 🚨 ตรวจสอบความขัดแย้ง: หากเวลาห่างกันเกิน 5 วินาที และเนื้อหาต่างกัน (ไม่ใช่แค่ Echo)
+                        if (Math.abs(localTime - cloudTime) > 5000 && JSON.stringify(localSpace) !== JSON.stringify(cloudSpace)) {
+                            if (isConflictModalOpen) continue;
+                            isConflictModalOpen = true;
+                            
+                            const cloudDate = new Date(cloudTime).toLocaleString('th-TH');
+                            const choice = await showConflictModal(cloudDate);
+                            isConflictModalOpen = false;
+
+                            if (choice === 'merge') {
+                                localSpaces[localIndex] = {
+                                    ...cloudSpace,
+                                    tasks: mergeItems(cloudSpace.tasks || [], localSpace.tasks || [], 'createdAt'),
+                                    resources: mergeItems(cloudSpace.resources, localSpace.resources, 'url'),
+                                    driveFiles: mergeItems(cloudSpace.driveFiles, localSpace.driveFiles, 'url'),
+                                    lastUpdated: Date.now()
+                                };
+                                saveData(true, false); // เซฟและ Push ข้อมูลที่ Merge แล้วขึ้น Cloud
+                                if (window.renderAll) window.renderAll();
+                            } else if (choice === 'cloud') {
+                                localSpaces[localIndex] = cloudSpace;
+                                saveData(true, true); // เขียนทับด้วย Cloud แบบเงียบๆ
+                                if (window.renderAll) window.renderAll();
+                            }
+                            // หากเลือก keep local (choice === 'local') หรือยกเลิก ให้คงค่าเดิมไว้
+                        } else {
+                            // กรณีการอัปเดตปกติ (ไม่มี Conflict รุนแรง)
+                            localSpaces[localIndex] = cloudSpace;
+                            hasChanged = true;
+                        }
                     }
                 }
-            });
+            }
 
             if (hasChanged) {
                 setSpaces(localSpaces);

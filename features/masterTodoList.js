@@ -40,8 +40,8 @@ export const masterTodoListState = {
     isProgressVisible: true,
     showMasterTaskActions: false,
     isSingleSelectMode: true,
-    addingSubtaskToIndex: null,
-    addingSubtaskToSpace: null,
+    addingSubtaskToTaskId: null,
+    addingSubtaskToSpaceId: null,
     selectedQuickAddSpaceId: null
 };
 
@@ -158,13 +158,13 @@ export function renderMasterTodoList(container) {
         onAddSubtaskAfter: (space, index, li) => {
             const subList = li.closest('.subtask-list');
             if (subList) {
-                masterTodoListState.addingSubtaskToIndex = parseInt(subList.dataset.parentIndex);
-                masterTodoListState.addingSubtaskToSpace = space.id;
+                masterTodoListState.addingSubtaskToTaskId = parseFloat(subList.dataset.parentId);
+                masterTodoListState.addingSubtaskToSpaceId = space.id;
                 onRefresh();
                 setTimeout(() => {
-                    const input = document.querySelector(`.subtask-add-input[data-parent="${masterTodoListState.addingSubtaskToIndex}"]`);
+                    const input = document.querySelector(`.subtask-add-input[data-parent="${masterTodoListState.addingSubtaskToTaskId}"]`);
                     if (input) input.focus();
-                }, 50);
+                }, 100);
             }
         },
         onDeleteEmptyTask: (space, index, type, li) => {
@@ -184,9 +184,9 @@ export function renderMasterTodoList(container) {
         },
         onUpdate: () => {
             onRefresh();
-            if (masterTodoListState.addingSubtaskToIndex !== null && masterTodoListState.addingSubtaskToSpace !== null) {
+            if (masterTodoListState.addingSubtaskToTaskId !== null && masterTodoListState.addingSubtaskToSpaceId !== null) {
                 setTimeout(() => {
-                    const input = document.querySelector(`.subtask-add-input[data-parent="${masterTodoListState.addingSubtaskToIndex}"]`);
+                    const input = document.querySelector(`.subtask-add-input[data-parent="${masterTodoListState.addingSubtaskToTaskId}"]`);
                     if (input) input.focus();
                 }, 50);
             }
@@ -297,7 +297,7 @@ function renderTaskGroups(allSpaces) {
                             spaceId: space.id,
                             isProminentHidden: isSpaceProminentHidden,
                             showActions: masterTodoListState.showMasterTaskActions,
-                            addingSubtaskToIndex: (masterTodoListState.addingSubtaskToSpace === space.id) ? masterTodoListState.addingSubtaskToIndex : null,
+                            addingSubtaskToId: (masterTodoListState.addingSubtaskToSpaceId === space.id) ? masterTodoListState.addingSubtaskToTaskId : null,
                             isFiltered: false, // บังคับให้ปุ่มลากแสดงผลในหน้า Master View
                             isMobile,
                         });
@@ -438,6 +438,84 @@ export function initMasterEvents() {
     });
 
     if (groupContainer) {
+        // ⌨️ จัดการทางลัดเครื่องหมาย ">" สำหรับช่องกรอก Subtask ในหน้า Master View
+        groupContainer.addEventListener('keydown', (e) => {
+            const input = e.target;
+            if (!input.classList.contains('subtask-add-input')) return;
+
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                e.stopPropagation();
+                input.dataset.isSubmitting = "true";
+                const pId = parseFloat(input.getAttribute('data-parent'));
+                let value = input.value.trim();
+                
+                const sid = parseInt(input.closest('li').dataset.spaceId);
+                const space = getSpaces().find(s => s.id === sid);
+                const parentIdx = space.tasks.findIndex(t => t.createdAt === pId);
+                const task = space.tasks[parentIdx];
+
+                let shouldCreateMain = false;
+                const lowerValue = value.toLowerCase();
+                if (lowerValue === '>m') {
+                    value = '';
+                    shouldCreateMain = true;
+                } else if (lowerValue.endsWith('>m')) {
+                    value = value.slice(0, -2).trim();
+                    shouldCreateMain = true;
+                }
+
+                if (shouldCreateMain) masterTodoListState.addingSubtaskToTaskId = null;
+
+                if (value && task) {
+                    if (!task.subtasks) task.subtasks = [];
+                    task.subtasks.push({ id: Date.now(), text: value, completed: false });
+                    input.value = '';
+                    saveData();
+                } else if (!shouldCreateMain) {
+                    masterTodoListState.addingSubtaskToTaskId = null;
+                }
+
+                onRefresh();
+
+                if (shouldCreateMain && parentIdx !== -1) {
+                    const newId = Date.now();
+                    const newTask = { text: "", completed: false, tags: [], dueDate: null, createdAt: newId, googleTaskId: null, isProminent: false, subtasks: [] };
+                    space.tasks.splice(parentIdx + 1, 0, newTask);
+                    saveData();
+                    onRefresh();
+                    
+                    setTimeout(() => {
+                        const selector = `.task-group-details[data-space-id="${sid}"] .task-actual-text`;
+                        const items = document.querySelectorAll(selector);
+                        const target = Array.from(items).find(el => {
+                            const itemLi = el.closest('li');
+                            const tObj = space.tasks[parseInt(itemLi.dataset.index)];
+                            return tObj && tObj.createdAt === newId;
+                        });
+                        if (target) {
+                            target.focus();
+                            const range = document.createRange();
+                            range.selectNodeContents(target);
+                            const sel = window.getSelection();
+                            sel.removeAllRanges();
+                            sel.addRange(range);
+                        }
+                    }, 150);
+                } else if (masterTodoListState.addingSubtaskToTaskId !== null) {
+                    setTimeout(() => {
+                        const newInput = document.querySelector(`.subtask-add-input[data-parent="${pId}"]`);
+                        if (newInput) newInput.focus();
+                    }, 100);
+                }
+            }
+            
+            if (e.key === 'Escape') {
+                masterTodoListState.addingSubtaskToTaskId = null;
+                onRefresh();
+            }
+        });
+
         // 🟢 Handle Checkbox Changes (Task Completion) in Master View
         groupContainer.addEventListener('change', (e) => {
             const target = e.target;
@@ -713,13 +791,15 @@ export function initMasterEvents() {
             if (target.closest('.add-subtask-btn')) {
                 const idx = parseInt(target.closest('.add-subtask-btn').dataset.index);
                 const sid = parseInt(target.closest('li').dataset.spaceId);
-                masterTodoListState.addingSubtaskToIndex = idx;
-                masterTodoListState.addingSubtaskToSpace = sid;
+                const space = getSpaces().find(s => s.id === sid);
+                const task = space.tasks[idx];
+                if (task) masterTodoListState.addingSubtaskToTaskId = task.createdAt;
+                masterTodoListState.addingSubtaskToSpaceId = sid;
                 onRefresh();
                 setTimeout(() => {
-                    const input = document.querySelector(`.subtask-add-input[data-parent="${idx}"]`);
+                    const input = document.querySelector(`.subtask-add-input[data-parent="${masterTodoListState.addingSubtaskToTaskId}"]`);
                     if (input) input.focus();
-                }, 10);
+                }, 50);
                 return;
             }
 

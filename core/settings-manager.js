@@ -85,6 +85,19 @@ export function applyAppSettings() {
             .task-actual-text { font-size: 13px !important; padding: 0 !important; }
             .google-task-checkbox { transform: scale(0.9); margin-right: 8px !important; flex-shrink: 0; }
             
+            /* 🟢 แยกสี Checkbox บนมือถือเพื่อให้แยกประเภทงานได้ง่ายขึ้น */
+            /* งานหลัก: สีน้ำเงิน Primary */
+            .task-item > .item-main-row .google-task-checkbox input:checked + .checkmark-circle {
+                background-color: var(--primary-color) !important;
+                border-color: var(--primary-color) !important;
+            }
+            /* งานย่อย: สีเขียว Emerald และทำให้ขอบเป็นสีเขียวแม้ยังไม่ได้ติ๊ก */
+            .subtask-item > .item-main-row .google-task-checkbox .checkmark-circle { border-color: #10b981 !important; }
+            .subtask-item > .item-main-row .google-task-checkbox input:checked + .checkmark-circle {
+                background-color: #10b981 !important;
+                border-color: #10b981 !important;
+            }
+
             /* 🟢 จัดวาง Topbar ใหม่: ชื่อ Space อยู่บน, ปุ่มทั้ง 4 (CC, Sidebar, Rewards, Drive) อยู่แถวเดียวกันด้านล่าง */
             .topbar {
                 flex-wrap: wrap !important;
