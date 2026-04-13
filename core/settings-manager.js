@@ -83,10 +83,11 @@ export function applyAppSettings() {
             .task-item { padding: 4px 8px !important; border-bottom: 1px solid var(--border-color) !important; align-items: flex-start !important; gap: 2px !important; }
             .task-date { font-size: 9px !important; padding: 1px 5px !important; }
             .task-actual-text { font-size: 13px !important; padding: 0 !important; }
-            .google-task-checkbox { transform: scale(0.9); margin-right: 8px !important; flex-shrink: 0; }
+            .google-task-checkbox { transform: scale(0.9); margin-right: 4px !important; flex-shrink: 0; }
             
             /* 🟢 แยกสี Checkbox บนมือถือเพื่อให้แยกประเภทงานได้ง่ายขึ้น */
             /* งานหลัก: สีน้ำเงิน Primary */
+            .task-item > .item-main-row .google-task-checkbox .checkmark-circle { border-color: var(--primary-color) !important; }
             .task-item > .item-main-row .google-task-checkbox input:checked + .checkmark-circle {
                 background-color: var(--primary-color) !important;
                 border-color: var(--primary-color) !important;

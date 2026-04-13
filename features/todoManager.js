@@ -511,7 +511,7 @@ export function initTodoManager(callbacks) {
                 align-items: center;
                 cursor: grab;
             }
-            .maintask-drag-handle { color: var(--primary-color) !important; opacity: 0.9 !important; }
+            .maintask-drag-handle { color: var(--primary-color) !important; opacity: 1 !important; }
             .subtask-drag-handle { color: #10b981 !important; opacity: 0.8 !important; }
             .drag-handle svg { width: 16px; height: 16px; }
         }

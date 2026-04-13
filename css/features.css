@@ -121,7 +121,7 @@
 /* 🟢 สี drag icon แยกตามประเภทงาน */
 .maintask-drag-handle {
     color: var(--primary-color) !important;
-    opacity: 0.9 !important; /* 🟢 ปรับให้เข้มขึ้นเกือบสุดและคงที่ */
+    opacity: 1 !important; /* 🟢 ปรับให้เข้ม 100% เพื่อให้ตรงกับสี Checkbox */
 }
 
 .subtask-drag-handle {
@@ -361,7 +361,22 @@ body.is-sorting-tasks .smart-flow-desc {
 .google-task-checkbox input[type='checkbox'] { position: absolute; opacity: 0; width: 0; height: 0; }
 .google-task-checkbox:hover input[type='checkbox']:not(:checked) + .checkmark-circle { border-color: #80868b; }
 .google-task-checkbox:hover input[type='checkbox']:not(:checked) + .checkmark-circle svg { stroke: #dadce0 !important; opacity: 1 !important; transform: scale(1); }
-.google-task-checkbox input[type='checkbox']:checked + .checkmark-circle { background-color: #2684fc; border-color: #2684fc; }
+
+/* 🟢 ปรับสี Checkbox ให้ตรงกับ Drag Icon แยกตามประเภทงาน */
+/* งานหลัก: สีน้ำเงิน Primary */
+.task-item > .item-main-row .google-task-checkbox .checkmark-circle { border-color: var(--primary-color) !important; }
+.task-item > .item-main-row .google-task-checkbox input:checked + .checkmark-circle {
+    background-color: var(--primary-color) !important;
+    border-color: var(--primary-color) !important;
+}
+
+/* งานย่อย: สีเขียว Emerald และทำให้ขอบเป็นสีเขียวแม้ยังไม่ได้ติ๊ก */
+.subtask-item > .item-main-row .google-task-checkbox .checkmark-circle { border-color: #10b981 !important; }
+.subtask-item > .item-main-row .google-task-checkbox input:checked + .checkmark-circle {
+    background-color: #10b981 !important;
+    border-color: #10b981 !important;
+}
+
 .google-task-checkbox input[type='checkbox']:checked + .checkmark-circle svg { stroke: #fff !important; opacity: 1 !important; transform: scale(1); stroke-dasharray: 24; stroke-dashoffset: 24; animation: drawGoogleCheck 0.3s forwards 0.1s ease-out; }
 .google-task-checkbox input[type='checkbox']:checked + .checkmark-circle::after { animation: burstOut 0.4s forwards cubic-bezier(0.2, 0.0, 0.2, 1); }
 
