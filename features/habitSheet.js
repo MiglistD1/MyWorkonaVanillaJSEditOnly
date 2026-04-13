@@ -54,24 +54,22 @@ export function openHabitModal(space) {
         const modalHTML = ` 
         <div id="habit-modal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:1100; pointer-events:none;">
             <div class="modal-content" style="position:absolute; display:flex; flex-direction:column; background:var(--bg-card); pointer-events:auto; box-shadow: 0 10px 40px rgba(0,0,0,0.2); border: 1px solid var(--border-color); padding: 0; overflow:hidden;">
-                <div id="habit-header" style="display:flex; justify-content:space-between; align-items:center; padding: 15px 20px; border-bottom:1px solid var(--border-color); background: var(--bg-spacebar); cursor: grab; user-select:none;">
-                    <div>
-                        <h3 style="margin:0; font-size:20px; display:flex; align-items:center; gap:8px;">
-                            <svg class="svg-icon-lg" style="color:var(--primary-color);"><use href="#icon-sparkles"></use></svg>
-                            Habit Tracker
-                        </h3>
-                        <div id="habit-stats-text" style="font-size:13px; color:#888; margin-top:4px;">Keep the streak alive!</div>
+                <div id="habit-header" style="display:flex; justify-content:space-between; align-items:flex-start; padding: 12px 20px; border-bottom:1px solid var(--border-color); background: var(--bg-spacebar); cursor: grab; user-select:none;">
+                    <div style="flex: 1;">
+                        <h3 style="margin:0; font-size:16px; font-weight: 800;">Habit Tracker</h3>
+                        <div id="habit-stats-text" style="font-size:12px; color:#888; margin-top:2px;">Keep the streak alive!</div>
+                        
+                        <div style="display:flex; align-items:center; gap:8px; margin-top:8px;">
+                            <button class="btn-icon" id="toggle-habit-actions" title="Toggle Edit/Delete/Cycle" style="padding: 2px; border-radius: 4px; transition: all 0.3s ease;">
+                                <svg class="svg-icon-sm" style="width:14px; height:14px;"><use href="#icon-eye"></use></svg>
+                            </button>
+                            <label class="task-item" style="display:flex; align-items:center; gap:4px; font-size:10px; color:var(--text-muted); cursor:pointer; background:var(--hover-bg); padding:2px 6px; border-radius:4px; margin:0;">
+                                <input type="checkbox" id="toggle-hide-completed-habits" ${getAppSettings().hideCompletedHabits ? 'checked' : ''} style="cursor:pointer; width:12px; height:12px;"> 
+                                Hide Done
+                            </label>
+                        </div>
                     </div>
-                    <div style="display:flex; align-items:center; gap:10px;">
-                        <button class="btn-icon" id="toggle-habit-actions" title="Toggle Edit/Delete/Cycle" style="padding: 4px; border-radius: 6px; transition: all 0.3s ease;">
-                            <svg class="svg-icon-sm"><use href="#icon-eye"></use></svg>
-                        </button>
-                        <label class="task-item" style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-muted); cursor:pointer; background:var(--hover-bg); padding:4px 8px; border-radius:6px;">
-                            <input type="checkbox" id="toggle-hide-completed-habits" ${getAppSettings().hideCompletedHabits ? 'checked' : ''} style="cursor:pointer;"> 
-                            Hide Done
-                        </label>
-                        <button class="btn-icon" id="btn-close-habit" style="font-size:18px;">✕</button>
-                    </div>
+                    <button class="btn-icon" id="btn-close-habit" style="font-size:18px; padding: 4px;">✕</button>
                 </div>
                 
                 <div style="display:flex; gap:8px; padding: 20px 20px 10px 20px; align-items: center;">
@@ -423,7 +421,7 @@ function updateHabitToggleUI() {
     btn.style.background = isActive ? 'rgba(47, 128, 237, 0.15)' : 'transparent';
     btn.style.border = isActive ? '1px solid var(--primary-color)' : '1px solid transparent';
     btn.style.opacity = isActive ? '1' : '0.6';
-    btn.innerHTML = `<svg class="svg-icon-sm"><use href="#icon-${isActive ? 'eye' : 'eye-off'}"></use></svg>`;
+    btn.innerHTML = `<svg class="svg-icon-sm" style="width:14px; height:14px;"><use href="#icon-${isActive ? 'eye' : 'eye-off'}"></use></svg>`;
 
     // 🟢 ซ่อน/แสดงปุ่ม Template & Group ในแถบรับข้อมูล
     document.querySelectorAll('.habit-action-btn').forEach(el => {
@@ -432,15 +430,35 @@ function updateHabitToggleUI() {
 }
 
 export function renderHabitList(space) {
-    // 🟢 FIX: ไม่ต้อง re-render ถ้ามี Element ที่กำลังแก้ไขอยู่
-    if (isAnyEditableElementFocused()) {
-        console.log("RenderHabitList skipped: Editable element is focused.");
+    // 🟢 ป้องกันการวาดทับเฉพาะตอนกำลังพิมพ์ชื่อ Habit เท่านั้น (เพื่อให้การติ๊ก Checkbox ยังอัปเดตได้)
+    const activeEl = document.activeElement;
+    if (activeEl && (activeEl.id === 'new-habit-input' || activeEl.classList.contains('habit-text-content'))) {
         return;
     }
     const container = document.getElementById('habit-list-container');
     const progressText = document.getElementById('habit-progress-percent');
     const progressBar = document.getElementById('habit-progress-bar');
     
+    // 🟢 Update Dashboard Toggle Button if present
+    const dashHabitBtn = document.querySelector('.btn-habit-toggle');
+    if (dashHabitBtn) {
+        const hList = space.habits || [];
+        const hTotal = hList.length;
+        const hDone = hList.filter(h => h.completed).length;
+        const isMobile = window.innerWidth <= 768;
+        const iconSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg>`;
+        const countHtml = (hTotal > 0 && !isMobile) ? `<span style="font-size: 9px; font-weight: 700; margin-left: 4px; vertical-align: middle;">${hDone}/${hTotal}</span>` : '';
+        
+        let statusStyle = '';
+        if (hTotal === 0) statusStyle = 'color: var(--text-muted); border: 1px solid var(--border-color); background: rgba(0,0,0,0.05);';
+        else if (hDone === 0) statusStyle = 'color: #ef4444; border: 1px solid #ef4444; background: rgba(239, 68, 68, 0.1);';
+        else if (hDone < hTotal) statusStyle = 'color: #d97706; border: 1px solid #f59e0b; background: rgba(245, 158, 11, 0.1);';
+        else statusStyle = 'color: #10b981; border: 1px solid #10b981; background: rgba(16, 185, 129, 0.1);';
+        
+        dashHabitBtn.style.cssText = `margin-right: 10px; width: auto; padding: 3px 6px; transition: all 0.3s ease; ${statusStyle}`;
+        dashHabitBtn.innerHTML = iconSvg + countHtml;
+    }
+
     checkAndResetHabits(space);
 
     if (container.sortable) {
@@ -679,12 +697,13 @@ export function renderHabitList(space) {
             }
             
             habit.lastUpdate = new Date().toDateString();
+            saveData(true); // บันทึกทันทีไม่ต้องรอ
 
-            // 🟢 FIX: หน่วงเวลาการ re-render เพื่อให้ animation เสร็จสมบูรณ์
-            // และป้องกันการกระพริบหากมีการกดรัวๆ
             setTimeout(() => {
-                if (isAnyEditableElementFocused()) return; // ตรวจสอบอีกครั้งก่อน re-render
-                saveData(true);
+                // ตรวจสอบโฟกัสอีกครั้งก่อนวาดใหม่
+                const active = document.activeElement;
+                if (active && (active.id === 'new-habit-input' || active.classList.contains('habit-text-content'))) return;
+                
                 renderHabitList(space);
                 renderTasks(space);
             }, isChecked ? 800 : 0); // เพิ่มเป็น 800ms ให้เท่ากับระบบ Task

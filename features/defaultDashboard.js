@@ -1,8 +1,9 @@
-import { getSpaces, getAppSettings, saveData, getFilterTags } from '../core/storage.js';
+import { getSpaces, getAppSettings, saveData, getFilterTags, getCurrentSpace } from '../core/storage.js';
 import { updateKeepTagButtonState, openKeepWithTag } from './googleKeep.js';
 import { renderMasterTodoList, renderMasterHeaderControls, initMasterEvents, masterTodoListState as commandCenterState } from './masterTodoList.js';
 import { renderSmartFlow, initSmartFlow, flowState, showFocusPopup, formatFocusTime } from './smartFlow.js';
 import { toggleDashboardQuickNote, renderDashboardQuickNote } from './dashboardQuickNote.js';
+import { toggleHabitModal } from './habitSheet.js';
 import Sortable from '../sortable.esm.js';
 
 let ccWidgetStateCache = null; // 🟢 แคชสถานะ UI ไว้ในแรมเพื่อให้ทำงานเร็วขึ้น
@@ -37,6 +38,26 @@ export async function renderDefaultDashboard() {
     await initSmartFlow(); 
     const settings = getAppSettings();
 
+    const currentSpace = getCurrentSpace();
+    const habits = currentSpace?.habits || [];
+    const hTotal = habits.length;
+    const hDone = habits.filter(h => h.completed).length;
+    const isMobile = window.innerWidth <= 768;
+    const habitCountHtml = (hTotal > 0 && !isMobile) 
+        ? `<span style="font-size: 9px; font-weight: 700; margin-left: 4px; vertical-align: middle;">${hDone}/${hTotal}</span>` 
+        : '';
+
+    let habitStatusStyle = '';
+    if (hTotal === 0) {
+        habitStatusStyle = 'color: var(--text-muted); border: 1px solid var(--border-color); background: rgba(0,0,0,0.05);';
+    } else if (hDone === 0) {
+        habitStatusStyle = 'color: #ef4444; border: 1px solid #ef4444; background: rgba(239, 68, 68, 0.1);';
+    } else if (hDone < hTotal) {
+        habitStatusStyle = 'color: #d97706; border: 1px solid #f59e0b; background: rgba(245, 158, 11, 0.1);';
+    } else {
+        habitStatusStyle = 'color: #10b981; border: 1px solid #10b981; background: rgba(16, 185, 129, 0.1);';
+    }
+
     // 1. Render Dashboard Wrapper
     container.innerHTML = `
         <div id="cc-minimized-row" class="minimized-widgets-bar">
@@ -45,6 +66,10 @@ export async function renderDefaultDashboard() {
             </button>
             <button class="btn-icon btn-dashboard-note-toggle" title="Dashboard Quick Note" style="margin-right: 10px; ${settings.dashboardQuickNote?.isOpen ? 'color: var(--primary-color); border: 1px solid var(--primary-color); background: rgba(47, 128, 237, 0.1);' : ''}">
                 <svg class="svg-icon-sm"><use href="#icon-pencil"></use></svg>
+            </button>
+            <button class="btn-icon btn-habit-toggle" title="Habit Tracker" style="margin-right: 10px; width: auto; padding: 3px 6px; transition: all 0.3s ease; ${habitStatusStyle}">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg>
+                ${habitCountHtml}
             </button>
             <div class="reward-system-btn-group" style="display: flex; align-items: center; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.2); border-radius: 20px; padding: 2px 4px; margin-right: 10px;">
                 <button id="btn-master-open-rewards" class="btn-icon" title="Quest Loot & Rewards" style="color: #f59e0b; width: 32px; height: 32px; opacity: 1; margin: 0;"><svg class="svg-icon-lg"><use href="#icon-sparkles"></use></svg></button>
@@ -184,6 +209,12 @@ export async function renderDefaultDashboard() {
     const noteBtn = container.querySelector('.btn-dashboard-note-toggle');
     if (noteBtn) {
         noteBtn.onclick = () => toggleDashboardQuickNote();
+    }
+
+    // Habit Tracker Toggle
+    const habitToggleBtn = container.querySelector('.btn-habit-toggle');
+    if (habitToggleBtn) {
+        habitToggleBtn.onclick = () => toggleHabitModal(getCurrentSpace());
     }
 
     // 3. Global Dashboard UI Updates

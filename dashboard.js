@@ -451,6 +451,47 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         updateExportUI();
 
+        /**
+         * 🕒 ระบบตรวจสอบการสำรองข้อมูลอัตโนมัติ (Auto-backup check)
+         * แก้ไขปัญหา "Missed Window": หากเปิดคอมช้ากว่าเวลาที่ตั้งไว้ ระบบจะเช็คและรันให้ทันที
+         */
+        const checkAutoExport = () => {
+            const settings = getAppSettings();
+            const days = settings.autoExportDays || 0;
+            if (days <= 0) return; // ปิดการใช้งานถ้าตั้งเป็น 0
+
+            const lastExport = settings.lastExportTimestamp || 0;
+            const timeStr = settings.autoExportTime || "00:00";
+            const [targetH, targetM] = timeStr.split(':').map(Number);
+
+            const now = new Date();
+            const scheduledToday = new Date();
+            scheduledToday.setHours(targetH, targetM, 0, 0);
+
+            const msPerDay = 24 * 60 * 60 * 1000;
+            // คำนวณหาเวลาที่ควรจะ Backup รอบถัดไป (อิงจากครั้งล่าสุด + จำนวนวัน)
+            const nextDueTimestamp = lastExport + (days * msPerDay);
+
+            // เงื่อนไข: ถ้า (เวลาปัจจุบัน >= รอบที่ควรทำ) และ (เวลาปัจจุบัน >= เวลาที่กำหนดไว้ของวันนี้)
+            if (Date.now() >= nextDueTimestamp && now >= scheduledToday) {
+                const btn = document.getElementById('btn-manual-export');
+                if (btn) {
+                    console.log("⏰ Auto-backup is due. Triggering...");
+                    // หากเป็น Extension ให้รันทันที, หากเป็น Web ให้ขึ้น Toast เตือน (เพราะ Browser บล็อค Auto-download)
+                    if (typeof chrome !== 'undefined' && chrome.downloads) {
+                        btn.click();
+                    } else if (typeof window.showToast === 'function') {
+                        window.showToast("📅 ถึงเวลาสำรองข้อมูล (Auto-Backup) ตามกำหนดการแล้วครับ", "download", () => btn.click());
+                    }
+                }
+            }
+        };
+
+        // รันตรวจสอบทันทีเมื่อโหลดแอป (รอ 2 วินาทีให้ข้อมูลนิ่ง) และรันซ้ำทุก 1 นาที
+        setTimeout(checkAutoExport, 2000);
+        setInterval(checkAutoExport, 60000);
+
+
         btnManualExport?.addEventListener('click', () => {
             const performExport = (allData) => {
                 const settings = getAppSettings();

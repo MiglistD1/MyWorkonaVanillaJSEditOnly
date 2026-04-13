@@ -358,33 +358,20 @@ body.is-sorting-tasks .smart-flow-desc {
 .subtask-item.prominent .task-actual-text { font-weight: 700; color: orange !important; }
 
 .google-task-checkbox { display: inline-flex; align-items: center; cursor: pointer; position: relative; margin-right: 0; flex-shrink: 0; overflow: visible; }
-.google-task-checkbox input[type='checkbox'] { position: absolute; opacity: 0; width: 0; height: 0; }
-.google-task-checkbox:hover input[type='checkbox']:not(:checked) + .checkmark-circle { border-color: #80868b; }
-.google-task-checkbox:hover input[type='checkbox']:not(:checked) + .checkmark-circle svg { stroke: #dadce0 !important; opacity: 1 !important; transform: scale(1); }
 
-/* 🟢 แก้ไขปัญหาเครื่องหมายถูกหายและขีดเบี้ยว (Global Fix) */
-.google-task-checkbox .checkmark-circle svg path { 
-    fill: none !important; /* ป้องกันขีดเบี้ยว */
-    stroke: white !important; /* บังคับเครื่องหมายถูกเป็นสีขาว */
-}
-
-/* ปรับสีวงกลมเมื่อติ๊กถูกให้ทำงานทุกที่ที่มีคลาส task-item */
-.task-item .google-task-checkbox input:checked + .checkmark-circle {
+/* 🟢 Apply standard checkbox colors to the actual input for task items */
+.task-item .google-task-checkbox input:checked {
     background-color: var(--primary-color) !important;
     border-color: var(--primary-color) !important;
 }
 
-/* งานย่อย: สีเขียว Emerald และทำให้ขอบเป็นสีเขียวแม้ยังไม่ได้ติ๊ก */
-.subtask-item > .item-main-row .google-task-checkbox .checkmark-circle { border-color: #10b981 !important; }
-.subtask-item > .item-main-row .google-task-checkbox input:checked + .checkmark-circle {
+/* งานย่อย: สีเขียว Emerald */
+.subtask-item > .item-main-row .google-task-checkbox input { border-color: #10b981 !important; }
+.subtask-item > .item-main-row .google-task-checkbox input:checked {
     background-color: #10b981 !important;
     border-color: #10b981 !important;
 }
 
-.google-task-checkbox input[type='checkbox']:checked + .checkmark-circle svg { stroke: #fff !important; opacity: 1 !important; transform: scale(1); stroke-dasharray: 24; stroke-dashoffset: 24; animation: drawGoogleCheck 0.3s forwards 0.1s ease-out; }
-.google-task-checkbox input[type='checkbox']:checked + .checkmark-circle::after { animation: burstOut 0.4s forwards cubic-bezier(0.2, 0.0, 0.2, 1); }
-
-.checkmark-circle::after { content: ''; position: absolute; width: 100%; height: 100%; border-radius: 50%; border: 2px solid #2684fc; opacity: 0; transform: scale(0.5); pointer-events: none; }
 .task-item.completed-hold .task-actual-text,
 .subtask-item.completed-hold .task-actual-text { text-decoration: line-through !important; color: var(--text-muted) !important; opacity: 0.6; transition: all 0.3s ease; }
 

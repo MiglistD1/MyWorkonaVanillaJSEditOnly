@@ -97,7 +97,7 @@ details[open] > .details-summary .summary-chevron {
 .tag-selection-list { display: flex; flex-direction: column; gap: 2px; }
 .tag-select-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 6px; cursor: pointer; transition: background 0.2s; font-size: 14px; color: var(--text-main); }
 .tag-select-row:hover { background: var(--hover-bg); }
-.tag-select-row input[type="checkbox"] { cursor: pointer; width: 16px; height: 16px; margin: 0; }
+.tag-select-row input[type="checkbox"] { cursor: pointer; }
 .tag-type-badge { font-size: 10px; padding: 1px 6px; border-radius: 4px; background: rgba(0,0,0,0.05); color: var(--text-muted); margin-left: auto; }
 .dark-mode .tag-type-badge { background: rgba(255,255,255,0.1); }
 
@@ -139,6 +139,3 @@ input:checked + .slider:before { transform: translateX(16px); }
 .modal-content h3 svg, .settings-group label svg, .modal-content .section-label svg, .modal-content h3 i { opacity: 0.4 !important; margin-right: 8px !important; stroke-width: 1.2 !important; }
 #smart-flow-settings-modal .modal-content, #settings-modal .modal-content { width: 580px !important; }
 #settings-modal .modal-content .settings-group-container { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-
-.checkmark-circle { display: flex !important; align-items: center !important; justify-content: center !important; padding: 0 !important; line-height: 0 !important; overflow: visible !important; box-sizing: border-box !important; }
-.checkmark-circle svg { width: 11px !important; height: 11px !important; fill: none !important; opacity: 0; display: block !important; margin: 0 !important; stroke-width: 3px !important; flex-shrink: 0 !important; transform-origin: center center !important; }

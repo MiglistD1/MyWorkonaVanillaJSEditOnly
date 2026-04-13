@@ -70,34 +70,46 @@ export function applyAppSettings() {
         document.head.appendChild(mobileStyle);
     }
     mobileStyle.innerHTML = `
+        /* 🟢 Global Modal Fix: ป้องกันล้นจอทั้ง Desktop และ Mobile */
+        .modal-content {
+            max-height: 90vh !important;
+            overflow-y: auto !important;
+            scrollbar-width: thin;
+            box-sizing: border-box !important;
+        }
+
+        /* 🟢 Sync Drag Handle & Checkbox Colors (Global) */
+        .maintask-drag-handle { color: var(--primary-color) !important; opacity: 0.8 !important; }
+        .subtask-drag-handle { color: #10b981 !important; opacity: 0.8 !important; }
+
+        /* Main Task Checkbox (ใช้สีเดียวกับไอคอนลากงานหลัก) */
+        .task-item .google-task-checkbox .checkmark-circle { border-color: var(--primary-color) !important; border-width: 2px !important; }
+        .task-item > .item-main-row .google-task-checkbox input:checked + .checkmark-circle {
+            background-color: var(--primary-color) !important;
+            border-color: var(--primary-color) !important;
+        }
+
+        /* Subtask Checkbox (ใช้สีเดียวกับไอคอนลากงานย่อย) */
+        .subtask-item .google-task-checkbox .checkmark-circle { border-color: #10b981 !important; border-width: 2px !important; }
+        .subtask-item > .item-main-row .google-task-checkbox input:checked + .checkmark-circle {
+            background-color: #10b981 !important;
+            border-color: #10b981 !important;
+        }
+
         @media (max-width: 768px) {
-            /* 1. ซ่อนส่วนที่ไม่เกี่ยวข้องกับ To-do */
+            /* 🟢 2. สำหรับมือถือ: ซ่อน Resources และ Tabs ออกไปตามคำขอ */
             #tabs-card, #resources-card, .topbar .search-wrapper, .topbar #global-launchers-bar, .topbar #utility-group, 
             .topbar #btn-utility-more, #schedule-mode-bar, #focus-mode-bar, #tag-bar-container { display: none !important; }
             #main-grid { grid-template-columns: 1fr !important; padding: 0 !important; gap: 0 !important; }
             #tasks-card { border-radius: 0 !important; border: none !important; width: 100% !important; overflow-x: hidden !important; }
             .card-body { padding: 10px !important; }
             
-            /* 3. UI To-do แบบ Google Tasks และทำให้ Scroll ได้ */
-            #tasks-card { overflow-y: auto !important; height: calc(100vh - 60px); }
+            /* 3. ปรับให้ยืดยาวตามเนื้อหา ไม่ต้อง scroll แยกรายบล็อก */
+            #tasks-card, #resources-card { overflow-y: visible !important; height: auto !important; }
             .task-item { padding: 4px 8px !important; border-bottom: 1px solid var(--border-color) !important; align-items: flex-start !important; gap: 2px !important; }
             .task-date { font-size: 9px !important; padding: 1px 5px !important; }
             .task-actual-text { font-size: 13px !important; padding: 0 !important; }
             .google-task-checkbox { transform: scale(0.9); margin-right: 4px !important; flex-shrink: 0; }
-            
-            /* 🟢 แยกสี Checkbox บนมือถือเพื่อให้แยกประเภทงานได้ง่ายขึ้น */
-            /* งานหลัก: สีน้ำเงิน Primary */
-            .task-item > .item-main-row .google-task-checkbox .checkmark-circle { border-color: var(--primary-color) !important; }
-            .task-item > .item-main-row .google-task-checkbox input:checked + .checkmark-circle {
-                background-color: var(--primary-color) !important;
-                border-color: var(--primary-color) !important;
-            }
-            /* งานย่อย: สีเขียว Emerald และทำให้ขอบเป็นสีเขียวแม้ยังไม่ได้ติ๊ก */
-            .subtask-item > .item-main-row .google-task-checkbox .checkmark-circle { border-color: #10b981 !important; }
-            .subtask-item > .item-main-row .google-task-checkbox input:checked + .checkmark-circle {
-                background-color: #10b981 !important;
-                border-color: #10b981 !important;
-            }
 
             /* 🟢 จัดวาง Topbar ใหม่: ชื่อ Space อยู่บน, ปุ่มทั้ง 4 (CC, Sidebar, Rewards, Drive) อยู่แถวเดียวกันด้านล่าง */
             .topbar {
@@ -386,18 +398,11 @@ export function applyAppSettings() {
                 display: inline-flex !important;
             }
 
-            /* 🟢 บังคับให้ Modal ไม่ล้นจอ และสามารถเลื่อนดูได้บนมือถือ */
-            .modal-content, #settings-modal .modal-content, #smart-flow-settings-modal .modal-content, .reward-modal-content {
+            /* 🟢 ปรับตำแหน่ง Modal บนมือถือให้เหมาะสม */
+            .modal-content {
                 width: 90% !important;
                 max-width: 400px !important;
-                position: fixed !important;
-                top: 50% !important;
-                left: 50% !important;
-                transform: translate(-50%, -50%) !important;
-                margin: 0 !important;
                 max-height: 85vh !important;
-                overflow-y: auto !important;
-                box-sizing: border-box !important;
             }
 
             /* 🟢 ปรับเมนู Popup ให้เป็น Bottom Sheet */

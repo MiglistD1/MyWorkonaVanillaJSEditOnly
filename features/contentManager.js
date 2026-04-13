@@ -67,6 +67,9 @@ export function renderMainContent() {
       document.getElementById('tabs-card')?.setAttribute('style', 'display:none !important');
       document.getElementById('resources-card')?.setAttribute('style', 'display:none !important');
       if (toggleToolsBtn) toggleToolsBtn.style.display = 'none';
+  } else {
+      // คืนค่าการแสดงผลพื้นฐานเพื่อให้ Resources กลับมาแสดงในช่วง Tablet
+      document.getElementById('resources-card')?.style.removeProperty('display');
   }
 
   const space = getCurrentSpace(); if (!space) return;

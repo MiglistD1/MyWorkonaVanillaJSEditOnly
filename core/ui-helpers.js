@@ -357,6 +357,11 @@ export function generateTaskHTML(task, index, {
     const hasTags = task.tags && task.tags.length > 0;
     const tagBtnHTML = isSubtask ? generateMiniTagsBtn(task.tags, 'subtask', index, parentIndex, spaceId) : generateMiniTagsBtn(task.tags, 'task', index, null, spaceId);
 
+    // 🟢 NEW: Add specific remove button for template sandbox tasks
+    let templateRemoveBtnHTML = '';
+    if (spaceId === 'sandbox' && !isSubtask) {
+        templateRemoveBtnHTML = `<button class="btn-icon btn-remove-temp-task" data-index="${index}" style="color:#ef4444; margin-left: 5px;">✕</button>`;
+    }
     // Actions that are always visible: Tags only if they exist, link button if it has a link
     if (hasTags) {
         actionButtons += tagBtnHTML;
@@ -435,7 +440,7 @@ export function generateTaskHTML(task, index, {
             </div>
 
             <div class="item-action-group" style="flex-shrink: 0; margin-left: auto; display: flex; align-items: center; gap: 8px;">
-                ${subtaskSpecificActionsHTML}${actionButtons}
+                ${subtaskSpecificActionsHTML}${actionButtons}${templateRemoveBtnHTML}
             </div>
         </div>
         ${subtasksHTML}

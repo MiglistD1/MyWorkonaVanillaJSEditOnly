@@ -75,11 +75,14 @@ export function renderMainContent() {
   if (isMobile) {
       // ปรับปรุงการซ่อนโดยใช้ ID ที่ตรงกับ HTML จริง
       if (mainGrid) mainGrid.style.gridTemplateColumns = '1fr';
-      document.getElementById('tabs-card').style.display = 'none';
-      document.getElementById('resources-card').style.display = 'none';
+      document.getElementById('tabs-card')?.setAttribute('style', 'display:none !important');
+      document.getElementById('resources-card')?.setAttribute('style', 'display:none !important');
       if (sBar) sBar.style.display = 'none';
       if (fBar) fBar.style.display = 'none';
       if (toggleToolsBtn) toggleToolsBtn.style.display = 'none';
+  } else {
+      // คืนค่าการแสดงผลพื้นฐานสำหรับโหมดที่ไม่ใช่มือถือ (ช่วง Tablet/Stacked จะแสดงผลได้ปกติ)
+      document.getElementById('resources-card').style.display = '';
   }
 
   const space = getCurrentSpace(); if (!space) return;

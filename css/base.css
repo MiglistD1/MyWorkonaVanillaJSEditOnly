@@ -55,33 +55,57 @@ summary::-webkit-details-marker {
 .svg-icon-sm { width: 15px; height: 15px; vertical-align: middle; fill: none; stroke-linecap: round; stroke-linejoin: round; color: inherit;}
 .svg-icon-lg { width: 22px; height: 22px; vertical-align: middle; fill: none; stroke-linecap: round; stroke-linejoin: round;}
 
+/* 🔴 Hide legacy SVG checkmark components everywhere */
 .checkmark-circle {
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    border: 2px solid var(--border-color, #ccc);
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    padding: 0 !important;
-    line-height: 0 !important;
-    overflow: visible !important;
-    box-sizing: border-box !important;
-    transition: all 0.2s cubic-bezier(0.4, 0.0, 0.2, 1);
-    background: transparent;
-    position: relative;
+    display: none !important;
 }
 
-.checkmark-circle svg {
-    width: 11px !important;
-    height: 11px !important;
-    fill: none !important;
-    opacity: 0;
-    display: block !important;
-    margin: 0 !important;
-    stroke-width: 3px !important;
-    flex-shrink: 0 !important;
-    transform-origin: center center !important;
+input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    border: 1px solid var(--border-color);
+    border-radius: 50%;
+    background-color: var(--bg-card);
+    cursor: pointer;
+    position: relative;
+    display: inline-block;
+    vertical-align: middle;
+    margin: 0;
+    transition: all 0.2s ease-in-out;
+}
+
+input[type="checkbox"]:checked {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+input[type="checkbox"]:checked::after {
+    content: '';
+    display: block;
+    position: absolute;
+    left: 5px;
+    top: 1px;
+    width: 4px;
+    height: 8px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+/* 🟢 Force checkmark visibility for modal and standard checkboxes */
+.modal-content input[type="checkbox"],
+#sync-calendar-checkbox,
+#repeat-enabled,
+#toggle-hide-completed-habits {
+    width: 16px !important;
+    height: 16px !important;
+    border-radius: 50% !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    display: inline-block !important;
+    position: relative !important;
 }
 
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }

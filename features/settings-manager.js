@@ -70,37 +70,54 @@ export function applyAppSettings() {
         document.head.appendChild(mobileStyle);
     }
     mobileStyle.innerHTML = `
+        /* 🟢 Global Modal Fix: ป้องกันล้นจอทั้ง Desktop และ Mobile */
+        .modal-content {
+            max-height: 90vh !important;
+            overflow-y: auto !important;
+            scrollbar-width: thin;
+            box-sizing: border-box !important;
+        }
+
+        /* 🟢 Sync Drag Handle & Checkbox Colors (Global) */
+        .maintask-drag-handle { color: var(--primary-color) !important; opacity: 0.8 !important; }
+        .subtask-drag-handle { color: #10b981 !important; opacity: 0.8 !important; }
+
+        /* Main Task Checkbox (ใช้สีเดียวกับไอคอนลากงานหลัก) */
+        .task-item .google-task-checkbox .checkmark-circle { border-color: var(--primary-color) !important; border-width: 2px !important; }
+        .task-item > .item-main-row .google-task-checkbox input:checked + .checkmark-circle {
+            background-color: var(--primary-color) !important;
+            border-color: var(--primary-color) !important;
+        }
+
+        /* Subtask Checkbox (ใช้สีเดียวกับไอคอนลากงานย่อย) */
+        .subtask-item .google-task-checkbox .checkmark-circle { border-color: #10b981 !important; border-width: 2px !important; }
+        .subtask-item > .item-main-row .google-task-checkbox input:checked + .checkmark-circle {
+            background-color: #10b981 !important;
+            border-color: #10b981 !important;
+        }
+
+        /* 🟢 1. สำหรับจอเล็กที่เริ่มจัดคอลัมน์แนวตั้ง (Tablet/Small Desktop) แต่ยังไม่ถึงระดับมือถือ */
+        @media (max-width: 1100px) {
+            #main-grid { grid-template-columns: 1fr !important; gap: 20px !important; }
+            #tasks-card, #resources-card { overflow-y: visible !important; height: auto !important; min-height: 0 !important; }
+        }
+
         @media (max-width: 768px) {
-            /* 1. ซ่อนส่วนที่ไม่เกี่ยวข้องกับ To-do */
+            /* 🟢 2. สำหรับมือถือ: ซ่อน Resources ออกไปตามคำขอ */
             #tabs-card, #resources-card, .topbar .search-wrapper, .topbar #global-launchers-bar, .topbar #utility-group, 
             .topbar #btn-utility-more, #schedule-mode-bar, #focus-mode-bar, #tag-bar-container { display: none !important; }
             #main-grid { grid-template-columns: 1fr !important; padding: 0 !important; gap: 0 !important; }
             #tasks-card { border-radius: 0 !important; border: none !important; width: 100% !important; overflow-x: hidden !important; }
             .card-body { padding: 10px !important; }
             
-            /* 2. ปรับ Sidebar ให้เป็น Drawer เต็มหน้าจอ */
+            /* 2. ทำให้งานยืดยาวตามเนื้อหา ไม่ต้อง scroll แยกรายบล็อก */
+            #tasks-card { overflow-y: visible !important; height: auto !important; }
             #spacebar:not(.collapsed) { width: 85% !important; z-index: 10001; }
             
-            /* 3. UI To-do แบบ Google Tasks และทำให้ Scroll ได้ */
-            #tasks-card { overflow-y: auto !important; height: calc(100vh - 60px); }
             .task-item { padding: 4px 8px !important; border-bottom: 1px solid var(--border-color) !important; align-items: center !important; gap: 2px !important; }
             .task-actual-text { font-size: 13px !important; padding: 0 !important; }
             .google-task-checkbox { transform: scale(0.9); margin-right: 2px !important; flex-shrink: 0; }
             
-            /* 🟢 แยกสี Checkbox บนมือถือเพื่อให้แยกประเภทงานได้ง่ายขึ้น */
-            /* งานหลัก: สีน้ำเงิน Primary */
-            .task-item > .item-main-row .google-task-checkbox .checkmark-circle { border-color: var(--primary-color) !important; }
-            .task-item > .item-main-row .google-task-checkbox input:checked + .checkmark-circle {
-                background-color: var(--primary-color) !important;
-                border-color: var(--primary-color) !important;
-            }
-            /* งานย่อย: สีเขียว Emerald และทำให้ขอบเป็นสีเขียวแม้ยังไม่ได้ติ๊ก */
-            .subtask-item > .item-main-row .google-task-checkbox .checkmark-circle { border-color: #10b981 !important; }
-            .subtask-item > .item-main-row .google-task-checkbox input:checked + .checkmark-circle {
-                background-color: #10b981 !important;
-                border-color: #10b981 !important;
-            }
-
             /* 4. ช่องกรอกงานใหม่แบบ Floating Bottom Bar (แบบ Google Tasks) - แก้ไขการซ่อน */
             .task-input-bar { 
                 position: fixed; bottom: 0; left: 0; right: 0; 

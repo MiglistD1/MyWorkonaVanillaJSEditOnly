@@ -450,6 +450,48 @@ export function initTodoManager(callbacks) {
     // 🟢 Moved from top level to inside init
     const taskInput = document.getElementById('new-task-input');
     const sortSelect = document.getElementById('btn-task-sort');
+    let habitBtn = document.getElementById('btn-open-habits');
+
+    // 🟢 บังคับสร้างปุ่ม Habit Tracker และจัดวางข้างปุ่ม Sort ในหน้า To-do List
+    if (sortSelect) {
+        if (!habitBtn) {
+            habitBtn = document.createElement('button');
+            habitBtn.id = 'btn-open-habits';
+            habitBtn.className = 'btn btn-outline';
+            habitBtn.title = 'Habit Tracker';
+            const initialHabits = getCurrentSpace()?.habits || [];
+            const hT = initialHabits.length;
+            const hD = initialHabits.filter(h => h.completed).length;
+            const isMob = window.innerWidth <= 768;
+            const initialCountText = (hT > 0 && !isMob) ? ` ${hD}/${hT}` : '';
+            const labelText = isMob ? '' : ' Habit';
+            habitBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="${isMob ? '' : 'margin-right:6px;'}"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg>${labelText}${initialCountText}`;
+            
+            const baseStyle = `display: inline-flex; align-items: center; justify-content: center; margin-left: 8px; padding: ${isMob ? '0' : '2px 8px'}; height: ${isMob ? '30px' : '27px'}; width: ${isMob ? '30px' : 'auto'}; font-size: 11px; font-weight: 700; transition: all 0.3s ease; `;
+            if (hT === 0) habitBtn.style.cssText = baseStyle + 'color: var(--text-muted); border: 1px solid var(--border-color); background: rgba(0,0,0,0.05);';
+            else if (hD === 0) habitBtn.style.cssText = baseStyle + 'color: #ef4444; border: 1px solid #ef4444; background: rgba(239, 68, 68, 0.1);';
+            else if (hD < hT) habitBtn.style.cssText = baseStyle + 'color: #d97706; border: 1px solid #f59e0b; background: rgba(245, 158, 11, 0.1);';
+            else habitBtn.style.cssText = baseStyle + 'color: #10b981; border: 1px solid #10b981; background: rgba(16, 185, 129, 0.1);';
+        }
+        sortSelect.parentNode.insertBefore(habitBtn, sortSelect.nextSibling);
+        habitBtn.onclick = () => toggleHabitModal(getCurrentSpace());
+    }
+
+    // 🟢 บังคับสร้างปุ่ม Templates และจัดวางข้างปุ่ม Habit ในหน้า To-do List (Desktop/Mobile)
+    let templateBtn = document.getElementById('btn-todo-templates');
+    if (sortSelect && !templateBtn) {
+        templateBtn = document.createElement('button');
+        templateBtn.id = 'btn-todo-templates';
+        templateBtn.className = 'btn btn-outline';
+        templateBtn.title = 'Manage Templates';
+        const isMob = window.innerWidth <= 768;
+        templateBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="${isMob ? '' : 'margin-right:6px;'}"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>${isMob ? '' : ' Templates'}`;
+        
+        const baseStyle = `display: inline-flex; align-items: center; justify-content: center; margin-left: 8px; padding: ${isMob ? '0' : '2px 8px'}; height: ${isMob ? '30px' : '27px'}; width: ${isMob ? '30px' : 'auto'}; font-size: 11px; font-weight: 700; color: var(--text-muted); border: 1px solid var(--border-color); background: var(--bg-card); transition: all 0.3s ease;`;
+        templateBtn.style.cssText = baseStyle;
+        
+        sortSelect.parentNode.insertBefore(templateBtn, habitBtn ? habitBtn.nextSibling : sortSelect.nextSibling);
+    }
 
     if (sortSelect) {
         sortSelect.onchange = () => {
@@ -657,13 +699,10 @@ export function initTodoManager(callbacks) {
             }
         }
 
-        // 🟢 Fix: FAB Directly opens task input bar and focuses the field for immediate typing
+        // 🟢 แก้ไข: ให้ FAB เปิดเมนู (ที่มีปุ่ม Templates) แทนการเปิดช่องพิมพ์ทันที
         fab.onclick = (e) => {
             e.stopPropagation();
-            const bar = document.getElementById('new-task-input')?.closest('.task-input-bar');
-            if (bar) bar.classList.add('is-active');
-            document.getElementById('new-task-input')?.focus();
-            fab.classList.add('is-hidden');
+            fabMenu.classList.add('is-active');
         };
 
         // คลิกที่อื่นเพื่อซ่อนแถบพิมพ์ (ยกเว้นในตัวแถบเอง)
@@ -682,14 +721,6 @@ export function initTodoManager(callbacks) {
 
     // 🟢 Template System Initialization
     initTodoTemplateSystem();
-
-    // 🟢 คืนชีพปุ่ม Habit Tracker และบังคับแสดงผล
-    const habitBtn = document.getElementById('btn-open-habits');
-    if (habitBtn) {
-        habitBtn.style.display = 'inline-flex';
-        habitBtn.onclick = () => toggleHabitModal(getCurrentSpace());
-    }
-
     // 🔄 Repeating Tasks Modal Logic
     const repeatModal = document.getElementById('repeat-settings-modal');
     const repeatEnabled = document.getElementById('repeat-enabled');
@@ -1354,8 +1385,7 @@ export function initTodoManager(callbacks) {
             const days = getAppSettings().autoDeleteDays || 30;
             task.expiryAt = task.deletedAt + (days * 24 * 60 * 60 * 1000);
             task.completed = false; // เอากลับมาเป็นงานที่ยังไม่เสร็จเผื่อกู้คืน
-            saveData(); onRenderCallback();
-            triggerCloudSave();
+            saveData(); onRenderCallback();          
         }
         // Restore Task
         // 🟢 NEW: Restore Task (from trash)
@@ -2262,36 +2292,205 @@ function initTodoTemplateSystem() {
 
     // 🟢 บันทึกฟังก์ชัน Refresh ไว้เพื่อให้ Modals เรียกใช้งานได้
     const renderSandbox = () => {
+        const space = getCurrentSpace();
         sandboxList.innerHTML = currentTemplateTasks.map((t, i) => {
-            const hasLink = t.linkData && t.linkData.url;
-            
-            return `
-            <li class="task-item" style="padding:8px 12px; border-bottom:1px solid var(--border-color); display:flex; align-items:center; gap:10px;">
-                <div style="width:16px; height:16px; border-radius:50%; border:2px solid var(--border-color); opacity:0.3;"></div>
-                <span style="flex:1; font-size:14px; font-weight:500;">${t.text}</span>
-                
-                <div class="item-action-group" style="display:flex; align-items:center; gap:6px; opacity:1;">
-                    ${generateMiniTagsBtn(t.tags, 'sandbox-task', i)}
-                    
-                    <button class="btn-icon btn-remove-temp-task" data-index="${i}" style="color:#ef4444; margin-left: 5px;">✕</button>
-                </div>
-            </li>`;
+            return generateTaskHTML(t, i, { spaceId: 'sandbox', isMasterView: false, isFiltered: false, depth: 0, showActions: space?.showTaskActions || false, isTrash: false, addingSubtaskToId: (addingSubtaskToTaskId === t.createdAt) ? t.createdAt : null });
         }).join('');
     };
 
     sandboxList.onclick = (e) => {
         const target = e.target;
-        const removeBtn = target.closest('.btn-remove-temp-task');
-        const tagBtn = target.closest('.btn-edit-tags');
 
+        // 🔘 Toggle Actions Menu (Dots)
+        const toggleBtn = target.closest('.toggle-actions-btn');
+        if (toggleBtn) {
+            const collapsibleActions = toggleBtn.parentElement.querySelector('.collapsible-actions');
+            if (collapsibleActions) {
+                const isHidden = collapsibleActions.style.display === 'none' || collapsibleActions.style.display === '';
+                collapsibleActions.style.display = isHidden ? 'flex' : 'none';
+                toggleBtn.classList.toggle('expanded', isHidden);
+            }
+            return;
+        }
+
+        // 🔘 Close Individual Actions (ปุ่ม ✕ ในเมนู)
+        const closeActionsBtn = target.closest('.close-actions-btn');
+        if (closeActionsBtn) {
+            const group = closeActionsBtn.closest('.item-action-group');
+            const menu = group?.querySelector('.collapsible-actions');
+            const toggle = group?.querySelector('.toggle-actions-btn');
+            if (menu) menu.style.display = 'none';
+            if (toggle) toggle.classList.remove('expanded');
+            return;
+        }
+
+        // Handle remove button (specific to template sandbox)
+        const removeBtn = target.closest('.btn-remove-temp-task'); // This button is specific to the template sandbox
         if (removeBtn) {
-            const i = parseInt(removeBtn.dataset.index);
-            currentTemplateTasks.splice(i, 1);
+            const idx = parseInt(removeBtn.dataset.index);
+            currentTemplateTasks.splice(idx, 1);
             renderSandbox();
-        } else if (tagBtn) {
-            openSandboxTagModal(parseInt(tagBtn.dataset.index));
+            return;
+        }
+
+        // Handle tag button (existing functionality, now also for subtasks)
+        const tagBtn = target.closest('.btn-edit-tags');
+        if (tagBtn) {
+            const idx = parseInt(tagBtn.dataset.index);
+            const pIdxAttr = tagBtn.getAttribute('data-parent-index');
+            const pIdx = (pIdxAttr !== null) ? parseInt(pIdxAttr) : null;
+            openSandboxTagModal(idx, pIdx);
+            return;
+        }
+
+        // Add Sub-task
+        const addSubtaskBtn = target.closest('.add-subtask-btn');
+        if (addSubtaskBtn) {
+            const idx = parseInt(addSubtaskBtn.dataset.index);
+            const task = currentTemplateTasks[idx];
+            if (task) addingSubtaskToTaskId = task.createdAt;
+            renderSandbox();
+            setTimeout(() => {
+                const input = document.querySelector(`.subtask-add-input[data-parent="${addingSubtaskToTaskId}"]`);
+                if (input) input.focus();
+            }, 10);
+            return;
+        }
+
+        // Edit Main Task (text) - handled by inline editor, but if a button triggers it
+        const editMainTaskBtn = target.closest('.edit-task-text-btn');
+        if (editMainTaskBtn) {
+            const taskTextEl = editMainTaskBtn.closest('.task-item').querySelector('.task-actual-text');
+            if (taskTextEl) taskTextEl.focus();
+            return;
+        }
+
+        // Edit Sub-task (text) - handled by inline editor
+        const editSubtaskBtn = target.closest('.edit-subtask-btn');
+        if (editSubtaskBtn) {
+            const subtaskTextEl = editSubtaskBtn.closest('.subtask-item').querySelector('.task-actual-text');
+            if (subtaskTextEl) subtaskTextEl.focus();
+            return;
+        }
+
+        // Delete Main Task
+        const deleteMainTaskBtn = target.closest('.delete-task-btn');
+        if (deleteMainTaskBtn) {
+            const idx = parseInt(deleteMainTaskBtn.dataset.index);
+            if (confirm("Delete this template task?")) {
+                currentTemplateTasks.splice(idx, 1);
+                renderSandbox();
+            }
+            return;
+        }
+
+        // Delete Sub-task
+        const deleteSubtaskBtn = target.closest('.delete-subtask-btn');
+        if (deleteSubtaskBtn) {
+            const pIdx = parseInt(deleteSubtaskBtn.dataset.parentIndex);
+            const sIdx = parseInt(deleteSubtaskBtn.dataset.subIndex);
+            if (confirm("Delete this template subtask?")) {
+                currentTemplateTasks[pIdx].subtasks.splice(sIdx, 1);
+                renderSandbox();
+            }
+            return;
+        }
+
+        // Task Link
+        const linkBtn = target.closest('.task-link-btn');
+        if (linkBtn) {
+            const idx = parseInt(linkBtn.dataset.index);
+            const pIdxAttr = linkBtn.getAttribute('data-parent-index');
+            const pIdx = (pIdxAttr !== null) ? parseInt(pIdxAttr) : null;
+            openTaskLinkModal(idx, pIdx !== null, pIdx, 'sandbox'); // Pass 'sandbox' as spaceId
+            return;
+        }
+
+        // Prominent Task (Flag)
+        const prominentBtn = target.closest('.btn-prominent-task');
+        if (prominentBtn) {
+            const idx = parseInt(prominentBtn.dataset.index);
+            const pIdxAttr = prominentBtn.getAttribute('data-parent-index');
+            const pIdx = (pIdxAttr !== null) ? parseInt(pIdxAttr) : null;
+            let task;
+            if (pIdx !== null) {
+                task = currentTemplateTasks[pIdx]?.subtasks?.[idx];
+            } else {
+                task = currentTemplateTasks[idx];
+            }
+            if (task) {
+                task.isProminent = !task.isProminent;
+                renderSandbox(); // Re-render to update UI
+            }
+            return;
+        }
+
+        // Toggle Subtask Controls
+        const toggleSubtaskControlsBtn = target.closest('.toggle-subtask-controls-btn');
+        if (toggleSubtaskControlsBtn) {
+            const idx = parseInt(toggleSubtaskControlsBtn.dataset.index);
+            if (currentTemplateTasks[idx]) {
+                currentTemplateTasks[idx].subtaskControlsOpen = !currentTemplateTasks[idx].subtaskControlsOpen;
+                renderSandbox();
+            }
+            return;
+        }
+
+        // Toggle Hide Completed Subtasks
+        const hideCompletedSubtasksBtn = target.closest('.hide-completed-subtasks-btn');
+        if (hideCompletedSubtasksBtn) {
+            const idx = parseInt(hideCompletedSubtasksBtn.dataset.index);
+            if (currentTemplateTasks[idx]) {
+                currentTemplateTasks[idx].completedSubtasksHidden = !currentTemplateTasks[idx].completedSubtasksHidden;
+                renderSandbox();
+            }
+            return;
+        }
+
+        // Toggle Subtasks Visibility
+        const toggleSubtasksBtn = target.closest('.toggle-subtasks-btn');
+        if (toggleSubtasksBtn) {
+            const idx = parseInt(toggleSubtasksBtn.dataset.index);
+            if (currentTemplateTasks[idx]) {
+                currentTemplateTasks[idx].subtasksHidden = !currentTemplateTasks[idx].subtasksHidden;
+                renderSandbox();
+            }
+            return;
         }
     };
+
+    // 🟢 บันทึกงานย่อยใน Sandbox (Enter/Esc)
+    sandboxList.addEventListener('keydown', (e) => {
+        const input = e.target;
+        if (!input.classList.contains('subtask-add-input')) return;
+        if (e.key === 'Enter') {
+            e.preventDefault(); e.stopPropagation();
+            input.dataset.isSubmitting = "true";
+            const pId = parseFloat(input.getAttribute('data-parent'));
+            const value = input.value.trim();
+            const parentIdx = currentTemplateTasks.findIndex(t => t.createdAt === pId);
+            if (value && parentIdx !== -1) {
+                const task = currentTemplateTasks[parentIdx];
+                if (!task.subtasks) task.subtasks = [];
+                task.subtasks.push({ id: Date.now(), text: value, completed: false, createdAt: Date.now() });
+                input.value = '';
+            } else { addingSubtaskToTaskId = null; }
+            renderSandbox();
+            if (addingSubtaskToTaskId) {
+                setTimeout(() => {
+                    const newInput = sandboxList.querySelector(`.subtask-add-input[data-parent="${pId}"]`);
+                    if (newInput) newInput.focus();
+                }, 10);
+            }
+        }
+        if (e.key === 'Escape') { addingSubtaskToTaskId = null; renderSandbox(); }
+    });
+
+    sandboxList.addEventListener('focusout', (e) => {
+        if (e.target.classList.contains('subtask-add-input') && e.target.dataset.isSubmitting !== "true") {
+            setTimeout(() => { if (!document.activeElement.classList.contains('subtask-add-input')) { addingSubtaskToTaskId = null; renderSandbox(); } }, 100);
+        }
+    });
 
     const renderSavedTemplates = () => {
         const space = getCurrentSpace();
@@ -2340,6 +2539,8 @@ function initTodoTemplateSystem() {
             nameInput.value = template.name;
             // สร้างสำเนาข้อมูล (Deep Copy) เพื่อไม่ให้กระทบต้นฉบับขณะแก้
             currentTemplateTasks = JSON.parse(JSON.stringify(template.tasks));
+            // ตรวจสอบให้แน่ใจว่าทุกงานมี ID อ้างอิง
+            currentTemplateTasks.forEach(t => { if(!t.createdAt) t.createdAt = Date.now() + Math.random(); });
             renderSandbox();
             document.getElementById('btn-save-full-template').innerText = "💾 Update Template";
             document.getElementById('template-editor-section').style.borderColor = 'var(--primary-color)';
@@ -2379,7 +2580,7 @@ function initTodoTemplateSystem() {
 
     document.getElementById('btn-add-task-to-temp').onclick = () => {
         const val = tempTaskInput.value.trim();
-        if (val) { currentTemplateTasks.push({ text: val, completed: false, subtasks: [], tags: [], linkData: null }); tempTaskInput.value = ''; renderSandbox(); }
+        if (val) { currentTemplateTasks.push({ text: val, completed: false, subtasks: [], tags: [], linkData: null, createdAt: Date.now() }); tempTaskInput.value = ''; renderSandbox(); }
     };
 
     document.getElementById('btn-save-full-template').onclick = () => {
@@ -2387,10 +2588,162 @@ function initTodoTemplateSystem() {
         if (!name || currentTemplateTasks.length === 0) return alert("Please enter name and at least 1 task");
         const space = getCurrentSpace();
         if (!space.todoTemplates) space.todoTemplates = [];
-        space.todoTemplates.push({ name, tasks: [...currentTemplateTasks] });
+        
+        // 🟢 แก้ไข: ตรวจสอบว่าเป็นการอัปเดตของเดิมหรือสร้างใหม่
+        if (editingTemplateIndex !== null) {
+            space.todoTemplates[editingTemplateIndex] = { name, tasks: [...currentTemplateTasks] };
+            editingTemplateIndex = null;
+            document.getElementById('btn-save-full-template').innerText = "💾 Save Template";
+            document.getElementById('template-editor-section').style.borderColor = 'var(--border-color)';
+        } else {
+            space.todoTemplates.push({ name, tasks: [...currentTemplateTasks] });
+        }
+        
         saveData();
         currentTemplateTasks = []; nameInput.value = ''; renderSandbox(); renderSavedTemplates();
     };
+
+    /**
+     * 📑 ระบบจัดการ Tag Modal สำหรับโหมด Sandbox (Template Tasks/Subtasks)
+     */
+    const openSandboxTagModal = (index, parentIndex = null) => {
+        let item;
+        if (parentIndex !== null && !isNaN(parentIndex)) {
+            item = currentTemplateTasks[parentIndex]?.subtasks?.[index];
+        } else {
+            item = currentTemplateTasks[index];
+        }
+        if (!item) return;
+        if (!item.tags) item.tags = [];
+
+        const modal = document.getElementById('tag-modal');
+        const container = document.getElementById('modal-tag-list-container');
+        const space = getCurrentSpace(); 
+        
+        const defaultTags = ["AI", "Half screen"];
+        const customTags = space.tags ? space.tags.filter(t => !defaultTags.includes(t)) : [];
+        
+        let html = '';
+        html += `
+            <div class="tag-selection-section">
+                <span class="tag-selection-label">Standard Tags</span>
+                <div class="tag-selection-list">
+                    ${defaultTags.map(tag => {
+                        const isChecked = item.tags.map(t => t.toUpperCase()).includes(tag.toUpperCase()) ? "checked" : "";
+                        return `
+                            <label class="tag-select-row task-item" for="tag-checkbox-${tag.replace(/\s/g, '-')}-sandbox-${index}" style="display:flex; align-items:center; gap:10px;">
+                                <label class="google-task-checkbox">
+                                    <input type="checkbox" class="modal-checkbox-item" value="${tag}" ${isChecked}>
+                                    <div class="checkmark-circle"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" fill="none" stroke="white" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"></path></svg></div>
+                                </label>
+                                <span>${tag === 'AI' ? '🤖 AI' : '💻 Half screen'}</span>
+                                <span class="tag-type-badge">System</span>
+                            </label>`;
+                    }).join('')}
+                </div>
+            </div>`;
+
+        if (customTags.length > 0) {
+            html += `
+                <div class="tag-selection-section">
+                    <span class="tag-selection-label">Your Tags</span>
+                    <div class="tag-selection-list">
+                        ${customTags.map(tag => {
+                            const isChecked = item.tags.map(t => t.toUpperCase()).includes(tag.toUpperCase()) ? "checked" : "";
+                            return `
+                                <label class="tag-select-row task-item" for="tag-checkbox-${tag.replace(/\s/g, '-')}-sandbox-${index}" style="display:flex; align-items:center; gap:10px;">
+                                    <label class="google-task-checkbox">
+                                        <input type="checkbox" class="modal-checkbox-item" value="${tag}" ${isChecked}>
+                                        <div class="checkmark-circle"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" fill="none" stroke="white" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"></path></svg></div>
+                                </label>
+                                    <span>${tag}</span>
+                                </label>`;
+                        }).join('')}
+                    </div>
+                </div>`;
+        }
+
+        container.innerHTML = html;
+        modal.style.display = 'flex';
+        
+        document.getElementById('btn-save-item-tags').onclick = () => {
+            item.tags = Array.from(container.querySelectorAll('.modal-checkbox-item:checked')).map(cb => cb.value);
+            modal.style.display = 'none';
+            renderSandbox(); 
+        };
+        document.getElementById('btn-close-modal').onclick = () => { modal.style.display = 'none'; };
+    }
+
+    // Attach inline editing listeners for template tasks and subtasks
+    attachTaskInlineEditListeners(sandboxList, (li) => {
+        const type = li.dataset.type;
+        const index = parseInt(li.dataset.index);
+        const parentIndex = li.dataset.parentIndex ? parseInt(li.dataset.parentIndex) : null;
+
+        let taskObj;
+        if (type === 'subtask' && parentIndex !== null) {
+            taskObj = currentTemplateTasks[parentIndex]?.subtasks?.[index];
+        } else {
+            taskObj = currentTemplateTasks[index];
+        }
+
+        return {
+            id: 'sandbox', 
+            name: 'Template Sandbox',
+            tasks: currentTemplateTasks, 
+            tags: getCurrentSpace()?.tags || [] 
+        };
+    }, {
+        saveData: () => { },
+        onUpdate: renderSandbox, 
+        onAddMainTaskAfter: (mockSpace, index) => {
+            const newTask = { text: "", completed: false, tags: [], dueDate: null, createdAt: Date.now(), googleTaskId: null, isProminent: false, subtasks: [] };
+            currentTemplateTasks.splice(index + 1, 0, newTask);
+            renderSandbox();
+            setTimeout(() => {
+                const items = sandboxList.querySelectorAll('.task-actual-text');
+                const target = Array.from(items).find(el => {
+                    const li = el.closest('li');
+                    const taskIdx = parseInt(li.dataset.index);
+                    const tObj = currentTemplateTasks[taskIdx];
+                    return tObj && tObj.createdAt === newTask.createdAt;
+                });
+                if (target) {
+                    target.focus();
+                    const range = document.createRange();
+                    range.selectNodeContents(target);
+                    const sel = window.getSelection();
+                    sel.removeAllRanges();
+                    sel.addRange(range);
+                }
+            }, 100);
+        },
+        onAddSubtaskAfter: (mockSpace, index, li) => {
+            const subList = li.closest('.subtask-list');
+            if (subList) {
+                addingSubtaskToTaskId = parseFloat(subList.dataset.parentId);
+                renderSandbox();
+                setTimeout(() => {
+                    const input = document.querySelector(`.subtask-add-input[data-parent="${addingSubtaskToTaskId}"]`);
+                    if (input) input.focus();
+                }, 100);
+            }
+        },
+        onDeleteEmptyTask: (mockSpace, index, type, li) => {
+            if (type === 'task') {
+                currentTemplateTasks.splice(index, 1);
+            } else if (type === 'subtask') {
+                const pIdx = parseInt(li.closest('.subtask-list').dataset.parentIndex);
+                currentTemplateTasks[pIdx].subtasks.splice(index, 1);
+            }
+            renderSandbox();
+        }
+    });
+
+    // Attach subtask event listeners for template sandbox
+    attachSubtaskEventListeners(sandboxList, { id: 'sandbox', tasks: currentTemplateTasks }, renderSandbox, {}, () => {
+        renderSandbox();
+    });
 }
 
 async function addTask() { 
@@ -2571,34 +2924,6 @@ async function saveEditedTask() {
     _fromCommandCenter = false; // Reset the flag
 }
 
-/**
- * 🏷️ ฟังก์ชันขับเคลื่อน Tag Modal สำหรับโหมด Sandbox
- */
-function openSandboxTagModal(index) {
-    const task = currentTemplateTasks[index];
-    if (!task) return;
-
-    const modal = document.getElementById('tag-modal');
-    const container = document.getElementById('modal-tag-list-container');
-    const space = getCurrentSpace();
-    
-    // วาดรายการ Tag จาก Space ปัจจุบัน
-    container.innerHTML = (space?.tags || []).map(tag => `
-        <label class="tag-select-row">
-            <input type="checkbox" class="sandbox-tag-check" value="${tag}" ${task.tags.includes(tag) ? 'checked' : ''}>
-            <span>${tag}</span>
-        </label>
-    `).join('') || '<p style="font-size:12px; opacity:0.5; padding:10px;">No tags found in this space.</p>';
-
-    modal.style.display = 'flex';
-    
-    document.getElementById('btn-save-item-tags').onclick = () => {
-        task.tags = Array.from(container.querySelectorAll('.sandbox-tag-check:checked')).map(cb => cb.value);
-        modal.style.display = 'none';
-    };
-    document.getElementById('btn-close-modal').onclick = () => { modal.style.display = 'none'; };
-}
-
 export function openTaskLinkModal(idx, isSubtask, pIdx = null, spaceId = null) {
     if (isSubtask) {
         editingLinkTaskIdx = pIdx;
@@ -2708,6 +3033,29 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
     const toggleTaskActionsBtn = document.getElementById('btn-toggle-task-actions');
     if (toggleTaskActionsBtn) {
         toggleTaskActionsBtn.innerHTML = `<span class="toggle-actions-btn circle-icon ${space.showTaskActions ? 'expanded' : ''}" style="margin: 0; pointer-events: none;"></span>`;
+    }
+
+    // 🟢 อัปเดตรายการใน Habit Tracker ทันทีหากหน้าต่างเปิดอยู่ (รองรับการอัปเดต Tag และสลับ Space)
+    const habitModal = document.getElementById('habit-modal');
+    if (habitModal && habitModal.style.display !== 'none') {
+        renderHabitList(space);
+    }
+
+    const habitBtn = document.getElementById('btn-open-habits');
+    if (habitBtn) {
+        const habits = space.habits || [];
+        const completed = habits.filter(h => h.completed).length;
+        const total = habits.length;
+        const isMob = window.innerWidth <= 768;
+        const countText = (total > 0 && !isMob) ? ` ${completed}/${total}` : '';
+        const labelText = isMob ? '' : ' Habit';
+        habitBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="${isMob ? '' : 'margin-right:6px;'}"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg>${labelText}${countText}`;
+
+        const baseStyle = `display: inline-flex; align-items: center; justify-content: center; margin-left: 8px; padding: ${isMob ? '0' : '2px 8px'}; height: ${isMob ? '30px' : '27px'}; width: ${isMob ? '30px' : 'auto'}; font-size: 11px; font-weight: 700; transition: all 0.3s ease; `;
+        if (total === 0) habitBtn.style.cssText = baseStyle + 'color: var(--text-muted); border: 1px solid var(--border-color); background: rgba(0,0,0,0.05);';
+        else if (completed === 0) habitBtn.style.cssText = baseStyle + 'color: #ef4444; border: 1px solid #ef4444; background: rgba(239, 68, 68, 0.1);';
+        else if (completed < total) habitBtn.style.cssText = baseStyle + 'color: #d97706; border: 1px solid #f59e0b; background: rgba(245, 158, 11, 0.1);';
+        else habitBtn.style.cssText = baseStyle + 'color: #10b981; border: 1px solid #10b981; background: rgba(16, 185, 129, 0.1);';
     }
 
     const sortSelectUI = document.getElementById('btn-task-sort');
