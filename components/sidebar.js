@@ -332,21 +332,19 @@ export function renderSidebar() {
     archivedContainer.style.display = archivedSpaces.length > 0 ? 'block' : 'none';
     trashContainer.style.display = deletedSpaces.length > 0 ? 'block' : 'none';
 
-    const createSpaceElement = (space) => {
+    const createSpaceElement = (space, prefixColor) => {
         const div = document.createElement('div');
         div.dataset.id = space.id;
         const status = getCombinedStatus(space);
         const isWorking = status.active && !status.isLocked; // 🟢 ทามเมอร์กำลังเดิน หรืออยู่ในเวลาทำงาน
         const pinnedClass = space.isPinned ? 'is-pinned' : '';
         div.className = `space-item ${space.id === getCurrentSpaceId() ? 'active' : ''} ${status.isLocked ? 'locked-space' : ''} ${pinnedClass} ${isWorking ? 'is-working' : ''}`;
-        
-        let iconVal = space.icon || "📁";
-        let iconHTML;
-        if (iconVal.startsWith('http') || iconVal.startsWith('data:image')) {
-            iconHTML = `<img src="${iconVal}" style="width:14px; height:14px; margin-right:6px; border-radius:3px; object-fit:cover; display:inline-block; vertical-align:middle;">`;
-        } else {
-            iconHTML = `<span style="margin-right:6px; font-size:12px;">${iconVal}</span>`;
-        }
+
+        // ตรวจสอบรูปแบบชื่อ (ตัวเลข + ตัวอักษรภาษาอังกฤษ) เช่น 1A, 22B
+        const nameMatch = space.name.match(/^(\d+[A-Za-z]+)(.*)/);
+        const nameHTML = nameMatch 
+            ? `<span style="font-weight:800; color:${prefixColor || 'var(--primary-color)'};">${nameMatch[1]}</span>${nameMatch[2]}`
+            : space.name;
 
         // Create structure with placeholders for status
         const countdown = space.isDeleted ? getTrashCountdownText(space, getAppSettings().autoDeleteDays) : "";
@@ -363,11 +361,10 @@ export function renderSidebar() {
             ${pinnedBadge}
             <div class="space-info" style="display:flex; align-items:center; flex:1; overflow:hidden; cursor:pointer; min-height: 24px;">
                 <div class="space-icon-wrapper" style="flex-shrink:0; display:flex; align-items:center;">
-                    ${iconHTML}
-                    <span class="status-indicator" style="margin-right:8px; display:none; align-items:center;"></span>
+                    <span class="status-indicator" style="margin-right:4px; display:none; align-items:center;"></span>
                 </div>
                 <span class="space-name-text" style="flex:1; line-height:1.4;">
-                    ${space.name}
+                    ${nameHTML}
                 </span>
                 ${countdownHTML}
                 <span class="status-timer" style="display:none; margin-left:auto; margin-right:4px; font-size:11px; font-weight:600; background:rgba(255,255,255,0.7); padding:1px 6px; border-radius:4px; min-width:48px; text-align:center; box-shadow: 0 1px 2px rgba(0,0,0,0.05);"></span>
@@ -435,6 +432,11 @@ export function renderSidebar() {
     folderOrder.forEach(folderName => {
         const isCollapsed = settings.collapsedFolders?.includes(folderName);
 
+        // ดึงตัวอักษรย่อสำหรับโฟลเดอร์จาก Settings (ที่ผู้ใช้กรอกเอง)
+        const prefixVal = (settings.folderPrefixes && settings.folderPrefixes[folderName]) ? settings.folderPrefixes[folderName] : "";
+        const prefixColor = (settings.folderPrefixColors && settings.folderPrefixColors[folderName]) ? settings.folderPrefixColors[folderName] : "";
+        const folderPrefixHTML = prefixVal ? `<span style="color:${prefixColor || 'inherit'}; font-weight:bold;">(${prefixVal}) </span>` : "";
+
         const isLocked = settings.lockedFolders?.includes(folderName);
         
         const folderWrapper = document.createElement('div');
@@ -464,7 +466,7 @@ export function renderSidebar() {
                     <use href="#icon-chevron-right"></use>
                 </svg>
                 ${fIconHTML}
-                <span class="folder-name-text" style="overflow:hidden; text-overflow:ellipsis;">${folderName}</span>
+                <span class="folder-name-text" style="overflow:hidden; text-overflow:ellipsis;">${folderPrefixHTML}${folderName}</span>
                 <span class="folder-count-badge" style="opacity:0.5; font-weight:400; font-size:10px; margin-left:2px;">(${groups[folderName].length})</span>
             </div>
             <div class="folder-actions" style="display:none; gap:4px;">
@@ -526,8 +528,23 @@ export function renderSidebar() {
         content.className = `folder-content ${isCollapsed ? 'is-collapsed' : ''}`;
         content.dataset.folder = folderName;
         
+        // 🟢 จัดอันดับ Space อัตโนมัติ: เรียงตามตัวเลขน้อยไปมาก ส่วนที่ไม่มีตัวเลขจะอยู่ท้ายสุด
+        groups[folderName].sort((a, b) => {
+            const matchA = a.name.match(/^(\d+)/);
+            const matchB = b.name.match(/^(\d+)/);
+            
+            const numA = matchA ? parseInt(matchA[1], 10) : Infinity;
+            const numB = matchB ? parseInt(matchB[1], 10) : Infinity;
+
+            if (numA !== numB) {
+                return numA - numB;
+            }
+            // ถ้าตัวเลขเท่ากัน (เช่น 1A กับ 1B) หรือไม่มีเลขทั้งคู่ ให้เรียงตามตัวอักษรปกติ
+            return a.name.localeCompare(b.name);
+        });
+
         groups[folderName].forEach(space => {
-            content.appendChild(createSpaceElement(space));
+            content.appendChild(createSpaceElement(space, prefixColor));
         });
         
         folderWrapper.appendChild(content);
@@ -546,11 +563,15 @@ export function renderSidebar() {
     });
 
     archivedSpaces.forEach(space => {
-        archivedListUI.appendChild(createSpaceElement(space));
+        const fName = space.folder || 'General';
+        const pColor = (settings.folderPrefixColors && settings.folderPrefixColors[fName]) ? settings.folderPrefixColors[fName] : "";
+        archivedListUI.appendChild(createSpaceElement(space, pColor));
     });
 
     deletedSpaces.forEach(space => {
-        trashListUI.appendChild(createSpaceElement(space));
+        const fName = space.folder || 'General';
+        const pColor = (settings.folderPrefixColors && settings.folderPrefixColors[fName]) ? settings.folderPrefixColors[fName] : "";
+        trashListUI.appendChild(createSpaceElement(space, pColor));
     });
 
     // Archive Sortable: จัดลำดับในคลังเก็บ และลากกลับไปโฟลเดอร์เพื่อ Unarchive
@@ -765,6 +786,8 @@ function showFolderEditModal(folderName) {
     const activeName = isCreateMode ? "" : folderName;
     const currentIcon = (!isCreateMode && settings.folderIcons && settings.folderIcons[folderName]) ? settings.folderIcons[folderName] : "📁";
     const currentTheme = (!isCreateMode && settings.folderThemes && settings.folderThemes[folderName]) ? settings.folderThemes[folderName] : { color: '#555555', fontSize: 11 };
+    const currentPrefix = (!isCreateMode && settings.folderPrefixes && settings.folderPrefixes[folderName]) ? settings.folderPrefixes[folderName] : "";
+    const currentPrefixColor = (!isCreateMode && settings.folderPrefixColors && settings.folderPrefixColors[folderName]) ? settings.folderPrefixColors[folderName] : "#4a86e8";
     
     const modalId = 'folder-edit-modal-custom';
     let modal = document.getElementById(modalId);
@@ -785,7 +808,11 @@ function showFolderEditModal(folderName) {
                         <div id="folder-modal-preview" class="folder-edit-preview" title="Click to upload image"></div>
                         <div style="flex:1;">
                             <input type="text" id="folder-modal-name" class="settings-input" placeholder="Folder Name">
-                            <input type="text" id="folder-modal-icon-input" class="settings-input" placeholder="Emoji or URL" style="margin-top:8px; font-size:12px;">
+                            <div style="display:flex; gap:5px; margin-top:8px; align-items:center;">
+                                <input type="text" id="folder-modal-icon-input" class="settings-input" placeholder="Emoji or URL" style="font-size:12px; flex:1;">
+                                <input type="text" id="folder-modal-prefix" class="settings-input" placeholder="Prefix (B)" style="font-size:12px; width:70px; text-align:center;" maxlength="3">
+                                <input type="color" id="folder-modal-prefix-color" style="width:30px; height:30px; border:none; background:transparent; cursor:pointer;" title="Prefix Color">
+                            </div>
                             <input type="file" id="folder-modal-file" accept="image/*" style="display:none;">
                         </div>
                     </div>
@@ -822,6 +849,8 @@ function showFolderEditModal(folderName) {
 
     const nameInput = document.getElementById('folder-modal-name');
     const iconInput = document.getElementById('folder-modal-icon-input');
+    const prefixInput = document.getElementById('folder-modal-prefix');
+    const prefixColorInput = document.getElementById('folder-modal-prefix-color');
     const preview = document.getElementById('folder-modal-preview');
     const fileInput = document.getElementById('folder-modal-file');
     const colorInput = document.getElementById('folder-modal-color');
@@ -836,6 +865,8 @@ function showFolderEditModal(folderName) {
     titleHeader.innerText = isCreateMode ? "📁 Create Folder" : "📂 Edit Folder";
     nameInput.value = activeName;
     nameInput.disabled = (folderName === 'General');
+    prefixInput.value = currentPrefix;
+    prefixColorInput.value = currentPrefixColor;
     iconInput.value = currentIcon;
     colorInput.value = currentTheme.color || "#555555";
     sizeInput.value = currentTheme.fontSize || 11;
@@ -865,7 +896,7 @@ function showFolderEditModal(folderName) {
         reader.readAsDataURL(file);
     };
 
-    resetIdentityBtn.onclick = () => { iconInput.value = "📁"; updatePreview(); };
+    resetIdentityBtn.onclick = () => { iconInput.value = "📁"; prefixInput.value = ""; prefixColorInput.value = "#4a86e8"; updatePreview(); };
     resetTypographyBtn.onclick = () => { colorInput.value = "#555555"; sizeInput.value = 11; };
 
     modal.style.display = 'flex';
@@ -880,10 +911,17 @@ function showFolderEditModal(folderName) {
             spaces.forEach(s => { if (s.folder === folderName) s.folder = newName; });
             delete settings.folderIcons[folderName];
             delete settings.folderThemes[folderName];
+            if (settings.folderPrefixes) delete settings.folderPrefixes[folderName];
+            if (settings.folderPrefixColors) delete settings.folderPrefixColors[folderName];
         }
         if (!settings.folderIcons) settings.folderIcons = {};
         settings.folderIcons[newName] = iconInput.value.trim() || "📁";
         settings.folderThemes[newName] = { color: colorInput.value, fontSize: sizeInput.value };
+        // บันทึกตัวอักษรย่อ
+        if (!settings.folderPrefixes) settings.folderPrefixes = {};
+        settings.folderPrefixes[newName] = prefixInput.value.trim().toUpperCase();
+        if (!settings.folderPrefixColors) settings.folderPrefixColors = {};
+        settings.folderPrefixColors[newName] = prefixColorInput.value;
         saveData();
         modal.style.display = 'none';
         renderSidebar();
@@ -906,6 +944,8 @@ function showFolderEditModal(folderName) {
             // 2. ล้างข้อมูล Metadata ของโฟลเดอร์เพื่อให้โฟลเดอร์หายไปจาก Sidebar
             if (settings.folderIcons) delete settings.folderIcons[folderName];
             if (settings.folderThemes) delete settings.folderThemes[folderName];
+            if (settings.folderPrefixes) delete settings.folderPrefixes[folderName];
+            if (settings.folderPrefixColors) delete settings.folderPrefixColors[folderName];
             if (settings.folderOrder) settings.folderOrder = settings.folderOrder.filter(f => f !== folderName);
             if (settings.lockedFolders) settings.lockedFolders = settings.lockedFolders.filter(f => f !== folderName);
             if (settings.collapsedFolders) settings.collapsedFolders = settings.collapsedFolders.filter(f => f !== folderName);

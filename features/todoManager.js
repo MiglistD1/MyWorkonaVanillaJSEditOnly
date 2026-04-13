@@ -2816,4 +2816,4 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
             }
         });
     }
-}
+}      

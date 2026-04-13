@@ -14,9 +14,6 @@ export function setupSpaceModals(onRender) {
     const nameInput = document.getElementById('cust-space-name');
     const folderInput = document.getElementById('cust-space-folder');
     const folderSuggestions = document.getElementById('cust-folder-suggestions');
-    const iconInput = document.getElementById('cust-space-icon-input');
-    const iconPreview = document.getElementById('cust-space-icon-preview');
-    const iconFileInput = document.getElementById('cust-space-icon-file');
     const resetHeadersBtn = document.getElementById('btn-reset-headers');
 
     const headerTabs = document.getElementById('cust-header-tabs');
@@ -24,17 +21,6 @@ export function setupSpaceModals(onRender) {
     const headerTasks = document.getElementById('cust-header-tasks');
     
     const btnSave = document.getElementById('btn-save-cust-modal');
-
-    // Helper: Update Preview
-    const updatePreview = () => {
-        const val = iconInput.value || "📁";
-        if (val.startsWith('http') || val.startsWith('data:image')) {
-            iconPreview.innerHTML = `<img src="${val}" style="width:100%; height:100%; object-fit:cover; border-radius:4px;">`;
-        } else {
-            iconPreview.innerText = val;
-        }
-    };
-    iconInput.addEventListener('input', updatePreview);
 
     // Helper: Render folder tags for selection
     const renderFolderSuggestions = () => {
@@ -66,8 +52,6 @@ export function setupSpaceModals(onRender) {
         if (nameInput.value.trim()) space.name = nameInput.value.trim();
         space.folder = folderInput.value.trim() || null;
 
-        space.icon = iconInput.value || "📁";
-        
         space.headers = {
             tabHeader: headerTabs.value.trim(),
             resourceHeader: headerRes.value.trim(),
@@ -80,7 +64,7 @@ export function setupSpaceModals(onRender) {
 
     // Bind Auto-Save to Inputs
     const inputs = [
-        nameInput, folderInput, iconInput,
+        nameInput, folderInput,
         headerTabs, headerRes, headerTasks
     ];
     inputs.forEach(el => {
@@ -88,20 +72,6 @@ export function setupSpaceModals(onRender) {
         el.addEventListener('change', saveSpaceData);
     });
     
-    // Handle Icon Upload
-    iconPreview.addEventListener('click', () => iconFileInput.click());
-    iconFileInput.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (ev) => { 
-            iconInput.value = ev.target.result; 
-            updatePreview(); 
-            saveSpaceData(); // Save icon immediately
-        };
-        reader.readAsDataURL(file);
-    });
-
     // 1. Open Function (Exported to window)
     window.openCustomizeSpaceModal = (id, prefillFolderName = null) => {
         modal.style.display = 'flex';
@@ -115,7 +85,6 @@ export function setupSpaceModals(onRender) {
             nameInput.value = space.name;
             folderInput.value = space.folder || "";
 
-            iconInput.value = space.icon || "📁";
             btnSave.innerText = "Done"; // Change button text
 
             const h = space.headers || {};
@@ -136,7 +105,6 @@ export function setupSpaceModals(onRender) {
             // Set Defaults in Inputs
             nameInput.value = "New Space";
             folderInput.value = (prefillFolderName === 'General') ? "" : (prefillFolderName || "");
-            iconInput.value = "📄";
             btnSave.innerText = "Create";
             
             headerTabs.value = ""; headerRes.value = ""; headerTasks.value = "";
@@ -147,7 +115,6 @@ export function setupSpaceModals(onRender) {
             // Select name for easy editing
             setTimeout(() => nameInput.select(), 100);
         }
-        updatePreview();
     };
 
     // 2. Actions
