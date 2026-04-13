@@ -362,10 +362,14 @@ body.is-sorting-tasks .smart-flow-desc {
 .google-task-checkbox:hover input[type='checkbox']:not(:checked) + .checkmark-circle { border-color: #80868b; }
 .google-task-checkbox:hover input[type='checkbox']:not(:checked) + .checkmark-circle svg { stroke: #dadce0 !important; opacity: 1 !important; transform: scale(1); }
 
-/* 🟢 ปรับสี Checkbox ให้ตรงกับ Drag Icon แยกตามประเภทงาน */
-/* งานหลัก: สีน้ำเงิน Primary */
-.task-item > .item-main-row .google-task-checkbox .checkmark-circle { border-color: var(--primary-color) !important; }
-.task-item > .item-main-row .google-task-checkbox input:checked + .checkmark-circle {
+/* 🟢 แก้ไขปัญหาเครื่องหมายถูกหายและขีดเบี้ยว (Global Fix) */
+.google-task-checkbox .checkmark-circle svg path { 
+    fill: none !important; /* ป้องกันขีดเบี้ยว */
+    stroke: white !important; /* บังคับเครื่องหมายถูกเป็นสีขาว */
+}
+
+/* ปรับสีวงกลมเมื่อติ๊กถูกให้ทำงานทุกที่ที่มีคลาส task-item */
+.task-item .google-task-checkbox input:checked + .checkmark-circle {
     background-color: var(--primary-color) !important;
     border-color: var(--primary-color) !important;
 }

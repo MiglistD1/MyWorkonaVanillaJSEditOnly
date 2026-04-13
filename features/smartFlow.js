@@ -418,18 +418,18 @@ export function renderSmartFlow(container) {
                         <svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                         <span>View</span>
                     </button>
-                    <div id="sf-view-popup" class="dropdown-menu" style="display: none; top: 110%; right: 0; min-width: 160px; padding: 10px; flex-direction: column; gap: 4px;">
-                        <label class="tag-select-row" style="padding: 4px 8px; cursor: pointer; margin: 0;">
+                    <div id="sf-view-popup" class="dropdown-menu" style="display: none; top: 110%; right: 0; min-width: 160px; padding: 10px; flex-direction: column; gap: 4px; z-index: 1000;">
+                        <label class="tag-select-row task-item" style="padding: 4px 8px; cursor: pointer; margin: 0;">
                             <label class="google-task-checkbox">
                                 <input type="checkbox" class="sf-view-opt" data-prop="hideCompleted" ${flowState.hideCompleted ? 'checked' : ''}>
-                                <div class="checkmark-circle"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg></div>
+                                <div class="checkmark-circle"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" fill="none" stroke="white" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"></path></svg></div>
                             </label>
                             <span style="font-size: 13px; font-weight: 600; margin-left: 8px;">Hide Done</span>
                         </label>
-                        <label class="tag-select-row" style="padding: 4px 8px; cursor: pointer; margin: 0;">
+                        <label class="tag-select-row task-item" style="padding: 4px 8px; cursor: pointer; margin: 0;">
                             <label class="google-task-checkbox">
                                 <input type="checkbox" class="sf-view-opt" data-prop="hideLocked" ${flowState.hideLocked ? 'checked' : ''}>
-                                <div class="checkmark-circle"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg></div>
+                                <div class="checkmark-circle"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" fill="none" stroke="white" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"></path></svg></div>
                             </label>
                             <span style="font-size: 13px; font-weight: 600; margin-left: 8px;">Hide Locked</span>
                         </label>
@@ -1975,12 +1975,12 @@ function openSmartFlowSettingsModal(itemId) {
         if (fItem.id === itemId) return; // ไม่แสดงตัวเองในรายการ
         const isChecked = item.dependencies?.includes(fItem.id) ? 'checked' : '';
         const row = document.createElement('label');
-        row.className = 'tag-select-row';
+        row.className = 'tag-select-row task-item';
         row.style.cssText = 'display:flex; align-items:center; gap:10px; padding:4px; border-radius:4px; cursor:pointer; margin:0;';
         row.innerHTML = `
             <label class="google-task-checkbox">
                 <input type="checkbox" class="sf-setting-dep-checkbox" value="${fItem.id}" ${isChecked}>
-                <div class="checkmark-circle"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg></div>
+                <div class="checkmark-circle"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" fill="none" stroke="white" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"></path></svg></div>
             </label>
             <span style="font-size:12px; font-weight:600;">#${idx + 1} ${fItem.title}</span>
         `;
@@ -2227,12 +2227,12 @@ function openSmartFlowDependenciesModal(itemId) {
 
         const isChecked = currentItem.dependencies.includes(item.id) ? 'checked' : '';
         const label = document.createElement('label');
-        label.className = 'tag-select-row';
+        label.className = 'tag-select-row task-item';
         label.style.cssText = 'display:flex; align-items:center; gap:10px; padding:8px; border-radius:6px; cursor:pointer;';
         label.innerHTML = `
             <label class="google-task-checkbox">
                 <input type="checkbox" class="sf-dep-checkbox" value="${item.id}" ${isChecked}>
-                <div class="checkmark-circle"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg></div>
+                <div class="checkmark-circle"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" fill="none" stroke="white" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"></path></svg></div>
             </label>
             <div style="flex:1;">
                 <div style="font-size:13px; font-weight:700;">#${index + 1} ${item.title}</div>

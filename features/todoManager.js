@@ -4,7 +4,7 @@ import { getCurrentSpace, saveData, getShortDate, getAppSettings, setCurrentSpac
 import { mergeItems } from '../core/firebaseSync.js';
 import { generateMiniTagsBtn, generateTaskHTML, attachSubtaskEventListeners, attachTaskInlineEditListeners, handleTagAutocomplete, applySyntaxHighlighting } from '../core/ui-helpers.js';
 
-import { checkAndResetHabits, renderHabitList } from './habitSheet.js';
+import { checkAndResetHabits, renderHabitList, toggleHabitModal } from './habitSheet.js';
 import { createCalendarEvent, updateCalendarEvent, deleteCalendarEvent, getAuthToken, clearAuthToken } from '../core/calendarSync.js';
 
 // State & Callbacks
@@ -682,6 +682,13 @@ export function initTodoManager(callbacks) {
 
     // 🟢 Template System Initialization
     initTodoTemplateSystem();
+
+    // 🟢 คืนชีพปุ่ม Habit Tracker และบังคับแสดงผล
+    const habitBtn = document.getElementById('btn-open-habits');
+    if (habitBtn) {
+        habitBtn.style.display = 'inline-flex';
+        habitBtn.onclick = () => toggleHabitModal(getCurrentSpace());
+    }
 
     // 🔄 Repeating Tasks Modal Logic
     const repeatModal = document.getElementById('repeat-settings-modal');

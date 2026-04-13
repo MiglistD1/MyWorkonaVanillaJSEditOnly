@@ -66,7 +66,7 @@ export function openHabitModal(space) {
                         <button class="btn-icon" id="toggle-habit-actions" title="Toggle Edit/Delete/Cycle" style="padding: 4px; border-radius: 6px; transition: all 0.3s ease;">
                             <svg class="svg-icon-sm"><use href="#icon-eye"></use></svg>
                         </button>
-                        <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-muted); cursor:pointer; background:var(--hover-bg); padding:4px 8px; border-radius:6px;">
+                        <label class="task-item" style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-muted); cursor:pointer; background:var(--hover-bg); padding:4px 8px; border-radius:6px;">
                             <input type="checkbox" id="toggle-hide-completed-habits" ${getAppSettings().hideCompletedHabits ? 'checked' : ''} style="cursor:pointer;"> 
                             Hide Done
                         </label>
@@ -261,10 +261,10 @@ function showSaveHabitGroupModal(space) {
 
     const renderModalList = () => {
         listContainer.innerHTML = tempGroupItems.map((item, idx) => `
-            <label class="tag-select-row" style="padding:6px 10px; border-radius:6px; ${item.selected ? '' : 'opacity:0.5;'}">
+            <label class="tag-select-row task-item" style="padding:6px 10px; border-radius:6px; ${item.selected ? '' : 'opacity:0.5;'}">
                 <label class="google-task-checkbox">
                     <input type="checkbox" class="modal-item-check" data-index="${idx}" ${item.selected ? 'checked' : ''}>
-                    <div class="checkmark-circle"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg></div>
+                    <div class="checkmark-circle"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" fill="none" stroke="white" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"></path></svg></div>
                 </label>
                 <span style="font-size:13px; margin-left:8px; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${item.text}</span>
                 <button class="btn-icon btn-modal-remove-item" data-index="${idx}" style="color:#ef4444; padding:2px;">✕</button>
@@ -508,21 +508,22 @@ export function renderHabitList(space) {
 
         const el = document.createElement('div');
         el.setAttribute('data-index', index);
-        el.className = 'habit-item'; // เพิ่ม class สำหรับ CSS selector
+        el.className = 'habit-item task-item'; // 🟢 เพิ่ม task-item เพื่อให้ checkbox เปลี่ยนสี
         el.style.display = 'flex'; 
         el.style.alignItems = 'center';
         el.style.marginBottom = '10px';
-            el.style.background = habit.completed ? (habit.isFailed ? '#fef2f2' : '#f0fdf4') : '#fff';
-            el.style.border = habit.completed ? (habit.isFailed ? '1px solid #fecaca' : '1px solid #bbf7d0') : '1px solid #eee';
+        el.style.background = habit.completed ? (habit.isFailed ? '#fef2e2' : '#f0fdf4') : '#fff';
+        el.style.border = habit.completed ? (habit.isFailed ? '1px solid #fecaca' : '1px solid #bbf7d0') : '1px solid #eee';
         el.style.padding = '10px 12px';
         el.style.borderRadius = '8px';
         el.style.transition = 'all 0.2s';
 
         el.innerHTML = `
-            <label class="google-task-checkbox" style="margin-right:4px;">
+            <div class="item-main-row" style="display:flex; align-items:center; width:100%;">
+                <label class="google-task-checkbox" style="margin-right:8px;">
                 <input type="checkbox" ${habit.completed ? 'checked' : ''} class="habit-checkbox">
                 <div class="checkmark-circle">
-                    <svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg>
+                    <svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" fill="none" stroke="white" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
                 </div>
             </label>
             
@@ -562,6 +563,7 @@ export function renderHabitList(space) {
                 <button class="btn-icon fail-habit" style="display: ${showActions ? 'flex' : 'none'}; width: 22px; height: 22px; background: #fee2e2; color: #ef4444; border-radius: 50%; align-items: center; justify-content: center; border: 1px solid #fecaca; transition: all 0.2s; margin-left: 2px;" title="Mark as Failed (No Rewards)">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                 </button>
+            </div>
             </div>
         `;
 

@@ -364,9 +364,9 @@ export function setupLauncherModal() {
                 const label = document.createElement('label');
                 label.style.cssText = 'display: block; padding: 4px 8px; cursor: pointer; border-radius: 4px;';
                 label.innerHTML = `
-                    <label class="google-task-checkbox">
+                <label class="google-task-checkbox task-item">
                         <input type="checkbox" class="launcher-space-checkbox" value="${space.id}">
-                        <div class="checkmark-circle"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg></div>
+                    <div class="checkmark-circle"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" fill="none" stroke="white" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"></path></svg></div>
                     </label> ${space.name}`;
                 spaceSelectionContainer.appendChild(label);
             });
@@ -650,10 +650,10 @@ export function handleMiniTagClick(btn, onRender) {
                 ${defaultTags.map(tag => {
                     const isChecked = item.tags.map(t => t.toUpperCase()).includes(tag.toUpperCase()) ? "checked" : "";
                     return `
-                        <label class="tag-select-row" for="tag-checkbox-${tag.replace(/\s/g, '-')}-${index}" style="display:flex; align-items:center; gap:10px;">
+                        <label class="tag-select-row task-item" for="tag-checkbox-${tag.replace(/\s/g, '-')}-${index}" style="display:flex; align-items:center; gap:10px;">
                             <label class="google-task-checkbox">
                                 <input type="checkbox" class="modal-checkbox-item" value="${tag}" ${isChecked}>
-                                <div class="checkmark-circle"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg></div>
+                                <div class="checkmark-circle"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" fill="none" stroke="white" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"></path></svg></div>
                             </label>
                             <span>${tag === 'AI' ? '🤖 AI' : '💻 Half screen'}</span>
                             <span class="tag-type-badge">System</span>
@@ -671,10 +671,10 @@ export function handleMiniTagClick(btn, onRender) {
                     ${customTags.map(tag => {
                         const isChecked = item.tags.map(t => t.toUpperCase()).includes(tag.toUpperCase()) ? "checked" : "";
                         return `
-                            <label class="tag-select-row" for="tag-checkbox-${tag.replace(/\s/g, '-')}-${index}" style="display:flex; align-items:center; gap:10px;">
+                            <label class="tag-select-row task-item" for="tag-checkbox-${tag.replace(/\s/g, '-')}-${index}" style="display:flex; align-items:center; gap:10px;">
                                 <label class="google-task-checkbox">
                                     <input type="checkbox" class="modal-checkbox-item" value="${tag}" ${isChecked}>
-                                    <div class="checkmark-circle"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg></div>
+                                    <div class="checkmark-circle"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" fill="none" stroke="white" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"></path></svg></div>
                                 </label>
                                 <span>${tag}</span>
                             </label>`;

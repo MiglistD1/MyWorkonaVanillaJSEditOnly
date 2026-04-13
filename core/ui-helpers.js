@@ -335,7 +335,7 @@ export function generateTaskHTML(task, index, {
                 <label class="google-task-checkbox" style="margin-right: 8px;">
                     <input type="checkbox" class="${checkboxClass}" ${checkboxDataAttrs} checked>
                     <div class="checkmark-circle">
-                        <svg style="display:block; opacity:1; transform:scale(1);" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg>
+                        <svg style="display:block; opacity:1; transform:scale(1);" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" fill="none" stroke="white" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
                     </div>
                 </label>
                 <div style="flex: 1; min-width: 0; display: block; padding: 2px 0;">
@@ -419,7 +419,7 @@ export function generateTaskHTML(task, index, {
             <label class="google-task-checkbox" style="margin-right: 8px;">
                 <input type="checkbox" class="${checkboxClass}" ${checkboxDataAttrs} ${isActuallyDeleted ? 'checked' : (task.completed ? 'checked' : '')}>
                 <div class="checkmark-circle" style="${isActuallyDeleted ? 'background-color: #ef4444; border-color: #ef4444;' : ''}">
-                    <svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg>
+                    <svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" fill="none" stroke="white" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
                 </div>
             </label>
 
