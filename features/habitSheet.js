@@ -516,7 +516,7 @@ export function renderHabitList(space) {
         if (habit.resetInterval > 1) {
             const nextDate = new Date(lastDateObj);
             nextDate.setDate(lastDateObj.getDate() + habit.resetInterval);
-            nextDueHtml = `<span style="font-size: 10px; color: #ef4444; font-weight: 700; margin-left: 4px;" title="Next Schedule">Next: ${String(nextDate.getDate()).padStart(2, '0')} ${monthsTh[nextDate.getMonth()]} ${nextDate.getFullYear() + 543}</span>`;
+            nextDueHtml = `<span style="font-size: 10px; color: #ef4444; font-weight: 700; margin-left: 4px;" title="Next Schedule">ถัดไป ${String(nextDate.getDate()).padStart(2, '0')} ${monthsTh[nextDate.getMonth()]}</span>`;
         }
 
         const d = lastDateObj.getDate();
@@ -566,7 +566,7 @@ export function renderHabitList(space) {
 
                     ${showActions ? `
                         <div class="habit-cycle-badge" data-index="${index}" style="font-size:10px; color:var(--text-muted); background:var(--bg-body); padding:1px 6px; border-radius:4px; border:1px solid var(--border-color); display:flex; align-items:center; gap:2px;" title="Click to change cycle">
-                            Cycle: <span style="font-weight:700; color:var(--primary-color);">${habit.resetInterval}</span>d
+                            EV. <span style="font-weight:700; color:var(--primary-color);">${habit.resetInterval}</span>d
                         </div>
                     ` : ''}
                     ${nextDueHtml}
@@ -589,6 +589,7 @@ export function renderHabitList(space) {
         const cycleBadge = el.querySelector('.habit-cycle-badge');
         if (cycleBadge) {
             cycleBadge.addEventListener('click', (e) => {
+                e.stopPropagation(); // 🟢 ป้องกัน Event ไหลไปปิด Popup ทันทีที่เปิด
                 showCycleEditPopup(e.currentTarget, habit, space);
             });
         }
@@ -914,7 +915,7 @@ function showCycleEditPopup(anchorEl, habit, space) {
     `;
 
     popup.innerHTML = `
-        <div style="font-size: 12px; font-weight: 700; color: var(--text-muted); text-align: center;">RESET EVERY (DAYS)</div>
+        <div style="font-size: 12px; font-weight: 700; color: var(--text-muted); text-align: center;">ถัดไปทุกๆ (วัน)</div>
         <input type="number" id="popup-cycle-input" value="${habit.resetInterval}" min="1" 
             style="width: 100%; padding: 8px; border: 1px solid var(--primary-color); border-radius: 6px; 
             text-align: center; font-size: 18px; font-weight: 700; outline: none; background: var(--input-bg); color: var(--text-main);">
@@ -957,8 +958,11 @@ function showCycleEditPopup(anchorEl, habit, space) {
     document.getElementById('btn-popup-save').onclick = handleSave;
     input.onkeydown = (e) => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') closePopup(); };
 
-    // คลิกข้างนอกเพื่อปิด
-    window.onclick = (e) => { if (!popup.contains(e.target)) closePopup(); };
+    // 🟢 ปรับปรุงการปิดเมื่อคลิกข้างนอก (ใช้ Event Listener แทนการทับค่า window.onclick)
+    const closeHandler = (e) => {
+        if (!popup.contains(e.target)) { closePopup(); document.removeEventListener('click', closeHandler); }
+    };
+    setTimeout(() => document.addEventListener('click', closeHandler), 0);
 }
 
 function handleAddHabit(space) {
