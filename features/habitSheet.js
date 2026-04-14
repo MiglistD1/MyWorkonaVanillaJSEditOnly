@@ -783,17 +783,21 @@ export function renderHabitList(space) {
         }
     });
 
-    container.sortable = Sortable.create(container, {
-        animation: 150,
-        ghostClass: "sortable-ghost",
-        onEnd: function (evt) {
-            const movedItem = space.habits.splice(evt.oldIndex, 1)[0];
-            space.habits.splice(evt.newIndex, 0, movedItem);
-            saveData(true);
-            renderHabitList(space);
-            renderTasks(space);
-        }
-    });
+    // 🟢 MOBILE FIX: Disable Sortable drag-and-drop on mobile to prevent interference with tap interactions
+    const isMobileDevice = window.innerWidth <= 768;
+    if (!isMobileDevice) {
+        container.sortable = Sortable.create(container, {
+            animation: 150,
+            ghostClass: "sortable-ghost",
+            onEnd: function (evt) {
+                const movedItem = space.habits.splice(evt.oldIndex, 1)[0];
+                space.habits.splice(evt.newIndex, 0, movedItem);
+                saveData(true);
+                renderHabitList(space);
+                renderTasks(space);
+            }
+        });
+    }
 }
 
 /**
