@@ -83,6 +83,15 @@ export function applyAppSettings() {
         .subtask-drag-handle { color: #10b981 !important; opacity: 0.8 !important; }
 
         /* Main Task Checkbox (ใช้สีเดียวกับไอคอนลากงานหลัก) */
+        .task-item .google-task-checkbox input {
+            border-color: var(--primary-color) !important;
+            opacity: 0.8 !important;
+        }
+        .task-item .google-task-checkbox input:checked {
+            background-color: var(--primary-color) !important;
+            border-color: var(--primary-color) !important;
+            opacity: 1 !important;
+        }
         .task-item .google-task-checkbox .checkmark-circle { border-color: var(--primary-color) !important; border-width: 2px !important; }
         .task-item > .item-main-row .google-task-checkbox input:checked + .checkmark-circle {
             background-color: var(--primary-color) !important;

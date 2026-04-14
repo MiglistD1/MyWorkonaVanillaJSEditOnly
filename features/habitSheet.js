@@ -52,8 +52,8 @@ export function openHabitModal(space) {
     let modal = document.getElementById('habit-modal');
     if (!modal) {
         const modalHTML = ` 
-        <div id="habit-modal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:1100; pointer-events:none;">
-            <div class="modal-content" style="position:absolute; display:flex; flex-direction:column; background:var(--bg-card); pointer-events:auto; box-shadow: 0 10px 40px rgba(0,0,0,0.2); border: 1px solid var(--border-color); padding: 0; overflow:hidden;">
+        <div id="habit-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; z-index:1100; pointer-events:auto; overflow:hidden;">
+            <div class="modal-content" style="position:absolute; display:flex; flex-direction:column; background:var(--bg-card); pointer-events:auto; box-shadow: 0 10px 40px rgba(0,0,0,0.2); border: 1px solid var(--border-color); padding: 0; overflow:hidden; touch-action:manipulation;">
                 <div id="habit-header" style="display:flex; justify-content:space-between; align-items:flex-start; padding: 12px 20px; border-bottom:1px solid var(--border-color); background: var(--bg-spacebar); cursor: grab; user-select:none;">
                     <div style="flex: 1;">
                         <h3 style="margin:0; font-size:16px; font-weight: 800;">Habit Tracker</h3>
@@ -94,7 +94,7 @@ export function openHabitModal(space) {
                     <button class="btn btn-outline" id="btn-manage-habit-templates" style="font-size: 10px; padding: 2px 6px; height: 22px;" title="Manage Templates"><svg class="svg-icon-sm" style="width:12px;height:12px;"><use href="#icon-settings"></use></svg></button>
                 </div>
 
-                <div id="habit-list-container" style="flex:1; overflow-y:auto; padding: 0 20px 10px 20px;"></div>
+                <div id="habit-list-container" style="flex:1; overflow-y:auto; padding: 0 20px 10px 20px; -webkit-overflow-scrolling:touch; touch-action:pan-y;"></div>
                 
                 <div style="padding: 10px 20px 20px 20px; border-top:1px solid var(--border-color); text-align:center;">
                    <div style="background:#f0fdf4; border:1px solid #bbf7d0; color:#15803d; border-radius:8px; padding:8px; font-size:13px; font-weight:600;">
@@ -614,11 +614,14 @@ export function renderHabitList(space) {
         const cancelPress = () => clearTimeout(longPressTimer);
 
         nameTextEl.addEventListener('mousedown', startPress);
-        nameTextEl.addEventListener('touchstart', startPress, { passive: true });
+        nameTextEl.addEventListener('touchstart', startPress, { passive: false });
         nameTextEl.addEventListener('mouseup', cancelPress);
         nameTextEl.addEventListener('mouseleave', cancelPress);
         nameTextEl.addEventListener('touchend', cancelPress);
         nameTextEl.addEventListener('touchcancel', cancelPress);
+        
+        // 🟢 MOBILE FIX: Set touch-action on editable text for proper mobile interaction
+        nameTextEl.style.touchAction = 'manipulation';
 
         // --- 🟢 Event: Autocomplete for Habits ---
         nameTextEl.addEventListener('input', (e) => {
@@ -661,7 +664,10 @@ export function renderHabitList(space) {
             document.execCommand('insertText', false, text);
         });
 
-        el.querySelector('.habit-checkbox').addEventListener('change', (e) => {
+        const checkboxInput = el.querySelector('.habit-checkbox');
+        
+        // 🟢 MOBILE FIX: Add both 'change' and 'click' handlers for reliable mobile tap detection
+        const handleCheckboxChange = (e) => {
             const isChecked = e.target.checked;
             
             // 🟢 แสดงสถานะ Syncing บนปุ่ม
@@ -707,7 +713,15 @@ export function renderHabitList(space) {
                 renderHabitList(space);
                 renderTasks(space);
             }, isChecked ? 800 : 0); // เพิ่มเป็น 800ms ให้เท่ากับระบบ Task
-        });
+        };
+        
+        checkboxInput.addEventListener('change', handleCheckboxChange);
+        // 🟢 MOBILE FIX: Add touchend handler for Android tap detection
+        checkboxInput.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            checkboxInput.checked = !checkboxInput.checked;
+            handleCheckboxChange({ target: checkboxInput });
+        }, { passive: false });
 
         // --- 🟢 Event: Link To-Do Template ---
         const linkBtn = el.querySelector('.btn-link-todo-temp');

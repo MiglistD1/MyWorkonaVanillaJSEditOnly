@@ -360,6 +360,9 @@ body.is-sorting-tasks .smart-flow-desc {
 .google-task-checkbox { display: inline-flex; align-items: center; cursor: pointer; position: relative; margin-right: 0; flex-shrink: 0; overflow: visible; }
 
 /* 🟢 Apply standard checkbox colors to the actual input for task items */
+.task-item .google-task-checkbox input {
+    border-color: var(--primary-color) !important;
+}
 .task-item .google-task-checkbox input:checked {
     background-color: var(--primary-color) !important;
     border-color: var(--primary-color) !important;

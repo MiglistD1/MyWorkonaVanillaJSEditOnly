@@ -151,6 +151,61 @@
     .content-grid.tasks-collapsed #tasks-card {
         display: none;
     }
+
+    /* 🟢 MOBILE FIX: Habit Tracker Touch Handling on Small Screens & Android */
+    #habit-modal {
+        width: 100% !important;
+        height: 100% !important;
+        pointer-events: auto !important;
+        touch-action: manipulation;
+    }
+
+    #habit-modal .modal-content {
+        touch-action: manipulation !important;
+        -webkit-touch-callout: none;
+    }
+
+    /* 🟢 Habit List Container: Ensure proper scrolling and touch propagation */
+    #habit-list-container {
+        -webkit-overflow-scrolling: touch !important;
+        touch-action: pan-y !important;
+    }
+
+    /* 🟢 Habit Items: Ensure checkbox taps work on mobile */
+    .habit-item {
+        touch-action: manipulation !important;
+        -webkit-user-select: none;
+        user-select: none;
+    }
+
+    .habit-item .google-task-checkbox {
+        touch-action: manipulation !important;
+        min-width: 16px;
+        min-height: 16px;
+    }
+
+    .habit-item .google-task-checkbox input[type="checkbox"] {
+        min-width: 16px !important;
+        min-height: 16px !important;
+        touch-action: manipulation !important;
+        /* Increase touch target for mobile */
+        padding: 4px !important;
+        margin: -4px !important;
+    }
+
+    /* 🟢 Habit Text: Enable proper editing on mobile */
+    .habit-text-content {
+        touch-action: manipulation !important;
+        -webkit-user-select: text;
+        user-select: text;
+    }
+
+    /* 🟢 Ensure buttons in habit items are tappable */
+    .habit-item .btn-icon {
+        touch-action: manipulation !important;
+        min-width: 32px;
+        min-height: 32px;
+    }
 }
 
 @media (min-width: 1000px) {
