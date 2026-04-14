@@ -126,6 +126,15 @@
         justify-content: space-around !important;
     }
 
+    /* 🟢 MOBILE FIX: Hide task-input-bar by default on mobile, show only when is-active */
+    .task-input-bar {
+        display: none !important;
+    }
+
+    .task-input-bar.is-active {
+        display: flex !important;
+    }
+
     /* 🟢 MOBILE FIX: Habit Modal Positioning & Touch Targets */
     #habit-modal {
         z-index: 1200 !important;
@@ -239,6 +248,231 @@
         touch-action: manipulation !important;
         min-width: 32px;
         min-height: 32px;
+    }
+
+    /* 🔴 CRITICAL FIX: Mobile Task Input Bar Popup - Show as Modal when .is-active */
+    .task-input-bar {
+        position: static;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .task-input-bar.is-active {
+        position: fixed !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        top: auto !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+        padding: 12px !important;
+        border-radius: 12px 12px 0 0 !important;
+        background: var(--bg-card) !important;
+        border: 1px solid var(--border-color) !important;
+        box-shadow: 0 -4px 12px rgba(0,0,0,0.15) !important;
+        z-index: 9999 !important;
+        display: grid !important;
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+        animation: slideUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        pointer-events: auto !important;
+        box-sizing: border-box !important;
+    }
+
+    .task-input-bar.is-active #new-task-input {
+        width: 100% !important;
+        font-size: 16px !important;
+        padding: 12px !important;
+        min-height: 44px !important;
+        box-sizing: border-box !important;
+        grid-column: 1 !important;
+    }
+
+    .task-input-bar.is-active > div {
+        display: grid !important;
+        grid-template-columns: 1fr auto auto !important;
+        gap: 8px !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+        align-items: center !important;
+    }
+
+    .task-input-bar.is-active .date-wrapper {
+        min-width: 120px !important;
+        height: 32px !important;
+        flex: 0 1 auto !important;
+    }
+
+    .task-input-bar.is-active .btn-icon {
+        width: 32px !important;
+        height: 32px !important;
+        min-width: 32px !important;
+        min-height: 32px !important;
+        padding: 6px !important;
+        flex-shrink: 0 !important;
+    }
+
+    .task-input-bar.is-active #btn-add-task {
+        width: 100% !important;
+        min-height: 44px !important;
+        padding: 12px 16px !important;
+        font-size: 14px !important;
+        font-weight: 600 !important;
+        grid-column: 1 !important;
+        margin: 0 !important;
+    }
+
+    .task-input-bar.is-active #google-task-controls {
+        display: none !important;
+    }
+
+    .task-input-bar.is-active::before {
+        content: '';
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.3);
+        z-index: -1;
+        animation: fadeIn 0.2s ease-out;
+    }
+
+    @keyframes slideUp {
+        from {
+            transform: translateY(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    /* 🟢 Adjust input bar header for mobile popup */
+    .task-input-bar.is-active .sf-input-bar-header {
+        position: absolute;
+        top: -50px;
+        left: 0;
+        right: 0;
+        padding: 12px 16px;
+        background: var(--bg-card);
+        border-top: 1px solid var(--border-color);
+        border-radius: 12px 12px 0 0;
+        display: flex !important;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        box-sizing: border-box;
+        z-index: 10000;
+    }
+
+    .task-input-bar.is-active #new-task-input {
+        flex: 1;
+        min-width: 0;
+    }
+}
+
+@media (max-width: 768px) {
+    /* 🟢 Mobile FAB Menu Popup - Critical Styling */
+    .sf-mobile-fab-menu,
+    .mobile-tools-popup {
+        position: fixed !important;
+        bottom: 80px !important;
+        right: 20px !important;
+        left: auto !important;
+        top: auto !important;
+        background: var(--bg-card) !important;
+        border: 1px solid var(--border-color) !important;
+        border-radius: 12px !important;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.2), 0 8px 24px rgba(0,0,0,0.15) !important;
+        z-index: 9998 !important;
+        display: none !important;
+        flex-direction: column !important;
+        min-width: 200px !important;
+        max-width: 90vw !important;
+        overflow: hidden !important;
+        opacity: 0;
+        transform: scale(0.9) translateY(20px);
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        pointer-events: auto !important;
+    }
+
+    .sf-mobile-fab-menu.is-active,
+    .mobile-tools-popup.is-active {
+        display: flex !important;
+        opacity: 1;
+        transform: scale(1) translateY(0);
+        pointer-events: auto !important;
+    }
+
+    /* 🟢 Mobile FAB Menu Drag Handle */
+    .sf-mobile-fab-menu .drag-handle-bar {
+        width: 40px;
+        height: 4px;
+        background: var(--text-muted);
+        opacity: 0.3;
+        border-radius: 2px;
+        margin: 12px auto 0;
+        display: block;
+    }
+
+    /* 🟢 Mobile FAB Menu Items */
+    .sf-mobile-fab-menu button,
+    .mobile-tools-popup button {
+        display: flex !important;
+        align-items: center !important;
+        gap: 12px !important;
+        padding: 14px 16px !important;
+        border: none !important;
+        background: transparent !important;
+        color: var(--text-main) !important;
+        font-size: 14px !important;
+        cursor: pointer !important;
+        text-align: left !important;
+        transition: all 0.2s ease !important;
+        border-bottom: 1px solid var(--border-color) !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+        font-weight: 500 !important;
+    }
+
+    .sf-mobile-fab-menu button:last-child,
+    .mobile-tools-popup button:last-child {
+        border-bottom: none !important;
+    }
+
+    .sf-mobile-fab-menu button:hover,
+    .sf-mobile-fab-menu button:active,
+    .mobile-tools-popup button:hover,
+    .mobile-tools-popup button:active {
+        background: var(--hover-bg) !important;
+        color: var(--primary-color) !important;
+    }
+
+    .sf-mobile-fab-menu button:active,
+    .mobile-tools-popup button:active {
+        background: rgba(47, 128, 237, 0.15) !important;
+        transform: scale(0.98);
+    }
+
+    /* 🟢 Mobile FAB Menu Backdrop */
+    .sf-mobile-fab-menu.is-active::before,
+    .mobile-tools-popup.is-active::before {
+        content: '';
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.2);
+        z-index: -1;
+        animation: fadeIn 0.2s ease-out;
     }
 }
 

@@ -130,64 +130,82 @@ export function applyAppSettings() {
             /* 4. ช่องกรอกงานใหม่แบบ Floating Bottom Bar (แบบ Google Tasks) - แก้ไขการซ่อน */
             .task-input-bar { 
                 position: fixed; bottom: 0; left: 0; right: 0; 
-                background: var(--bg-card); padding: 8px 8px 24px 8px !important; 
+                background: var(--bg-card) !important; 
                 box-shadow: 0 -10px 50px rgba(0,0,0,0.3); 
                 z-index: 10006 !important; border-radius: 16px 16px 0 0;
                 margin: 0 !important; width: 100% !important; 
-                visibility: hidden !important; /* เปลี่ยนจาก display: none เพื่อให้ JS หา Element เจอ */
+                visibility: hidden !important;
                 transform: translateY(100%);
                 pointer-events: none;
                 transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.2s;
-                display: grid !important;
-                grid-template-columns: 1fr 44px 44px !important;
-                grid-template-areas: 
-                    "header header header"
-                    "input repeat calendar"
-                    "date add add"
-                    "list list list" !important;
-                gap: 10px 10px !important;
+                
+                /* 🟢 บังคับใช้ Grid และจัดบรรทัดใหม่หมด */
+                display: grid !important; 
+                grid-template-columns: repeat(4, 1fr) !important;
+                grid-template-rows: auto auto auto !important;
+                gap: 16px 8px !important;
+                padding: 20px 20px 45px 20px !important; /* เว้นล่างเยอะหน่อยกันนิ้วโดนขอบ */
                 box-sizing: border-box !important;
             }
             .task-input-bar.is-active { visibility: visible !important; transform: translateY(0) !important; pointer-events: auto !important; }
 
             .sf-input-bar-header {
-                grid-area: header;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-bottom: 2px;
+                grid-row: 1 !important;
+                grid-column: 1 / 5 !important;
+                display: flex !important;
+                justify-content: space-between !important;
+                align-items: center !important;
+                width: 100% !important; 
+                margin: 0 !important;
+                padding: 0 !important;
             }
+            .sf-input-bar-header span { font-size: 12px !important; font-weight: 900 !important; color: var(--text-muted) !important; text-transform: uppercase; letter-spacing: 1px; }
+            .sf-btn-close-input { padding: 5px !important; font-size: 20px !important; color: var(--text-main) !important; }
 
             #new-task-input {
-                grid-area: input; 
-                width: 100% !important;
-                min-width: 0 !important; /* 🟢 แก้ไข: ป้องกันการยืดเกิน */
-                padding: 12px 14px !important;
+                grid-row: 2 !important;
+                grid-column: 1 / 5 !important;
+                width: 100% !important; 
+                height: 48px !important;
+                padding: 0 16px !important;
                 border: 2px solid var(--primary-color) !important;
                 background: var(--bg-body) !important;
                 border-radius: 10px !important;
                 box-sizing: border-box !important;
+                font-size: 16px !important;
             }
 
             #btn-task-repeat, #btn-task-calendar-sync {
+                grid-row: 3 !important;
                 display: flex !important;
-                width: 44px !important; height: 44px !important;
+                width: 100% !important; 
+                height: 44px !important;
                 background: var(--bg-body) !important;
                 border: 2px solid var(--border-color) !important;
                 border-radius: 10px !important;
                 align-items: center; justify-content: center;
-                margin: 0 !important; padding: 0 !important;
             }
+            #btn-task-repeat { grid-column: 2 !important; }
+            #btn-task-calendar-sync { grid-column: 3 !important; }
 
-            #btn-task-repeat { grid-area: repeat; }
-            #btn-task-calendar-sync { grid-area: calendar; }
+            .date-wrapper {
+                grid-row: 3 !important;
+                grid-column: 1 !important;
+                width: 100% !important; height: 44px !important;
+                background: var(--bg-body) !important; border: 2px solid var(--border-color) !important; border-radius: 10px !important;
+                display: flex !important; align-items: center; justify-content: center;
+            }
 
             #btn-add-task {
-                padding: 0 16px !important; /* 🟢 แก้ไข: ลด Padding เพื่อไม่ให้ข้อความล้น */
+                grid-row: 3 !important;
+                grid-column: 4 !important;
+                width: 100% !important;
+                height: 44px !important;
+                background: var(--primary-color) !important; color: white !important;
+                border-radius: 10px !important; font-weight: 800 !important; border: none !important;
+                display: flex !important; align-items: center; justify-content: center;
             }
-            .date-wrapper {
-                margin: 0 !important; /* 🟢 แก้ไข: ลบ margin-top ที่ไม่จำเป็น */
-            }
+            .date-display-label { font-size: 10px !important; font-weight: 800 !important; color: var(--text-main) !important; }
 
             /* 5. ปุ่ม Actions ต่างๆ ให้ดูสะอาดขึ้น */
             .item-action-group { opacity: 1 !important; }
@@ -345,116 +363,6 @@ export function initSettingsManager(callbacks) {
         });
     }
     
-    // Toggle Dark Mode
-    const btnToggleDark = document.getElementById('btn-toggle-darkmode');
-    if (btnToggleDark) {
-        btnToggleDark.addEventListener('click', () => { 
-            const settings = getAppSettings(); 
-            settings.isDarkMode = !settings.isDarkMode; 
-            saveData(); 
-            applyAppSettings(); 
-        });
-    }
-}
-    // Toggle Dark Mode
-    const btnToggleDark = document.getElementById('btn-toggle-darkmode');
-    if (btnToggleDark) {
-        btnToggleDark.addEventListener('click', () => { 
-            const settings = getAppSettings(); 
-            settings.isDarkMode = !settings.isDarkMode; 
-            saveData(); 
-            applyAppSettings(); 
-        });
-    }
-}
-    // Toggle Dark Mode
-    const btnToggleDark = document.getElementById('btn-toggle-darkmode');
-    if (btnToggleDark) {
-        btnToggleDark.addEventListener('click', () => { 
-            const settings = getAppSettings(); 
-            settings.isDarkMode = !settings.isDarkMode; 
-            saveData(); 
-            applyAppSettings(); 
-        });
-    }
-}
-    // Toggle Dark Mode
-    const btnToggleDark = document.getElementById('btn-toggle-darkmode');
-    if (btnToggleDark) {
-        btnToggleDark.addEventListener('click', () => { 
-            const settings = getAppSettings(); 
-            settings.isDarkMode = !settings.isDarkMode; 
-            saveData(); 
-            applyAppSettings(); 
-        });
-    }
-}
-    // Toggle Dark Mode
-    const btnToggleDark = document.getElementById('btn-toggle-darkmode');
-    if (btnToggleDark) {
-        btnToggleDark.addEventListener('click', () => { 
-            const settings = getAppSettings(); 
-            settings.isDarkMode = !settings.isDarkMode; 
-            saveData(); 
-            applyAppSettings(); 
-        });
-    }
-}
-    // Toggle Dark Mode
-    const btnToggleDark = document.getElementById('btn-toggle-darkmode');
-    if (btnToggleDark) {
-        btnToggleDark.addEventListener('click', () => { 
-            const settings = getAppSettings(); 
-            settings.isDarkMode = !settings.isDarkMode; 
-            saveData(); 
-            applyAppSettings(); 
-        });
-    }
-}
-    // Toggle Dark Mode
-    const btnToggleDark = document.getElementById('btn-toggle-darkmode');
-    if (btnToggleDark) {
-        btnToggleDark.addEventListener('click', () => { 
-            const settings = getAppSettings(); 
-            settings.isDarkMode = !settings.isDarkMode; 
-            saveData(); 
-            applyAppSettings(); 
-        });
-    }
-}
-    // Toggle Dark Mode
-    const btnToggleDark = document.getElementById('btn-toggle-darkmode');
-    if (btnToggleDark) {
-        btnToggleDark.addEventListener('click', () => { 
-            const settings = getAppSettings(); 
-            settings.isDarkMode = !settings.isDarkMode; 
-            saveData(); 
-            applyAppSettings(); 
-        });
-    }
-}
-    // Toggle Dark Mode
-    const btnToggleDark = document.getElementById('btn-toggle-darkmode');
-    if (btnToggleDark) {
-        btnToggleDark.addEventListener('click', () => { 
-            const settings = getAppSettings(); 
-            settings.isDarkMode = !settings.isDarkMode; 
-            saveData(); 
-            applyAppSettings(); 
-        });
-    }
-}
-    // Toggle Dark Mode
-    const btnToggleDark = document.getElementById('btn-toggle-darkmode');
-    if (btnToggleDark) {
-        btnToggleDark.addEventListener('click', () => { 
-            const settings = getAppSettings(); 
-            settings.isDarkMode = !settings.isDarkMode; 
-            saveData(); 
-            applyAppSettings(); 
-        });
-    }
-}
     // Toggle Dark Mode
     const btnToggleDark = document.getElementById('btn-toggle-darkmode');
     if (btnToggleDark) {

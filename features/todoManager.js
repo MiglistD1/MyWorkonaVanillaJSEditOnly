@@ -223,6 +223,127 @@ export function applyTaskSectionsOrder() {
     if (btnTodoUp) btnTodoUp.style.cssText = (order === 'todo-first' && location === 'tasks') ? `${baseBtnStyle} ${activeStyle}` : `${baseBtnStyle} ${inactiveStyle}`;
 }
 
+/** 📱 Setup Mobile Floating UI (FAB & Bottom Sheets) */
+function setupMobileTodoUI() {
+    const isMobile = window.innerWidth <= 768;
+    const isCommandCenter = getCurrentSpaceId() === 0;
+
+    // 1. Manage FAB visibility
+    let fab = document.getElementById('sf-mobile-fab-add');
+    let fabMenu = document.getElementById('sf-mobile-fab-menu');
+    
+    if (isMobile && !isCommandCenter) {
+        if (!fab) {
+            fab = document.createElement('button');
+            fab.id = 'sf-mobile-fab-add';
+            fab.className = 'sf-mobile-fab';
+            fab.innerHTML = '+';
+            document.body.appendChild(fab);
+
+            // Add scroll hide logic
+            const tasksColumn = document.getElementById('tasks-card');
+            let lastScrollTop = 0;
+            if (tasksColumn) {
+                tasksColumn.addEventListener('scroll', () => {
+                    const scrollTop = tasksColumn.scrollTop;
+                    if (scrollTop > lastScrollTop && scrollTop > 50) {
+                        fab.style.transform = 'translateY(100px)';
+                    } else {
+                        fab.style.transform = 'translateY(0)';
+                    }
+                    lastScrollTop = scrollTop;
+                }, { passive: true });
+            }
+
+            // 🟢 FAB click handler - set once only
+            fab.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                const menu = document.getElementById('sf-mobile-fab-menu');
+                if (menu) {
+                    menu.classList.toggle('is-active');
+                } else {
+                    console.error('🔴 Menu NOT found!');
+                }
+            }, false);
+        }
+
+        // 🟢 Setup Menu (สร้างเฉพาะเมื่อยังไม่มี)
+        if (!fabMenu) {
+            fabMenu = document.createElement('div');
+            fabMenu.id = 'sf-mobile-fab-menu';
+            fabMenu.className = 'mobile-tools-popup sf-mobile-fab-menu';
+            fabMenu.innerHTML = `
+                <div class="drag-handle-bar"></div>
+                <button id="sf-fab-menu-add-task" style="display:flex; align-items:center; gap:12px;"><svg class="svg-icon-lg" style="width:20px; height:20px;"><use href="#icon-pencil"></use></svg> Add new task</button>
+                <button id="sf-fab-menu-templates" style="display:flex; align-items:center; gap:12px;"><svg class="svg-icon-lg" style="width:20px; height:20px;"><use href="#icon-layers"></use></svg> Templates</button>
+            `;
+            document.body.appendChild(fabMenu);
+
+            fabMenu.querySelector('#sf-fab-menu-add-task').addEventListener('click', (e) => {
+                e.stopPropagation();
+                fabMenu.classList.remove('is-active');
+                document.getElementById('new-task-input').closest('.task-input-bar').classList.add('is-active');
+                document.getElementById('new-task-input').focus();
+                fab.classList.add('is-hidden');
+            }, false);
+
+            fabMenu.querySelector('#sf-fab-menu-templates').addEventListener('click', (e) => {
+                e.stopPropagation();
+                fabMenu.classList.remove('is-active');
+                document.getElementById('btn-todo-templates')?.click();
+            }, false);
+        }
+
+        // Setup Header for Input Bar if missing
+        const taskInputBar = document.getElementById('new-task-input')?.closest('.task-input-bar');
+        if (taskInputBar && !taskInputBar.querySelector('.sf-input-bar-header')) {
+            const header = document.createElement('div');
+            header.className = 'sf-input-bar-header';
+            header.innerHTML = `
+                <span style="font-size: 10px; font-weight: 900; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; display:flex; align-items:center; gap:4px;">✨ New Task</span>
+                <button class="btn-icon sf-btn-close-input" style="padding: 4px 8px; opacity: 0.8; font-size: 18px; color: var(--text-main); font-weight: bold;">✕</button>
+            `;
+            taskInputBar.prepend(header);
+            header.querySelector('.sf-btn-close-input').addEventListener('click', (e) => {
+                e.stopPropagation();
+                taskInputBar.classList.remove('is-active');
+                fab.classList.remove('is-hidden');
+            }, false);
+        }
+    } else {
+        if (fab) fab.remove();
+        if (fabMenu) fabMenu.remove();
+    }
+
+    // Global Click Listener for dismissing Mobile UI
+    if (!window._sfMobileClickBound) {
+        document.addEventListener('click', (e) => {
+            const bar = document.getElementById('new-task-input')?.closest('.task-input-bar');
+            const menu = document.getElementById('sf-mobile-fab-menu');
+            const fabBtn = document.getElementById('sf-mobile-fab-add');
+
+            // 🟢 Close input bar only if clicking outside of it AND not on FAB/Menu
+            if (bar && bar.classList.contains('is-active') && 
+                !bar.contains(e.target) && 
+                !menu?.contains(e.target) &&
+                !fabBtn?.contains(e.target)) {
+                bar.classList.remove('is-active');
+                if (fabBtn) fabBtn.classList.remove('is-hidden');
+            }
+            
+            // 🟢 Close menu only if clicking outside of menu AND not on FAB
+            if (menu && menu.classList.contains('is-active') && 
+                !menu.contains(e.target) && 
+                !fabBtn?.contains(e.target)) {
+                menu.classList.remove('is-active');
+            }
+        }, true);
+        window._sfMobileClickBound = true;
+    }
+}
+
 /** 🎵 Sound Helpers สำหรับความรู้สึก Premium */
 function playTaskAddedSound() {
     try {
@@ -673,148 +794,6 @@ export function initTodoManager(callbacks) {
     // Event Listeners
     document.getElementById('btn-add-task').addEventListener('click', addTask);
     document.getElementById('new-task-input').addEventListener('keypress', (e) => { if (e.key === 'Enter') addTask(); });
-
-    // 🟢 Mobile FAB & Input Overlay Logic - จัดการตัวแปรให้ถูกต้อง
-    const tasksColumn = document.getElementById('tasks-card'); // Use tasks-card as scrollable area
-    const isMobile = window.matchMedia("(max-width: 768px)").matches;
-    const isCommandCenter = getCurrentSpaceId() === 0;
-
-    if (isMobile && !isCommandCenter) { // 🟢 ไม่แสดง FAB ใน Command Center
-        let fab = document.getElementById('sf-mobile-fab-add');
-        if (!fab) { // สร้าง FAB ถ้ายังไม่มี
-            fab = document.createElement('button');
-            fab.id = 'sf-mobile-fab-add';
-            fab.className = 'sf-mobile-fab';
-            fab.innerHTML = '+';
-            document.body.appendChild(fab); // ติดที่ Body เพื่อให้ลอยอยู่เสมอ
-
-            // 🟢 เพิ่ม Logic ให้ FAB ซ่อนเมื่อเลื่อนลง และแสดงเมื่อเลื่อนขึ้น
-            let lastScrollTop = 0;
-            if (tasksColumn) {
-                tasksColumn.addEventListener('scroll', () => {
-                    const scrollTop = tasksColumn.scrollTop;
-                    if (scrollTop > lastScrollTop && scrollTop > 50) { // เลื่อนลง
-                        fab.style.transform = 'translateY(100px)'; // ซ่อนลงด้านล่าง
-                    } else { // เลื่อนขึ้น
-                        fab.style.transform = 'translateY(0)'; // แสดงขึ้นมา
-                    }
-                    lastScrollTop = scrollTop;
-                });
-            }
-        }
-
-        const taskInputBar = document.getElementById('new-task-input').closest('.task-input-bar'); // 🟢 หา Element โดยใช้ ID ที่แน่นอนกว่า
-
-        // 🟢 เพิ่มปุ่มปิดและหัวข้อให้กับ Popup (Bottom Sheet) เพื่อความสะดวกในการใช้งาน
-        if (taskInputBar && !taskInputBar.querySelector('.sf-input-bar-header')) {
-            const header = document.createElement('div');
-            header.className = 'sf-input-bar-header';
-            header.innerHTML = `
-                <span style="font-size: 10px; font-weight: 900; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; display:flex; align-items:center; gap:4px;">✨ New Task</span>
-                <button class="btn-icon sf-btn-close-input" style="padding: 4px 8px; opacity: 0.8; font-size: 18px; color: var(--text-main); font-weight: bold;">✕</button>
-            `;
-            taskInputBar.prepend(header);
-            
-            header.querySelector('.sf-btn-close-input').onclick = (e) => {
-                e.stopPropagation();
-                taskInputBar.classList.remove('is-active');
-                if (fab) fab.classList.remove('is-hidden');
-            };
-        }
-
-        // 🟢 สร้าง Mobile FAB Menu
-        let fabMenu = document.getElementById('sf-mobile-fab-menu');
-        if (!fabMenu) {
-            fabMenu = document.createElement('div');
-            fabMenu.id = 'sf-mobile-fab-menu';
-            fabMenu.className = 'mobile-tools-popup sf-mobile-fab-menu'; // ใช้สไตล์เดียวกับ mobile-tools-popup
-            fabMenu.innerHTML = `
-                <div class="drag-handle-bar"></div>
-                <button id="sf-fab-menu-add-task" style="display:flex; align-items:center; gap:12px;"><svg class="svg-icon-lg" style="width:20px; height:20px;"><use href="#icon-pencil"></use></svg> Add new task</button>
-                <button id="sf-fab-menu-templates" style="display:flex; align-items:center; gap:12px;"><svg class="svg-icon-lg" style="width:20px; height:20px;"><use href="#icon-layers"></use></svg> Templates</button>
-            `;
-            document.body.appendChild(fabMenu);
-
-            // Event Listener สำหรับ FAB Menu
-            fabMenu.querySelector('#sf-fab-menu-add-task').onclick = (e) => {
-                e.stopPropagation();
-                document.getElementById('sf-mobile-fab-menu').classList.remove('is-active');
-                document.getElementById('new-task-input').closest('.task-input-bar').classList.add('is-active');
-                document.getElementById('new-task-input').focus();
-                document.getElementById('sf-mobile-fab-add').classList.add('is-hidden');
-            };
-            fabMenu.querySelector('#sf-fab-menu-templates').onclick = (e) => {
-                e.stopPropagation();
-                fabMenu.classList.remove('is-active');
-                document.getElementById('btn-todo-templates')?.click(); // เปิด Modal Templates
-                fab.classList.remove('is-hidden'); // ซ่อน FAB ชั่วคราวเมื่อแถบพิมพ์เปิด
-            };
-
-            // 🟢 Drag Logic for FAB Menu (Bottom Sheet)
-            const fabMenuHeader = fabMenu.querySelector('.drag-handle-bar');
-            let isDraggingMenu = false;
-            let startY = 0;
-            let initialY = 0;
-
-            if (fabMenuHeader) {
-                fabMenuHeader.addEventListener('touchstart', (e) => {
-                    if (fabMenu.classList.contains('is-active')) {
-                        isDraggingMenu = true;
-                        startY = e.touches[0].clientY;
-                        initialY = fabMenu.getBoundingClientRect().top;
-                        fabMenu.style.transition = 'none'; // ปิด transition ขณะลาก
-                    }
-                }, { passive: true });
-
-                document.addEventListener('touchmove', (e) => {
-                    if (!isDraggingMenu) return;
-                    const currentY = e.touches[0].clientY;
-                    const dy = currentY - startY;
-                    const newTop = Math.max(window.innerHeight / 2, initialY + dy); // ไม่ให้ลากขึ้นสูงเกินครึ่งจอ
-                    fabMenu.style.transform = `translateY(${newTop - fabMenu.getBoundingClientRect().height}px)`;
-                }, { passive: true });
-
-                document.addEventListener('touchend', () => {
-                    if (isDraggingMenu) {
-                        isDraggingMenu = false;
-                        fabMenu.style.transition = ''; // เปิด transition คืน
-                        const currentPos = fabMenu.getBoundingClientRect().top;
-                        if (currentPos > window.innerHeight * 0.7) { // ถ้าลากลงเกินครึ่ง ให้ปิดเมนู
-                            fabMenu.classList.remove('is-active');
-                        } else {
-                            fabMenu.style.transform = 'translateY(0)'; // Snap กลับไปที่เดิม
-                        }
-                    }
-                });
-            }
-        }
-
-        // 🟢 ปรับปรุง: ใช้ .onclick แทน addEventListener เพื่อป้องกันการซ้อนทับของเหตุการณ์
-        fab.onclick = (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            const menu = document.getElementById('sf-mobile-fab-menu');
-            if (menu) menu.classList.add('is-active');
-        };
-
-        // 🟢 ระบบปิด UI อัตโนมัติเมื่อคลิกข้างนอก (ใช้ Global Flag เพื่อไม่ให้รันซ้ำซ้อน)
-        if (!window._sfMobileClickBound) {
-            document.addEventListener('click', (e) => {
-                const bar = document.getElementById('new-task-input')?.closest('.task-input-bar');
-                const menu = document.getElementById('sf-mobile-fab-menu');
-                const fabBtn = document.getElementById('sf-mobile-fab-add');
-
-                if (bar && bar.classList.contains('is-active') && !bar.contains(e.target)) {
-                    bar.classList.remove('is-active');
-                    if (fabBtn) fabBtn.classList.remove('is-hidden');
-                }
-                if (menu && menu.classList.contains('is-active') && !menu.contains(e.target) && e.target !== fabBtn) {
-                    menu.classList.remove('is-active');
-                }
-            });
-            window._sfMobileClickBound = true;
-        }
-    }
 
     // 🟢 Template System Initialization
     initTodoTemplateSystem();
@@ -3132,7 +3111,8 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
     // 🟢 ป้องกันการวาดทับขณะกำลังพิมพ์ เพื่อไม่ให้คีย์บอร์ดหุบและเสียโฟกัส
     // ยกเว้นกรณีที่กำลังกดยืนยัน (isSubmitting) เพื่อให้หน้าจออัปเดตรายการใหม่ทันที
     if (document.activeElement && document.activeElement.dataset.isSubmitting !== "true") {
-        if (document.activeElement.classList.contains('task-actual-text') || 
+        if (document.activeElement.classList.contains('task-input') ||
+            document.activeElement.classList.contains('task-actual-text') || 
             document.activeElement.classList.contains('subtask-add-input') || 
             document.activeElement.classList.contains('subtask-inline-input')) return;
     }
@@ -3143,6 +3123,9 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
     if (repeatingWaitingListUI) repeatingWaitingListUI.innerHTML = '';
     if (calendarSyncListUI) calendarSyncListUI.innerHTML = '';
     
+    // 🟢 Setup Mobile UI components (FAB, etc.) based on current state
+    setupMobileTodoUI();
+
     if(!space.tasks) space.tasks = [];
     checkAndResetHabits(space);
 

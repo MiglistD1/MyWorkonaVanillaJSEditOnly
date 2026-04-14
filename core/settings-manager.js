@@ -387,11 +387,15 @@ export function applyAppSettings() {
                 background: var(--primary-color) !important; color: white !important;
                 box-shadow: 0 4px 15px rgba(0,0,0,0.3) !important;
                 display: flex !important; align-items: center; justify-content: center;
-                font-size: 24px !important; z-index: 999; border: none !important;
-                transition: transform 0.2s active;
+                font-size: 24px !important; z-index: 9997 !important; border: none !important;
+                transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                cursor: pointer !important;
+                touch-action: manipulation !important;
+                -webkit-user-select: none !important;
+                user-select: none !important;
             }
             .sf-mobile-fab:active { transform: scale(0.9); }
-            .sf-mobile-fab.is-hidden { visibility: hidden !important; pointer-events: none !important; }
+            .sf-mobile-fab.is-hidden { display: none !important; pointer-events: none !important; }
             
             /* แสดงปุ่มเฉพาะบนมือถือ */
             .mobile-only {
