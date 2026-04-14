@@ -609,7 +609,7 @@ export function renderHabitList(space) {
         let longPressTimer;
         const startPress = (e) => {
             if (e.type === 'mousedown' && e.button !== 0) return;
-            longPressTimer = setTimeout(triggerFocus, 600);
+            longPressTimer = setTimeout(triggerFocus, 0);
         };
         const cancelPress = () => clearTimeout(longPressTimer);
 
@@ -649,7 +649,7 @@ export function renderHabitList(space) {
                 
                 // ✨ เอฟเฟกต์กระพริบสีเหลืองยืนยันการบันทึก
                 nameTextEl.classList.add('flash-confirm');
-                setTimeout(() => nameTextEl.classList.remove('flash-confirm'), 800);
+                setTimeout(() => nameTextEl.classList.remove('flash-confirm'), 0);
                 
                 renderTasks(space); // อัปเดต Progress Badge ที่ To-do list หลัก
             } else {
@@ -705,23 +705,20 @@ export function renderHabitList(space) {
             habit.lastUpdate = new Date().toDateString();
             saveData(true); // บันทึกทันทีไม่ต้องรอ
 
-            setTimeout(() => {
-                // ตรวจสอบโฟกัสอีกครั้งก่อนวาดใหม่
-                const active = document.activeElement;
-                if (active && (active.id === 'new-habit-input' || active.classList.contains('habit-text-content'))) return;
-                
-                renderHabitList(space);
-                renderTasks(space);
-            }, isChecked ? 800 : 0); // เพิ่มเป็น 800ms ให้เท่ากับระบบ Task
+            // 🟢 MOBILE FIX: Instant render without delay
+            const active = document.activeElement;
+            if (active && (active.id === 'new-habit-input' || active.classList.contains('habit-text-content'))) return;
+            
+            renderHabitList(space);
+            renderTasks(space);
         };
         
         checkboxInput.addEventListener('change', handleCheckboxChange);
-        // 🟢 MOBILE FIX: Add touchend handler for Android tap detection
-        checkboxInput.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            checkboxInput.checked = !checkboxInput.checked;
-            handleCheckboxChange({ target: checkboxInput });
-        }, { passive: false });
+        // 🟢 MOBILE FIX: Add click handler for reliable tap detection (no preventDefault to allow change event)
+        checkboxInput.addEventListener('click', (e) => {
+            // This ensures the change event fires properly on touch devices
+            e.stopPropagation();
+        });
 
         // --- 🟢 Event: Link To-Do Template ---
         const linkBtn = el.querySelector('.btn-link-todo-temp');
@@ -852,10 +849,8 @@ function showHabitTemplatePicker(anchorEl, habit, space) {
         };
     }
 
-    setTimeout(() => {
-        const close = (ev) => { if (!popup.contains(ev.target)) { popup.remove(); document.removeEventListener('mousedown', close); } };
-        document.addEventListener('mousedown', close);
-    }, 0);
+    const close = (ev) => { if (!popup.contains(ev.target)) { popup.remove(); document.removeEventListener('mousedown', close); } };
+    document.addEventListener('mousedown', close);
 }
 
 /**
@@ -959,9 +954,7 @@ function showCycleEditPopup(anchorEl, habit, space) {
     input.onkeydown = (e) => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') closePopup(); };
 
     // คลิกข้างนอกเพื่อปิด
-    setTimeout(() => {
-        window.onclick = (e) => { if (!popup.contains(e.target)) closePopup(); };
-    }, 0);
+    window.onclick = (e) => { if (!popup.contains(e.target)) closePopup(); };
 }
 
 function handleAddHabit(space) {

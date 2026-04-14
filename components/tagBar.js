@@ -7,7 +7,24 @@ const svgMenu = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" str
 
 let areDefaultsVisible = true; // State สำหรับการซ่อน/แสดงป้าย Default
 
+// 🟢 ฟังก์ชัน Neumorphism Hover Styles
+function neumorphismHoverStyle(bgColor) {
+    return `box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.12), inset 0 -2px 4px rgba(255, 255, 255, 0.8); background: ${bgColor};`;
+}
+
+function neumorphismHoverStyleDark(bgColor) {
+    return `box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3), inset 0 -2px 4px rgba(255, 255, 255, 0.05); background: ${bgColor};`;
+}
+
+// 🟢 ตัวแปรสำหรับตรวจสอบ Dark Mode
+let isDarkMode = false;
+
+function updateDarkModeState() {
+    isDarkMode = window.isDarkMode || getAppSettings().isDarkMode;
+}
+
 export function renderTagBar(space, currentFilterTags, currentFilterMode, callbacks) {
+    updateDarkModeState(); // 🟢 อัปเดตสถานะ Dark Mode ก่อนใช้งาน
     const { onFilterChange, onRenderMain } = callbacks;
     const tagBarContainer = document.getElementById('tag-bar-container');
     if (!tagBarContainer || !space) return;

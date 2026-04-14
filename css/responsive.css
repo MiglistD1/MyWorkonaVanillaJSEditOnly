@@ -125,6 +125,40 @@
     #firebase-sync-popup .sync-controls-container > div:first-child {
         justify-content: space-around !important;
     }
+
+    /* 🟢 MOBILE FIX: Habit Modal Positioning & Touch Targets */
+    #habit-modal {
+        z-index: 1200 !important;
+        pointer-events: auto !important;
+    }
+
+    #habit-modal .modal-content {
+        position: fixed !important;
+        top: 50% !important;
+        left: 50% !important;
+        transform: translate(-50%, -50%) !important;
+        width: 90% !important;
+        max-width: 95vw !important;
+        height: 85vh !important;
+        max-height: 85vh !important;
+        border-radius: 12px !important;
+        pointer-events: auto !important;
+    }
+
+    /* 🟢 CRITICAL: Ensure checkbox is always tappable on mobile */
+    .habit-item .google-task-checkbox {
+        pointer-events: auto !important;
+        display: inline-flex !important;
+    }
+
+    .habit-item .google-task-checkbox input[type="checkbox"] {
+        cursor: pointer !important;
+        pointer-events: auto !important;
+        width: 20px !important;
+        height: 20px !important;
+        min-width: 20px !important;
+        min-height: 20px !important;
+    }
 }
 
 @media (min-width: 1101px) {
