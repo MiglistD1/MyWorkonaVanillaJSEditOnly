@@ -131,11 +131,12 @@ export function applyAppSettings() {
             .task-input-bar { 
                 position: fixed; bottom: 0; left: 0; right: 0; 
                 background: var(--bg-card); padding: 8px 8px 24px 8px !important; 
-                box-shadow: 0 -10px 40px rgba(0,0,0,0.2); 
-                z-index: 1000; border-radius: 16px 16px 0 0;
+                box-shadow: 0 -10px 50px rgba(0,0,0,0.3); 
+                z-index: 10006 !important; border-radius: 16px 16px 0 0;
                 margin: 0 !important; width: 100% !important; 
                 visibility: hidden !important; /* เปลี่ยนจาก display: none เพื่อให้ JS หา Element เจอ */
                 transform: translateY(100%);
+                pointer-events: none;
                 transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.2s;
                 display: grid !important;
                 grid-template-columns: 1fr 44px 44px !important;
@@ -147,7 +148,7 @@ export function applyAppSettings() {
                 gap: 10px 10px !important;
                 box-sizing: border-box !important;
             }
-            .task-input-bar.is-active { visibility: visible !important; transform: translateY(0) !important; }
+            .task-input-bar.is-active { visibility: visible !important; transform: translateY(0) !important; pointer-events: auto !important; }
 
             .sf-input-bar-header {
                 grid-area: header;
@@ -241,7 +242,8 @@ export function applyAppSettings() {
                 background: var(--primary-color) !important; color: white !important;
                 box-shadow: 0 4px 15px rgba(0,0,0,0.3) !important;
                 display: flex !important; align-items: center; justify-content: center;
-                font-size: 30px !important; z-index: 999; border: none !important;
+                font-size: 30px !important; z-index: 10005 !important; border: none !important;
+                pointer-events: auto !important;
                 transition: transform 0.2s active;
             }
             .sf-mobile-fab:active { transform: scale(0.9); }

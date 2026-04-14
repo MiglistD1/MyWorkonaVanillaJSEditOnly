@@ -1,4 +1,4 @@
-import { svgTag, dragHandleSvg, svgEdit, svgTrashRed, svgPencil, svgRestore, svgArchive, svgRepeat } from './icons.js';
+import { svgTag, dragHandleSvg, svgEdit, svgTrashRed, svgPencil, svgRestore, svgArchive, svgRepeat, svgManualRepeat } from './icons.js';
 import { getShortDate, getAppSettings, getUnitCharFromThai, getFilterTags } from './storage.js';
 
 export function generateMiniTagsBtn(itemTags, type, index, parentIndex = null, spaceId = null) {
@@ -273,7 +273,20 @@ export function generateTaskHTML(task, index, {
         dateBadgeStyle += " background: var(--bg-body); color: var(--text-muted); opacity: 0.6; border: 1px solid var(--border-color); font-weight: 600;";
     }
 
-    const repeatIcon = (task.repeatConfig && task.repeatConfig.isRepeating) ? `<span style="margin-left:4px; opacity:0.6; color:var(--primary-color);" title="Repeating: ${task.repeatConfig.frequency}">${svgRepeat}</span>` : '';
+    let repeatIcon = '';
+    if (task.repeatConfig && task.repeatConfig.isRepeating) {
+        const isManual = task.repeatConfig.frequency === 'manual';
+        const icon = isManual ? svgManualRepeat : svgRepeat;
+        const color = isManual ? '#a855f7' : 'var(--primary-color)';
+        const bg = isManual ? 'rgba(168, 85, 247, 0.12)' : 'rgba(47, 128, 237, 0.12)';
+        const border = isManual ? 'rgba(168, 85, 247, 0.3)' : 'rgba(47, 128, 237, 0.3)';
+        
+        repeatIcon = `<span style="margin-left:6px; padding: 2px 6px; background: ${bg}; border: 1px solid ${border}; border-radius: 6px; color: ${color}; display: inline-flex; align-items: center; gap: 4px; font-size: 9px; font-weight: 800; vertical-align: middle; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="Repeating: ${task.repeatConfig.frequency}">
+            <span style="width:12px; height:12px; display:flex;">${icon}</span>
+            ${isManual ? 'MANUAL' : ''}
+        </span>`;
+    }
+
     const calendarIcon = task.calendarEventId ? `<span style="margin-right:4px; color:#166534; display: inline-flex; vertical-align: middle;" title="Synced with Google Calendar"><svg class="svg-icon-sm" style="width:12px; height:12px;"><use href="#icon-calendar"></use></svg></span>` : '';
 
     // Recursively render Sub-tasks

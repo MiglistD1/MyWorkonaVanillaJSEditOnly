@@ -50,6 +50,8 @@ export function calculateNextDate(currentDateStr, repeatConfig, currentTask = {}
     const interval = parseInt(repeatConfig.interval) || 1;
     
     switch (repeatConfig.frequency) {
+        case 'manual':
+            return null; // จะถูกจัดการผ่าน Popup แบบ Async ขณะกดจบงาน
         case 'daily':
             date.setDate(date.getDate() + interval);
             break;
@@ -297,6 +299,101 @@ function updateDateInputLabel(inputEl) {
         label.innerText = inputEl.placeholder || 'Set Date';
         label.style.color = 'var(--text-muted)';
     }
+}
+
+/** 📅 Helper: หน้าต่างเลือกวันที่ภาษาไทยสำหรับการทำซ้ำแบบกำหนดเอง */
+async function showManualRepeatDatePicker() {
+    return new Promise((resolve) => {
+        const modalId = 'sf-manual-date-picker';
+        let modal = document.getElementById(modalId);
+        if (modal) modal.remove();
+
+        const today = new Date();
+        const curYearBE = today.getFullYear() + 543;
+        const thaiMonths = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
+            "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
+
+        const html = `
+            <div class="modal-overlay" id="${modalId}" style="z-index: 20000; display: flex; align-items:center; justify-content:center; background: rgba(0,0,0,0.4); backdrop-filter: blur(4px);">
+                <div class="modal-content" style="width: 320px; padding: 25px; text-align: center; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
+                    <div style="font-size: 32px; margin-bottom: 10px;">📅</div>
+                    <h3 style="margin: 0 0 5px 0; font-size: 18px; font-weight:800;">ระบุรอบถัดไป</h3>
+                    <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 20px;">งานนี้จะกลับมาให้ทำอีกครั้งเมื่อไหร่?</p>
+                    
+                    <div style="display: flex; gap: 5px; margin-bottom: 25px;">
+                        <select id="sf-manual-day" class="settings-input" style="flex: 1; padding: 8px; font-weight:700; border-radius: 8px;"></select>
+                        <select id="sf-manual-month" class="settings-input" style="flex: 2; padding: 8px; font-weight:700; border-radius: 8px;"></select>
+                        <div style="flex: 1.5; display:flex; flex-direction:column; position:relative;">
+                            <button id="sf-toggle-year-mode" style="position:absolute; top:-22px; right:0; background:none; border:none; color:var(--primary-color); font-size:10px; font-weight:800; cursor:pointer; padding:2px; text-decoration:underline;">✏️ พิมพ์ปี</button>
+                            <select id="sf-manual-year-select" class="settings-input" style="width:100%; padding: 8px; font-weight:700; border-radius: 8px;"></select>
+                            <input type="number" id="sf-manual-year-input" class="settings-input" style="display:none; width:100%; padding: 8px; font-weight:700; border-radius: 8px; text-align:center;" placeholder="พ.ศ.">
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <button class="btn btn-outline" id="sf-manual-date-cancel" style="justify-content:center;">ยกเลิก</button>
+                        <button class="btn btn-primary" id="sf-manual-date-confirm" style="justify-content:center; font-weight:800;">ยืนยัน</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', html);
+        
+        const daySel = document.getElementById('sf-manual-day');
+        const monthSel = document.getElementById('sf-manual-month');
+        const yearSelect = document.getElementById('sf-manual-year-select');
+        const yearInput = document.getElementById('sf-manual-year-input');
+        const toggleModeBtn = document.getElementById('sf-toggle-year-mode');
+
+        for (let i = 1; i <= 31; i++) {
+            const opt = document.createElement('option');
+            opt.value = i; opt.innerText = i;
+            if (i === today.getDate()) opt.selected = true;
+            daySel.appendChild(opt);
+        }
+        thaiMonths.forEach((m, i) => {
+            const opt = document.createElement('option');
+            opt.value = i; opt.innerText = m;
+            if (i === today.getMonth()) opt.selected = true;
+            monthSel.appendChild(opt);
+        });
+        
+        // 🟢 สร้างตัวเลือกปี พ.ศ. (จำกัด 20 ปี)
+        for (let i = 0; i < 20; i++) {
+            const opt = document.createElement('option');
+            const valBE = curYearBE + i;
+            opt.value = valBE;
+            opt.innerText = valBE;
+            yearSelect.appendChild(opt);
+        }
+        yearInput.value = curYearBE;
+
+        // 🔄 Logic: สลับโหมดพิมพ์/เลือก
+        toggleModeBtn.onclick = () => {
+            const isDropdown = yearSelect.style.display !== 'none';
+            yearSelect.style.display = isDropdown ? 'none' : 'block';
+            yearInput.style.display = isDropdown ? 'block' : 'none';
+            toggleModeBtn.innerText = isDropdown ? '📁 เลือกปี' : '✏️ พิมพ์ปี';
+            if (!isDropdown) yearInput.value = yearSelect.value;
+            else yearInput.focus();
+        };
+
+        document.getElementById('sf-manual-date-confirm').onclick = () => {
+            const isInputMode = yearInput.style.display !== 'none';
+            const yearBE = parseInt(isInputMode ? yearInput.value : yearSelect.value) || curYearBE;
+            const yearCE = yearBE - 543;
+            const month = parseInt(monthSel.value) + 1; // แปลง 0-11 เป็น 1-12
+            const day = parseInt(daySel.value);
+            // 🟢 สร้าง String YYYY-MM-DD โดยตรงจากค่าที่เลือกเพื่อป้องกัน Timezone Shift
+            const dateStr = `${yearCE}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            document.getElementById(modalId).remove();
+            resolve(dateStr);
+        };
+        document.getElementById('sf-manual-date-cancel').onclick = () => {
+            document.getElementById(modalId).remove();
+            resolve(null);
+        };
+    });
 }
 
 export function initTodoManager(callbacks) {
@@ -641,10 +738,10 @@ export function initTodoManager(callbacks) {
             // Event Listener สำหรับ FAB Menu
             fabMenu.querySelector('#sf-fab-menu-add-task').onclick = (e) => {
                 e.stopPropagation();
-                fabMenu.classList.remove('is-active'); // ซ่อนเมนู
-                taskInputBar.classList.add('is-active'); // แสดงแถบพิมพ์
+                document.getElementById('sf-mobile-fab-menu').classList.remove('is-active');
+                document.getElementById('new-task-input').closest('.task-input-bar').classList.add('is-active');
                 document.getElementById('new-task-input').focus();
-                fab.classList.add('is-hidden'); // ซ่อน FAB ชั่วคราวเมื่อแถบพิมพ์เปิด
+                document.getElementById('sf-mobile-fab-add').classList.add('is-hidden');
             };
             fabMenu.querySelector('#sf-fab-menu-templates').onclick = (e) => {
                 e.stopPropagation();
@@ -652,13 +749,6 @@ export function initTodoManager(callbacks) {
                 document.getElementById('btn-todo-templates')?.click(); // เปิด Modal Templates
                 fab.classList.remove('is-hidden'); // ซ่อน FAB ชั่วคราวเมื่อแถบพิมพ์เปิด
             };
-
-            // 🟢 ปิด FAB Menu เมื่อคลิกนอกพื้นที่
-            document.addEventListener('click', (e) => {
-                if (!fabMenu.contains(e.target) && fabMenu.classList.contains('is-active')) {
-                    fabMenu.classList.remove('is-active');
-                }
-            });
 
             // 🟢 Drag Logic for FAB Menu (Bottom Sheet)
             const fabMenuHeader = fabMenu.querySelector('.drag-handle-bar');
@@ -699,24 +789,31 @@ export function initTodoManager(callbacks) {
             }
         }
 
-        // 🟢 แก้ไข: ให้ FAB เปิดเมนู (ที่มีปุ่ม Templates) แทนการเปิดช่องพิมพ์ทันที
+        // 🟢 ปรับปรุง: ใช้ .onclick แทน addEventListener เพื่อป้องกันการซ้อนทับของเหตุการณ์
         fab.onclick = (e) => {
+            e.preventDefault();
             e.stopPropagation();
-            fabMenu.classList.add('is-active');
+            const menu = document.getElementById('sf-mobile-fab-menu');
+            if (menu) menu.classList.add('is-active');
         };
 
-        // คลิกที่อื่นเพื่อซ่อนแถบพิมพ์ (ยกเว้นในตัวแถบเอง)
-        document.addEventListener('click', (e) => {
-            if (taskInputBar && !taskInputBar.contains(e.target) && taskInputBar.classList.contains('is-active')) {
-                taskInputBar.classList.remove('is-active');
-                fab.classList.remove('is-hidden');
-            }
-            if (!fabMenu.contains(e.target) && fabMenu.classList.contains('is-active')) {
-                fabMenu.classList.remove('is-active');
-                fab.classList.remove('is-hidden');
-            }
+        // 🟢 ระบบปิด UI อัตโนมัติเมื่อคลิกข้างนอก (ใช้ Global Flag เพื่อไม่ให้รันซ้ำซ้อน)
+        if (!window._sfMobileClickBound) {
+            document.addEventListener('click', (e) => {
+                const bar = document.getElementById('new-task-input')?.closest('.task-input-bar');
+                const menu = document.getElementById('sf-mobile-fab-menu');
+                const fabBtn = document.getElementById('sf-mobile-fab-add');
 
-        });
+                if (bar && bar.classList.contains('is-active') && !bar.contains(e.target)) {
+                    bar.classList.remove('is-active');
+                    if (fabBtn) fabBtn.classList.remove('is-hidden');
+                }
+                if (menu && menu.classList.contains('is-active') && !menu.contains(e.target) && e.target !== fabBtn) {
+                    menu.classList.remove('is-active');
+                }
+            });
+            window._sfMobileClickBound = true;
+        }
     }
 
     // 🟢 Template System Initialization
@@ -736,10 +833,18 @@ export function initTodoManager(callbacks) {
 
     if (freqSelect) {
         freqSelect.onchange = () => {
+            const isManual = freqSelect.value === 'manual';
+            document.getElementById('repeat-interval').parentElement.style.display = isManual ? 'none' : 'flex';
             weeklyOptions.style.display = freqSelect.value === 'weekly' ? 'block' : 'none';
             monthlyOptions.style.display = freqSelect.value === 'monthly' ? 'block' : 'none';
             yearlyOptions.style.display = freqSelect.value === 'yearly' ? 'block' : 'none';
         };
+        if (!freqSelect.querySelector('option[value="manual"]')) {
+            const opt = document.createElement('option');
+            opt.value = 'manual';
+            opt.innerText = 'ระบุวันที่เอง (Manual Date)';
+            freqSelect.appendChild(opt);
+        }
     }
 
     // Day pill selection logic
@@ -776,9 +881,11 @@ export function initTodoManager(callbacks) {
         });
 
         repeatOptions.style.display = config.isRepeating ? 'block' : 'none';
-        weeklyOptions.style.display = config.frequency === 'weekly' ? 'block' : 'none';
-        monthlyOptions.style.display = config.frequency === 'monthly' ? 'block' : 'none';
-        yearlyOptions.style.display = config.frequency === 'yearly' ? 'block' : 'none';
+        const isManual = config.frequency === 'manual';
+        document.getElementById('repeat-interval').parentElement.style.display = isManual ? 'none' : 'flex';
+        weeklyOptions.style.display = (config.frequency === 'weekly' && !isManual) ? 'block' : 'none';
+        monthlyOptions.style.display = (config.frequency === 'monthly' && !isManual) ? 'block' : 'none';
+        yearlyOptions.style.display = (config.frequency === 'yearly' && !isManual) ? 'block' : 'none';
     };
 
     // 📅 ระบบ Toggle Sync Calendar สำหรับช่อง Add Task
@@ -1669,7 +1776,7 @@ export function initTodoManager(callbacks) {
     const calendarSyncListEl = document.getElementById('calendar-sync-list');
     
     // Logic สำหรับ Checkbox แยกออกมา
-    const handleTaskChange = (e) => { // This handles main tasks
+    const handleTaskChange = async (e) => { // This handles main tasks
         if (e.target.classList.contains('subtask-check-box')) {
             const isChecked = e.target.checked;
             const pIdx = parseInt(e.target.dataset.parentIndex);
@@ -1803,7 +1910,13 @@ export function initTodoManager(callbacks) {
 
             // 🔄 Repeating Task Logic: Regenerate task on completion
             if (isChecked && task.repeatConfig && task.repeatConfig.isRepeating && task.dueDate && !task.wasRegenerated) {
-                const nextDate = calculateNextDate(task.dueDate, task.repeatConfig, task);
+                let nextDate = null;
+                if (task.repeatConfig.frequency === 'manual') {
+                    nextDate = await showManualRepeatDatePicker();
+                    if (nextDate) task.manualNextDate = nextDate; // เก็บไว้อ้างอิงแสดงผลในลิสต์รอทำซ้ำ
+                } else {
+                    nextDate = calculateNextDate(task.dueDate, task.repeatConfig, task);
+                }
                 
                 if (nextDate) {
                     task.wasRegenerated = true; // 🟢 มาร์คว่าสร้างงานใหม่ไปแล้ว ป้องกันการงอกซ้ำ
@@ -1820,6 +1933,12 @@ export function initTodoManager(callbacks) {
                     clonedTask.occurrenceCount = (task.occurrenceCount || 1) + 1; // 🟢 เพิ่มตัวนับครั้งที่ทำ
                     
                     space.tasks.push(clonedTask);
+                } else if (task.repeatConfig.frequency === 'manual') {
+                    // หากกดยกเลิกในโหมด Manual ให้คืนค่าสถานะเดิม
+                    task.completed = false;
+                    task.completedAt = null;
+                    if (checkboxWrapper) checkboxWrapper.classList.remove('is-syncing');
+                    if (taskItem) taskItem.classList.remove('completed-hold');
                 }
             }
 
@@ -3110,7 +3229,11 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
         const isRepeatingComplete = task.completed && isRepeating;
         
         // 🟢 คำนวณวันที่ถัดไปเฉพาะสำหรับรายการที่ทำเสร็จแล้ว เพื่อแสดงผลใน Badge (เช่น Done -> Next: Feb 4)
-        let nextDueDateForDisplay = isRepeatingComplete ? calculateNextDate(task.dueDate, task.repeatConfig, task) : null;
+        let nextDueDateForDisplay = isRepeatingComplete 
+            ? (task.repeatConfig.frequency === 'manual' 
+                ? task.manualNextDate 
+                : calculateNextDate(task.dueDate, task.repeatConfig, task)) 
+            : null;
 
         const isRepeatingWaiting = isRepeatingComplete;
 
