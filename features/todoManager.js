@@ -1323,7 +1323,7 @@ export function initTodoManager(callbacks) {
             e.preventDefault();
             e.stopPropagation(); // ป้องกันการพับ/เปิดของ Details เมื่อกดปุ่ม
             const space = getCurrentSpace();
-            if (space && confirm("Empty Tasks Trash? This cannot be undone.")) {
+            if (space && confirm("Clear Tasks Trash? This cannot be undone.")) {
                 space.tasks = space.tasks.filter(t => !t.isDeleted);
                 saveData();
                 onRenderCallback();

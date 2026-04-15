@@ -84,7 +84,7 @@ export function applyAppSettings() {
             flex-direction: row !important;
             align-items: center !important;
             gap: 5px !important; /* ลดระยะห่างหลักลง 50% */
-            padding: 6px 12px !important;
+            padding: 1px 12px !important;
             background: var(--bg-card);
             border: 1px solid var(--border-color);
             border-radius: 10px;
@@ -92,7 +92,7 @@ export function applyAppSettings() {
             box-shadow: 0 1px 3px rgba(0,0,0,0.05);
         }
         .sf-input-bar-header { display: none !important; } /* ซ่อนหัวข้อบน Laptop */
-        #new-task-input { flex: 1 !important; height: 36px !important; border: none !important; background: transparent !important; }
+        #new-task-input { flex: 1 !important; height: 30px !important; border: none !important; background: transparent !important; }
          .sf-input-tools-row { display: flex !important; align-items: center !important; gap: 4px !important; flex-shrink: 0 !important; } /* ลดระยะห่างระหว่างปุ่มลง 50% */
         
         /* ขนาดปุ่มมาตรฐานบน Laptop */
