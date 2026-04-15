@@ -699,7 +699,7 @@ export function applySyntaxHighlighting(el) {
     const text = el.textContent;
     const escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const highlighted = escaped
-        .replace(/(@รางวัล([\d.]+)(บาท|นาที|อัน)_([^\s]+))/gi, (match, p1, p2, p3, p4) => {
+        .replace(/(@รางวัล(\d+(?:\.\d+)?)(บาท|นาที|อัน)_([^\s]+))/gi, (match, p1, p2, p3, p4) => {
             const unitChar = getUnitCharFromThai(p3);
             const shortUnit = p3 === 'บาท' ? 'บ.' : (p3 === 'นาที' ? 'น.' : 'ชิ้น');
             return `<span class="hl-reward" data-type="${unitChar}"><span class="sf-reward-syntax">@รางวัล</span>${p2}<span class="sf-reward-unit" data-short="${shortUnit}">${p3}</span><span class="sf-reward-cat">_${p4}</span></span>`;

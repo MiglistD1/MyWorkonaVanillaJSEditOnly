@@ -298,14 +298,23 @@
             </div>
             
             <div class="task-input-bar">
-              <button id="btn-sync-toggle" class="btn-sync-toggle active" title="Save to Google Tasks"><svg style="width:18px;height:18px;"><use href="#icon-gtask"></use></svg></button>
+              <!-- บรรทัดที่ 1: Header -->
+              <div class="sf-input-bar-header">
+                <span>✨ NEW TASK</span>
+                <button type="button" class="sf-btn-close-input">✕</button>
+              </div>
+
+              <!-- บรรทัดที่ 2: Input -->
               <input type="text" id="new-task-input" class="task-input" placeholder="Type a task...">
+
+              <!-- บรรทัดที่ 3: Tools -->
               <div class="date-wrapper">
                  <input type="date" id="new-task-date" class="task-date-input" title="Set Due Date">
                  <span class="date-display-label">Set Date</span>
-                 <svg class="svg-icon-sm calendar-icon"><use href="#icon-calendar"></use></svg>
               </div>
-              <button class="btn btn-primary" id="btn-add-task" style="padding: 5px 12px; flex-shrink: 0; font-size: 13px; margin-left: 4px;">Add</button>
+              <button type="button" id="btn-task-repeat" class="btn-icon" title="Repeat Settings"><svg class="svg-icon-sm"><use href="#icon-refresh"></use></svg></button>
+              <button type="button" id="btn-task-calendar-sync" class="btn-icon" title="Calendar Sync"><svg class="svg-icon-sm"><use href="#icon-calendar"></use></svg></button>
+              <button class="btn btn-primary" id="btn-add-task">Add Task</button>
             </div>
 
             <ul class="task-list drag-container" id="task-list"></ul>

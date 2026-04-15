@@ -78,38 +78,92 @@ export function applyAppSettings() {
             box-sizing: border-box !important;
         }
 
-        /* 🟢 Sync Drag Handle & Checkbox Colors (Global) */
-        .maintask-drag-handle { color: var(--primary-color) !important; opacity: 0.8 !important; }
-        .subtask-drag-handle { color: #10b981 !important; opacity: 0.8 !important; }
-
-        /* Main Task Checkbox (ใช้สีเดียวกับไอคอนลากงานหลัก) */
-        .task-item .google-task-checkbox .checkmark-circle { border-color: var(--primary-color) !important; border-width: 2px !important; }
-        .task-item > .item-main-row .google-task-checkbox input:checked + .checkmark-circle {
-            background-color: var(--primary-color) !important;
-            border-color: var(--primary-color) !important;
+        /*  LAPTOP/DESKTOP UI: Single Line Layout */
+        .task-input-bar {
+            display: flex !important;
+            flex-direction: row !important;
+            align-items: center !important;
+            gap: 5px !important; /* ลดระยะห่างหลักลง 50% */
+            padding: 6px 12px !important;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            margin-bottom: 15px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
         }
-
-        /* Subtask Checkbox (ใช้สีเดียวกับไอคอนลากงานย่อย) */
-        .subtask-item .google-task-checkbox .checkmark-circle { border-color: #10b981 !important; border-width: 2px !important; }
-        .subtask-item > .item-main-row .google-task-checkbox input:checked + .checkmark-circle {
-            background-color: #10b981 !important;
-            border-color: #10b981 !important;
+        .sf-input-bar-header { display: none !important; } /* ซ่อนหัวข้อบน Laptop */
+        #new-task-input { flex: 1 !important; height: 36px !important; border: none !important; background: transparent !important; }
+         .sf-input-tools-row { display: flex !important; align-items: center !important; gap: 4px !important; flex-shrink: 0 !important; } /* ลดระยะห่างระหว่างปุ่มลง 50% */
+        
+        /* ขนาดปุ่มมาตรฐานบน Laptop */
+        .sf-input-tools-row .date-wrapper { 
+            min-width: 77px !important; /* ลดขนาดลง 30% จาก 110px */
+            height: 32px !important; 
         }
-
+        .sf-input-tools-row .btn-icon { 
+            width: 32px !important; 
+            height: 32px !important; 
+            box-sizing: border-box !important; /* ป้องกันปุ่มขยายเมื่อขอบหนาขึ้น */
+            display: flex !important;
+            align-items: center;
+            justify-content: center;
+        }
+        .sf-input-tools-row #btn-add-task { 
+            height: 32px !important; 
+            padding: 0 10px !important; /* ลดขนาดลงประมาณ 30% จาก 15px */
+        }
         @media (max-width: 768px) {
-            /* 🟢 2. สำหรับมือถือ: ซ่อน Resources และ Tabs ออกไปตามคำขอ */
+            /* 🟢 Modal must be on top of New Task bar (which is 100,000) */
+            .modal-overlay {
+                z-index: 110000 !important;
+            }
+            /*  MOBILE UI: Keep Popup Layout */
             #tabs-card, #resources-card, .topbar .search-wrapper, .topbar #global-launchers-bar, .topbar #utility-group, 
-            .topbar #btn-utility-more, #schedule-mode-bar, #focus-mode-bar, #tag-bar-container { display: none !important; }
+            .topbar #btn-utility-more, #schedule-mode-bar, #focus-mode-bar, #tag-bar-container, #btn-todo-templates { display: none !important; }
             #main-grid { grid-template-columns: 1fr !important; padding: 0 !important; gap: 0 !important; }
             #tasks-card { border-radius: 0 !important; border: none !important; width: 100% !important; overflow-x: hidden !important; }
             .card-body { padding: 10px !important; }
             
-            /* 3. ปรับให้ยืดยาวตามเนื้อหา ไม่ต้อง scroll แยกรายบล็อก */
             #tasks-card, #resources-card { overflow-y: visible !important; height: auto !important; }
-            .task-item { padding: 4px 8px !important; border-bottom: 1px solid var(--border-color) !important; align-items: flex-start !important; gap: 2px !important; }
-            .task-date { font-size: 9px !important; padding: 1px 5px !important; }
-            .task-actual-text { font-size: 13px !important; padding: 0 !important; }
-            .google-task-checkbox { transform: scale(0.9); margin-right: 4px !important; flex-shrink: 0; }
+
+            /* บังคับกลับเป็น Popup สำหรับมือถือ */
+            .task-input-bar {
+                position: fixed !important; bottom: 0 !important; left: 0 !important; right: 0 !important;
+                width: 100% !important; z-index: 100000 !important;
+                flex-direction: column !important; gap: 16px !important;
+                padding: 20px 20px 45px 20px !important;
+                border-radius: 24px 24px 0 0 !important;
+                box-shadow: 0 -10px 50px rgba(0,0,0,0.3) !important;
+                display: none !important; /* ซ่อนไว้รอ is-active */
+                transform: translateY(100%);
+                transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            }
+            .task-input-bar.is-active { display: flex !important; transform: translateY(0); }
+            
+            /* แสดงหัวข้อและปุ่มปิดเฉพาะบนมือถือ */
+            .sf-input-bar-header { 
+                display: flex !important; 
+                justify-content: space-between !important; 
+                align-items: center !important;
+                width: 100% !important;
+            }
+
+            /* ปรับช่องพิมพ์งานบนมือถือให้เต็มบรรทัดและมีขอบ */
+            #new-task-input {
+                width: 100% !important; height: 50px !important;
+                padding: 0 16px !important; border: 2px solid var(--primary-color) !important;
+                border-radius: 12px !important; background: var(--bg-body) !important;
+            }
+
+            /* จัดระเบียบแถวเครื่องมือบนมือถือ (ตามสัดส่วนที่คุณเคยสั่ง) */
+            .sf-input-tools-row { width: 100% !important; gap: 8px !important; }
+            .sf-input-tools-row .date-wrapper { flex: 1 !important; height: 44px !important; }
+            #btn-task-repeat, #btn-task-calendar-sync { 
+                flex: 1.3 !important; 
+                height: 44px !important; 
+                box-sizing: border-box !important; /* 🟢 สำคัญ: ป้องกันเส้นขอบหนาแล้วปุ่มขยายขนาด */
+            }
+            .sf-input-tools-row #btn-add-task { flex: 1 !important; height: 44px !important; }
 
             /* 🟢 จัดวาง Topbar ใหม่: ชื่อ Space อยู่บน, ปุ่มทั้ง 4 (CC, Sidebar, Rewards, Drive) อยู่แถวเดียวกันด้านล่าง */
             .topbar {
@@ -209,89 +263,88 @@ export function applyAppSettings() {
 
             @keyframes sf-slide-in-right { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
-            /* 4. ช่องกรอกงานใหม่แบบ Floating Bottom Bar (แบบ Google Tasks) */
+            /* 🟢 REWRITTEN MOBILE INPUT BAR - 3 ROWS LAYOUT */
             .task-input-bar {
-                position: fixed; bottom: 0; left: 0; right: 0; 
-                background: var(--bg-card); padding: 8px 8px 24px 8px !important; 
-                box-shadow: 0 -10px 40px rgba(0,0,0,0.2); 
-                z-index: 1000; border-radius: 20px 20px 0 0;
-                margin: 0 !important; width: 100% !important; 
-                visibility: hidden !important; 
-                transform: translateY(100%);
-                transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.2s;
-                display: grid !important;
-                grid-template-columns: 1fr 44px 44px !important;
-                grid-template-areas: 
-                    "header header header"
-                    "input repeat calendar"
-                    "date add add"
-                    "list list list" !important;
-                gap: 10px 10px !important;
+                position: fixed !important; bottom: 0 !important; left: 0 !important; right: 0 !important;
+                width: 100% !important; z-index: 100000 !important;
+                background: var(--bg-card) !important;
+                padding: 20px 20px 45px 20px !important;
+                border-radius: 24px 24px 0 0 !important;
+                box-shadow: 0 -10px 50px rgba(0,0,0,0.3) !important;
                 box-sizing: border-box !important;
+                display: none !important; /* ซ่อนไว้ก่อนจนกว่าจะกด + */
+                flex-direction: column !important;
+                gap: 16px !important;
+                transform: translateY(100%);
+                transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             }
-            .task-input-bar.is-active { visibility: visible !important; transform: translateY(0) !important; }
-            
-            #new-task-input { 
-                grid-area: input; 
-                width: 100% !important;
-                min-width: 0 !important; /* 🟢 แก้ไข: ป้องกันการยืดเกิน */
-                font-size: 16px !important;
-                padding: 10px 14px !important;
-                border: 1.5px solid var(--border-color) !important;
-                background: var(--bg-body) !important;
-                height: auto !important;
-                border-radius: 12px !important;
-                box-sizing: border-box !important; /* 🟢 แก้ไข: ป้องกัน Padding ดัน Element */
-                box-shadow: inset 0 1px 2px rgba(0,0,0,0.05) !important;
+            .task-input-bar.is-active { 
+                display: flex !important; 
+                transform: translateY(0); 
+                visibility: visible !important; 
+                pointer-events: auto !important; 
             }
 
-            #btn-task-repeat, #btn-task-calendar-sync {
+            /* บรรทัดที่ 1: Header (ชื่อกลุ่มอยู่ซ้าย ปุ่มปิดอยู่ขวาสุด) */
+            .sf-input-bar-header {
                 display: flex !important;
-                align-items: center; 
-                justify-content: center;
-                width: 44px !important; 
-                height: 44px !important;
-                background: var(--bg-body) !important;
-                border: 1.5px solid var(--border-color) !important;
+                justify-content: space-between !important;
+                align-items: center !important;
+                width: 100% !important;
+            }
+            .sf-input-bar-header span { font-weight: 900; font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+            .sf-btn-close-input { background: none !important; border: none !important; font-size: 24px !important; color: var(--text-main) !important; cursor: pointer !important; padding: 5px !important; opacity: 0.6; }
+
+            /* บรรทัดที่ 2: ช่องพิมพ์งาน (ยาวเต็มบรรทัด) */
+            #new-task-input {
+                width: 100% !important;
+                height: 50px !important;
+                padding: 0 16px !important;
+                border: 2px solid var(--primary-color) !important;
                 border-radius: 12px !important;
-                padding: 0 !important;
-                margin: 0 !important;
-            }
-
-            #btn-task-repeat { grid-area: repeat; }
-            #btn-task-calendar-sync { 
-                grid-area: calendar; 
-                color: #4285f4; /* Google Blue */
-            }
-
-            .date-wrapper { 
-                grid-area: date; 
-                border: 1px solid var(--border-color) !important;
-                border-radius: 10px !important;
-                padding: 0 12px !important;
-                margin: 0 !important;
                 background: var(--bg-body) !important;
+                font-size: 16px !important;
+                box-sizing: border-box !important;
+                margin: 0 !important;
+            }
+
+            /* บรรทัดที่ 3: เครื่องมือ (จัดกึ่งกลางแถว) */
+            .sf-input-tools-row {
                 display: flex !important;
                 align-items: center !important;
-                height: 42px !important;
+                justify-content: center !important;
+                gap: 8px !important;
+                width: 100% !important;
             }
-            .task-date-input { width: 100% !important; font-size: 14px !important; border:none !important; }
-            
-            #btn-add-task { 
-                grid-area: add; 
-                height: 42px !important;
-                padding: 0 16px !important; /* 🟢 แก้ไข: ลด Padding เพื่อไม่ให้ข้อความล้น */
+            .sf-input-tools-row .date-wrapper {
+                flex: 1 !important; /* ลดขนาดลงประมาณ 30% จาก 1.5 */
+                height: 44px !important;
+                background: var(--bg-body) !important;
+                border: 1px solid var(--border-color) !important;
+                border-radius: 10px !important;
+                display: flex !important; align-items: center; justify-content: center;
+                margin: 0 !important; padding: 0 10px !important;
+            }
+            #btn-task-repeat, #btn-task-calendar-sync {
+                flex: 1.3 !important; /* เพิ่มขนาดขึ้น 30% และให้เท่ากันทั้ง 2 ปุ่ม */
+                height: 44px !important;
+                background: var(--bg-body);
+                border: 1px solid var(--border-color);
+                border-radius: 10px !important;
+                display: flex !important; align-items: center; justify-content: center;
+                padding: 0 !important; margin: 0 !important; opacity: 1 !important;
+            }
+            .sf-input-tools-row #btn-add-task {
+                flex: 1 !important; /* ลดขนาดลงประมาณ 20% จาก 1.2 */
+                height: 44px !important;
+                background: var(--primary-color);
+                color: white !important;
+                border: none !important;
                 border-radius: 10px !important;
                 font-weight: 800 !important;
                 font-size: 14px !important;
-            }
-
-            .sf-input-bar-header {
-                grid-area: header;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-bottom: 4px;
+                display: flex !important; align-items: center; justify-content: center;
+                margin: 0 !important;
             }
             
             #google-task-controls { 

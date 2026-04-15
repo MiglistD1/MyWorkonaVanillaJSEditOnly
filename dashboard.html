@@ -355,17 +355,27 @@
             </div>
             
             <div class="task-input-bar">
+             
+              <!-- บรรทัดที่ 1: Header -->
+              <div class="sf-input-bar-header">
+                <span>✨ NEW TASK</span>
+                <button type="button" class="sf-btn-close-input">✕</button>
+              </div>
+
+              <!-- บรรทัดที่ 2: Input -->
               <input type="text" id="new-task-input" class="task-input" placeholder="Type a task...">
-              <div style="display: flex; gap: 8px; flex-wrap: wrap; width: 100%; box-sizing: border-box;">
-                <div class="date-wrapper" style="flex: 1; min-width: 120px;">
-                   <input type="date" id="new-task-date" class="task-date-input" title="Set Due Date" style="width: 100%;">
+
+              <!-- บรรทัดที่ 3: Tools Row -->
+              <div class="sf-input-tools-row">
+                <div class="date-wrapper">
+                   <input type="date" id="new-task-date" class="task-date-input" title="Set Due Date">
                    <span class="date-display-label">Set Date</span>
                    <svg class="svg-icon-sm calendar-icon"><use href="#icon-calendar"></use></svg>
                 </div>
-                <button id="btn-task-repeat" class="btn-icon" title="Set Repeat" style="padding: 6px; min-width: 36px; height: 32px; flex-shrink: 0;"><svg class="svg-icon-sm"><use href="#icon-repeat"></use></svg></button>
-                <button id="btn-task-calendar-sync" class="btn-icon mobile-only" title="Sync to Google Calendar" style="display:none; padding: 6px; min-width: 36px; height: 32px; flex-shrink: 0;"><svg class="svg-icon-sm" style="color:#4285f4;"><use href="#icon-calendar"></use></svg></button>
+                <button type="button" id="btn-task-repeat" class="btn-icon" title="Set Repeat"><svg class="svg-icon-sm"><use href="#icon-repeat"></use></svg></button>
+                <button type="button" id="btn-task-calendar-sync" class="btn-icon" title="Sync to Google Calendar"><svg class="svg-icon-sm"><use href="#icon-calendar"></use></svg></button>
+                <button type="button" class="btn btn-primary" id="btn-add-task">Add Task</button>
               </div>
-              <button class="btn btn-primary" id="btn-add-task" style="padding: 10px 16px; width: 100%; font-size: 14px; min-height: 40px; box-sizing: border-box;">Add Task</button>
             </div>
 
             <ul class="task-list drag-container" id="task-list"></ul>
