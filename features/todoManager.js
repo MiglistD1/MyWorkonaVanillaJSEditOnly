@@ -901,14 +901,14 @@ export function initTodoManager(callbacks) {
 
 
     document.getElementById('btn-task-repeat').onclick = () => {
-        syncRepeatUI(currentTaskRepeatConfig);
         repeatModal.dataset.mode = 'add';
+        syncRepeatUI(currentTaskRepeatConfig);
         repeatModal.style.display = 'flex';
     };
 
     document.getElementById('btn-edit-task-repeat').onclick = () => {
-        syncRepeatUI(editingTaskRepeatConfig);
         repeatModal.dataset.mode = 'edit';
+        syncRepeatUI(editingTaskRepeatConfig);
         repeatModal.style.display = 'flex';
     };
 
@@ -937,6 +937,7 @@ export function initTodoManager(callbacks) {
             isRepeating: repeatEnabled.checked, 
             frequency: freqSelect.value, 
             interval: parseInt(document.getElementById('repeat-interval').value) || 1,
+            daysOfWeek: selectedDays,
             dayOfMonth: parseInt(document.getElementById('repeat-day-of-month').value) || 1,
             monthOfYear: parseInt(document.getElementById('repeat-month-of-year').value),
             dayOfMonthYear: parseInt(document.getElementById('repeat-yearly-day-of-month').value),
@@ -2118,6 +2119,16 @@ export function initTodoManager(callbacks) {
                     }
                     saveData(); onRenderCallback();
                 },
+                onConvertToSubtask: (space, index, taskObj, cleanedText) => {
+                    if (index === 0) return;
+                    const parentTask = space.tasks[index - 1];
+                    if (!parentTask) return;
+                    if (!parentTask.subtasks) parentTask.subtasks = [];
+                    const textToUse = cleanedText || taskObj.text;
+                    parentTask.subtasks.push({ id: Date.now(), text: textToUse, completed: false });
+                    space.tasks.splice(index, 1);
+                    saveData(); onRenderCallback();
+                },
                 onUpdate: () => onRenderCallback()
             });
 
@@ -2784,7 +2795,7 @@ async function addTask() {
         }
 
         // Initialize new task with isProminent: false
-        let newTask = { text: text, completed: false, tags: tags, dueDate: dateInput.value || null, createdAt: Date.now(), isProminent: false, subtasks: [], subtasksHidden: false, repeatConfig: { ...currentTaskRepeatConfig } }; 
+        let newTask = { text: text, completed: false, tags: tags, dueDate: dateInput.value || null, createdAt: Date.now(), isProminent: false, subtasks: [], subtasksHidden: false, repeatConfig: { ...currentTaskRepeatConfig }, wasRegenerated: false }; 
 
         if (currentTaskCalendarSync && newTask.dueDate) {
             try {

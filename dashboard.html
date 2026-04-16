@@ -735,24 +735,15 @@
       <!-- Section: Backup Config -->
       <div style="display:flex; flex-direction:column; gap:10px; padding: 10px; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 12px;">
         <div class="customize-row" style="margin-bottom: 0;">
-          <span style="font-size:12px; font-weight: 600;">Device Mode</span>
-          <select id="export-target" class="settings-input" style="width: 140px; font-size:11px; height:28px;">
-            <option value="computer">💻 Laptop (Subfolders)</option>
-            <option value="mobile">📱 Mobile (Prefixes)</option>
-          </select>
-        </div>
-        <div class="customize-row" style="margin-bottom: 0;">
           <span style="font-size:12px; font-weight: 600;">Path / Prefix</span>
           <input type="text" id="export-subfolder" class="settings-input" style="width: 140px; font-size:11px; height:28px;" placeholder="e.g. MyBackups">
         </div>
         <div class="customize-row" style="margin-bottom: 0;">
           <span style="font-size:12px; font-weight: 600;">Auto Export</span>
-          <select id="auto-export-days" class="settings-input" style="width: 140px; font-size:11px; height:28px;">
-            <option value="0">Disabled</option>
-            <option value="1">Every 1 Day</option>
-            <option value="3">Every 3 Days</option>
-            <option value="7">Every 7 Days</option>
-          </select>
+          <label class="google-task-checkbox">
+            <input type="checkbox" id="auto-export-enabled">
+            <div class="checkmark-circle"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg></div>
+          </label>
         </div>
         <div class="customize-row" style="margin-bottom: 0;">
           <span style="font-size:12px; font-weight: 600;">Merge Mode</span>

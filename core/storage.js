@@ -62,9 +62,8 @@ let appSettings = {
   folderThemes: {}, // Stores { folderName: { color, fontSize } }
   lockedFolders: [], // Stores folder names that should stay expanded on refresh
   exportSubfolder: "MyBackups",
-  autoExportDays: 0,
-  autoExportTime: "00:00",
-  exportTarget: "computer", // 'computer' or 'mobile'
+  autoExportEnabled: false,
+  exportTarget: "computer",
   autoDeleteDays: 30, // ค่าเริ่มต้น 30 วัน
   lastExportTimestamp: 0,
   focusPopupState: {

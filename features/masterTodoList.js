@@ -37,6 +37,7 @@ const computerIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
 export const masterTodoListState = {
     activeSpaceFilters: new Set(),
     showOnlyFlagged: false,
+    dateFilter: 'all',
     isProgressVisible: true,
     showMasterTaskActions: false,
     isSingleSelectMode: true,
@@ -44,6 +45,23 @@ export const masterTodoListState = {
     addingSubtaskToSpaceId: null,
     selectedQuickAddSpaceId: null
 };
+
+function applyDateFilter(tasks) {
+    const filter = masterTodoListState.dateFilter;
+    if (!filter || filter === 'all') return tasks;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return tasks.filter(t => {
+        if (!t.dueDate) return filter === 'no-date';
+        if (filter === 'no-date') return false;
+        const d = new Date(t.dueDate);
+        d.setHours(0, 0, 0, 0);
+        if (filter === 'past')   return d < today;
+        if (filter === 'today')  return d.getTime() === today.getTime();
+        if (filter === 'future') return d > today;
+        return false;
+    });
+}
 
 /**
  * Renders the controls (Buttons & Input Bar) typically placed in the header.
@@ -93,7 +111,8 @@ export function renderMasterTodoList(container) {
     allSpaces.forEach(space => {
         if (!masterTodoListState.activeSpaceFilters.has(space.id) && space.tasks) {
             const activeTasks = space.tasks.filter(t => t && !t.completed && !t.isDeleted);
-            const tasksToCount = masterTodoListState.showOnlyFlagged ? activeTasks.filter(t => t.isProminent) : activeTasks;
+            let tasksToCount = masterTodoListState.showOnlyFlagged ? activeTasks.filter(t => t.isProminent) : activeTasks;
+            tasksToCount = applyDateFilter(tasksToCount);
             totalTasks += tasksToCount.length;
             completedTasks += space.tasks.filter(t => t && t.completed).length;
         }
@@ -209,6 +228,13 @@ function renderProgressSection(allSpaces, totalTasks) {
                         title="${masterTodoListState.showOnlyFlagged ? 'Show All Tasks' : 'Show Only Flagged Tasks'}">
                         <svg class="svg-icon-sm"><use href="#icon-flag"></use></svg>
                     </button>
+                    <select id="master-date-filter" title="Filter by date" style="font-family:var(--app-font); font-size:10px; font-weight:700; padding:2px 6px; height:24px; border:1px solid var(--border-color); border-radius:6px; background:var(--bg-body); color:${masterTodoListState.dateFilter !== 'all' ? 'var(--primary-color)' : 'var(--text-muted)'}; cursor:pointer; outline:none;">
+                        <option value="all"     ${masterTodoListState.dateFilter === 'all'     ? 'selected' : ''}>📋 All</option>
+                        <option value="no-date" ${masterTodoListState.dateFilter === 'no-date' ? 'selected' : ''}>📌 No Date</option>
+                        <option value="past"    ${masterTodoListState.dateFilter === 'past'    ? 'selected' : ''}>🔴 Past</option>
+                        <option value="today"   ${masterTodoListState.dateFilter === 'today'   ? 'selected' : ''}>🟡 Today</option>
+                        <option value="future"  ${masterTodoListState.dateFilter === 'future'  ? 'selected' : ''}>🟢 Upcoming</option>
+                    </select>
                     <div style="display: flex; align-items: center; gap: 4px; background: var(--bg-body); padding: 2px 6px; border-radius: 8px; border: 1px solid var(--border-color);">
                         <button id="btn-master-mode-lock" class="btn-icon" title="${isLocked ? 'Unlock Settings' : 'Lock Settings'}" style="color: ${isLocked ? '#ef4444' : '#10b981'}; opacity: ${isLocked ? '1' : '0.4'}; padding: 2px;">
                             <svg class="svg-icon-sm"><use href="#icon-${isLocked ? 'lock-minimal' : 'unlock-minimal'}"></use></svg>
@@ -267,7 +293,9 @@ function renderTaskGroups(allSpaces) {
         if (masterTodoListState.showOnlyFlagged) {
             displayTasks = displayTasks.filter(t => t && t.isProminent);
         }
-        
+
+        displayTasks = applyDateFilter(displayTasks);
+
         if (displayTasks.length === 0) return '';
         const currentSort = space.taskSortOrder || 'manual';
 
@@ -389,6 +417,9 @@ export function initMasterEvents() {
 
     const filterFlagBtn = document.getElementById('btn-master-filter-flagged');
     if (filterFlagBtn) filterFlagBtn.onclick = () => { masterTodoListState.showOnlyFlagged = !masterTodoListState.showOnlyFlagged; onRefresh(); };
+
+    const dateFilterSelect = document.getElementById('master-date-filter');
+    if (dateFilterSelect) dateFilterSelect.onchange = () => { masterTodoListState.dateFilter = dateFilterSelect.value; onRefresh(); };
 
     const toggleSelectBtn = document.getElementById('btn-master-toggle-select-mode');
     if (toggleSelectBtn) toggleSelectBtn.onclick = () => { 

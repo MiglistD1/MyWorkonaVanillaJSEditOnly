@@ -626,6 +626,13 @@ export function attachTaskInlineEditListeners(container, getSpaceFn, callbacks =
                     if (newText === "" && extracted.length > 0) newText = extracted[0];
                 }
 
+                // 🟢 >s shortcut: convert main task to subtask of the task above
+                if (type === 'task' && /^(.*?)>s$/i.test(newText) && typeof callbacks.onConvertToSubtask === 'function') {
+                    const cleanedText = newText.replace(/>s$/i, '').trim();
+                    callbacks.onConvertToSubtask(space, idx, taskObj, cleanedText);
+                    return;
+                }
+
                 // ️ ป้องกันงานหาย: ลบเฉพาะเมื่อ "ตั้งใจ" ปล่อยว่างจริงๆ (Original ก็ว่าง) 
                 // หากเดิมมีข้อความอยู่แล้วจังหวะ enter มันว่าง (เพราะเอ๋อ) ให้คืนค่าเดิมแทนการลบ
                 if (newText === "" && wasEnter && taskObj.text === "" && typeof callbacks.onDeleteEmptyTask === 'function') {

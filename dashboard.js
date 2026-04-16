@@ -18,8 +18,7 @@ import { openOrFocusTab } from './core/ui-helpers.js';
 import { initDashboardQuickNote } from './features/dashboardQuickNote.js';
 import { 
   getAppSettings, saveData, loadData, getSpaces,
-  getCurrentSpaceId, setCurrentSpaceId, getFilterTags, setFilterTags, setSearchQuery, getCurrentSpace, getFilterMode, setFilterMode, getLocalSettings,
-  getShortDate
+  getCurrentSpaceId, setCurrentSpaceId, getFilterTags, setFilterTags, setSearchQuery, getCurrentSpace, getFilterMode, setFilterMode, getLocalSettings
 } from './core/storage.js';
 
 let sessionReminderActive = true; // 🟢 ตัวแปรสำหรับคุมการแจ้งเตือนในเซสชั่นปัจจุบัน
@@ -266,7 +265,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     if (success) {
                         lSettings.firebaseAutoSync = true;
-                        // 🛑 เอา syncPopup.style.display = 'none' ออกตามคำขอ เพื่อให้ผู้ใช้เห็นว่าสวิตช์ ON แล้วจริงๆ
+                        // � Auto Export: เซฟลง laptop ทันทีทุกครั้งที่เปิด Auto Sync สำเร็จ
+                        if (appSettings.autoExportEnabled) {
+                            document.getElementById('btn-manual-export')?.click();
+                        }
+                        // �� เอา syncPopup.style.display = 'none' ออกตามคำขอ เพื่อให้ผู้ใช้เห็นว่าสวิตช์ ON แล้วจริงๆ
                     } else {
                         autoSyncChk.checked = false;
                         lSettings.firebaseAutoSync = false;
@@ -333,163 +336,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Advanced Data Management Logic
         const subfolderInput = document.getElementById('export-subfolder');
-        const autoExportSelect = document.getElementById('auto-export-days');
-        const targetSelect = document.getElementById('export-target'); // 🟢 เพิ่มตัวเลือกอุปกรณ์
+        const autoExportToggle = document.getElementById('auto-export-enabled');
         const btnManualExport = document.getElementById('btn-manual-export');
         const btnImportData = document.getElementById('btn-import-data');
         const fileImportInput = document.getElementById('file-import-data');
 
-        // 🔐 ฟังก์ชันอัปเดตสถานะแม่กุญแจ
-        window.updateLockButton = () => {
-            const btn = document.getElementById('btn-set-data-management');
-            if (!btn) return;
-            const days = parseInt(autoExportSelect.value, 10);
-            const isSet = days > 0;
-            
-            if (isSet) {
-                // 🔒 แม่กุญแจปิด (สีแดง) - แสดงว่าได้ตั้งค่าไว้แล้ว
-                btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>`;
-                btn.style.borderColor = "#ef4444";
-                btn.style.background = "rgba(239, 68, 68, 0.05)";
-                btn.title = `Auto-export active (Every ${days} days)`;
-            } else {
-                // 🔓 แม่กุญแจเปิด (สีเขียว) - ยังไม่ล็อค / ปิดการทำงาน
-                btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path></svg>`;
-                btn.style.borderColor = "#10b981";
-                btn.style.background = "rgba(16, 185, 129, 0.05)";
-                btn.title = "Auto-export disabled";
-            }
-        };
-
         window.updateExportUI = () => {
-            const target = targetSelect?.value || appSettings.exportTarget || "computer";
-            if (btnManualExport) {
-                btnManualExport.innerHTML = target === "computer" 
-                    ? "💻 Export (PC / Laptop)"
-                    : "📱 Export (Mobile Device)";
-            }
-            if (window.updateLockButton) window.updateLockButton();
-
-            // 📅 จัดการแสดงผลปุ่มดูข้อมูลเวลาสำรองข้อมูลรอบถัดไป
-            const btnInfo = document.getElementById('btn-show-next-export');
-            if (btnInfo) {
-                const days = parseInt(autoExportSelect?.value || appSettings.autoExportDays || 0, 10);
-                btnInfo.style.display = days > 0 ? 'flex' : 'none';
-            }
+            if (btnManualExport) btnManualExport.innerHTML = "💻 Export (PC / Laptop)";
         };
 
         if (subfolderInput) subfolderInput.value = appSettings.exportSubfolder || "MyBackups";
-        if (autoExportSelect) {
-            autoExportSelect.value = appSettings.autoExportDays || 0;
-            autoExportSelect.addEventListener('change', updateExportUI);
-        }
-        if (targetSelect) targetSelect.value = appSettings.exportTarget || "computer";
+        if (autoExportToggle) autoExportToggle.checked = !!appSettings.autoExportEnabled;
 
-        const saveDataManagementSettings = (e) => {
-            if(e) e.preventDefault();
-            appSettings.exportSubfolder = subfolderInput.value.trim() || "MyBackups";
-            appSettings.autoExportDays = parseInt(autoExportSelect.value, 10);
-            appSettings.autoExportTime = document.getElementById('auto-export-time')?.value || "00:00";
-            if (targetSelect) appSettings.exportTarget = targetSelect.value;
+        const saveDataManagementSettings = () => {
+            appSettings.exportSubfolder = subfolderInput?.value.trim() || "MyBackups";
+            appSettings.autoExportEnabled = !!autoExportToggle?.checked;
+            appSettings.exportTarget = "computer";
             saveData(true);
-            updateExportUI();
-
-            const btn = document.getElementById('btn-set-data-management');
-            if (btn) {
-                btn.classList.add('flash-confirm');
-                setTimeout(() => btn.classList.remove('flash-confirm'), 500);
-            }
         };
 
-        if (autoExportSelect && !document.getElementById('btn-set-data-management')) {
-            // สร้าง Wrapper เพื่อให้ Dropdown และปุ่มอยู่บรรทัดเดียวกัน
-            const wrapper = document.createElement('div');
-            wrapper.className = 'sf-auto-export-wrapper';
-            wrapper.style.cssText = 'display:flex; align-items:center; gap:8px; margin-top:4px; flex-wrap: wrap;';
-            autoExportSelect.parentNode.insertBefore(wrapper, autoExportSelect);
-            wrapper.appendChild(autoExportSelect);
+        if (autoExportToggle) autoExportToggle.addEventListener('change', saveDataManagementSettings);
+        if (subfolderInput) subfolderInput.addEventListener('change', saveDataManagementSettings);
 
-            // 🟢 เพิ่มช่องเลือกเวลา (Time Input)
-            const timeInput = document.createElement('input');
-            timeInput.type = 'time';
-            timeInput.id = 'auto-export-time';
-            timeInput.className = 'settings-input';
-            timeInput.style.cssText = 'width: 115px; height: 38px; padding: 0 6px; border-radius: 8px; font-size: 11px; font-weight: 700; flex-shrink: 0;';
-            timeInput.value = appSettings.autoExportTime || "00:00";
-            wrapper.appendChild(timeInput);
-
-            const btnSet = document.createElement('button');
-            btnSet.id = 'btn-set-data-management';
-            btnSet.className = 'btn btn-outline';
-            btnSet.style.cssText = 'padding:0; width:38px; height:38px; display:flex; align-items:center; justify-content:center; border-radius:8px; flex-shrink:0;';
-            btnSet.onclick = saveDataManagementSettings;
-            wrapper.appendChild(btnSet);
-
-            // 🕒 ปุ่มดูเวลา Export รอบถัดไป
-            const btnInfo = document.createElement('button');
-            btnInfo.id = 'btn-show-next-export';
-            btnInfo.className = 'btn btn-outline';
-            btnInfo.style.cssText = 'padding:0; width:38px; height:38px; display:none; align-items:center; justify-content:center; border-radius:8px; flex-shrink:0;';
-            btnInfo.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>`;
-            btnInfo.onclick = () => {
-                const days = parseInt(autoExportSelect.value, 10);
-                const lastExport = appSettings.lastExportTimestamp || 0;
-                const timeStr = document.getElementById('auto-export-time')?.value || appSettings.autoExportTime || "00:00";
-                const [h, m] = timeStr.split(':').map(Number);
-
-                if (lastExport > 0) {
-                    const lastDate = new Date(lastExport);
-                    const nextDate = new Date(lastDate);
-                    nextDate.setDate(lastDate.getDate() + days);
-                    nextDate.setHours(h, m, 0, 0);
-                    alert(`📅 Next Auto-Backup scheduled for:\n${getShortDate(nextDate)} at ${timeStr}`);
-                } else {
-                    alert(`📅 First auto-backup is scheduled for today/tomorrow at ${timeStr}.\nIt will trigger after you perform a manual export or the time arrives.`);
-                }
-            };
-            wrapper.appendChild(btnInfo);
-        }
-        updateExportUI();
-
-        /**
-         * 🕒 ระบบตรวจสอบการสำรองข้อมูลอัตโนมัติ (Auto-backup check)
-         * แก้ไขปัญหา "Missed Window": หากเปิดคอมช้ากว่าเวลาที่ตั้งไว้ ระบบจะเช็คและรันให้ทันที
-         */
-        const checkAutoExport = () => {
-            const settings = getAppSettings();
-            const days = settings.autoExportDays || 0;
-            if (days <= 0) return; // ปิดการใช้งานถ้าตั้งเป็น 0
-
-            const lastExport = settings.lastExportTimestamp || 0;
-            const timeStr = settings.autoExportTime || "00:00";
-            const [targetH, targetM] = timeStr.split(':').map(Number);
-
-            const now = new Date();
-            const scheduledToday = new Date();
-            scheduledToday.setHours(targetH, targetM, 0, 0);
-
-            const msPerDay = 24 * 60 * 60 * 1000;
-            // คำนวณหาเวลาที่ควรจะ Backup รอบถัดไป (อิงจากครั้งล่าสุด + จำนวนวัน)
-            const nextDueTimestamp = lastExport + (days * msPerDay);
-
-            // เงื่อนไข: ถ้า (เวลาปัจจุบัน >= รอบที่ควรทำ) และ (เวลาปัจจุบัน >= เวลาที่กำหนดไว้ของวันนี้)
-            if (Date.now() >= nextDueTimestamp && now >= scheduledToday) {
-                const btn = document.getElementById('btn-manual-export');
-                if (btn) {
-                    console.log("⏰ Auto-backup is due. Triggering...");
-                    // หากเป็น Extension ให้รันทันที, หากเป็น Web ให้ขึ้น Toast เตือน (เพราะ Browser บล็อค Auto-download)
-                    if (typeof chrome !== 'undefined' && chrome.downloads) {
-                        btn.click();
-                    } else if (typeof window.showToast === 'function') {
-                        window.showToast("📅 ถึงเวลาสำรองข้อมูล (Auto-Backup) ตามกำหนดการแล้วครับ", "download", () => btn.click());
-                    }
-                }
-            }
-        };
-
-        // รันตรวจสอบทันทีเมื่อโหลดแอป (รอ 2 วินาทีให้ข้อมูลนิ่ง) และรันซ้ำทุก 1 นาที
-        setTimeout(checkAutoExport, 2000);
-        setInterval(checkAutoExport, 60000);
+        window.updateExportUI();
 
 
         btnManualExport?.addEventListener('click', () => {

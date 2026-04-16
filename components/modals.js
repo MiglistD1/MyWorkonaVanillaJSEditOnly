@@ -727,15 +727,11 @@ export function setupSettingsModal(onRender) {
         document.getElementById('setting-auto-delete-days').value = appSettings.autoDeleteDays || 30;
 
         // 🟢 ดึงค่า Data Management มาแสดงในช่อง Input ทันทีที่เปิดหน้า Modal
-        const targetSelect = document.getElementById('export-target');
         const subfolderInput = document.getElementById('export-subfolder');
-        const autoExportSelect = document.getElementById('auto-export-days');
-        const autoExportTime = document.getElementById('auto-export-time');
+        const autoExportToggleEl = document.getElementById('auto-export-enabled');
 
-        if (targetSelect) targetSelect.value = appSettings.exportTarget || "computer";
         if (subfolderInput) subfolderInput.value = appSettings.exportSubfolder || "MyBackups";
-        if (autoExportSelect) autoExportSelect.value = appSettings.autoExportDays || 0;
-        if (autoExportTime) autoExportTime.value = appSettings.autoExportTime || "00:00";
+        if (autoExportToggleEl) autoExportToggleEl.checked = !!appSettings.autoExportEnabled;
         
         // 🟢 อัปเดตสถานะแม่กุญแจและข้อความปุ่มทันทีที่เปิดหน้า Modal
         if (window.updateExportUI) window.updateExportUI();
@@ -772,14 +768,11 @@ export function setupSettingsModal(onRender) {
         appSettings.autoDeleteDays = parseInt(document.getElementById('setting-auto-delete-days').value) || 30;
 
         // 🟢 เพิ่มการเซฟส่วน Data Management เข้าไปด้วยเพื่อป้องกันค่าหลุด
-        const autoExportSelect = document.getElementById('auto-export-days');
-        const targetSelect = document.getElementById('export-target');
-        const subfolderInput = document.getElementById('export-subfolder');
-        const autoExportTime = document.getElementById('auto-export-time');
-        if (autoExportSelect) appSettings.autoExportDays = parseInt(autoExportSelect.value, 10);
-        if (autoExportTime) appSettings.autoExportTime = autoExportTime.value;
-        if (targetSelect) appSettings.exportTarget = targetSelect.value;
-        if (subfolderInput) appSettings.exportSubfolder = subfolderInput.value.trim() || "MyBackups";
+        const autoExportToggleModal = document.getElementById('auto-export-enabled');
+        const subfolderInputModal = document.getElementById('export-subfolder');
+        if (autoExportToggleModal) appSettings.autoExportEnabled = autoExportToggleModal.checked;
+        if (subfolderInputModal) appSettings.exportSubfolder = subfolderInputModal.value.trim() || "MyBackups";
+        appSettings.exportTarget = "computer";
 
         document.getElementById('settings-modal').style.display = 'none';
         saveData();

@@ -476,6 +476,14 @@
     }
 }
 
+@media (min-width: 769px) and (max-width: 1100px) {
+    #main-grid.tabs-collapsed #tabs-card,
+    #main-grid.resources-collapsed #resources-card,
+    #main-grid.tasks-collapsed #tasks-card {
+        display: none;
+    }
+}
+
 @media (min-width: 1000px) {
     .dashboard-grid {
         grid-template-columns: 1.5fr 1fr;
