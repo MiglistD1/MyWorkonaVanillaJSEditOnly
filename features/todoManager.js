@@ -2078,9 +2078,30 @@ export function initTodoManager(callbacks) {
             attachTaskInlineEditListeners(el, () => getCurrentSpace(), {
             saveData,
             onAddMainTaskAfter: (space, index) => {
-                const newTask = { text: "", completed: false, tags: [], dueDate: null, createdAt: Date.now(), googleTaskId: null, isProminent: false, subtasks: [] };
+                const newId = Date.now();
+                const newTask = { text: "", completed: false, tags: [], dueDate: null, createdAt: newId, googleTaskId: null, isProminent: false, subtasks: [] };
                 space.tasks.splice(index + 1, 0, newTask);
-                    saveData(); onRenderCallback();
+                saveData(); 
+                onRenderCallback();
+
+                // 🟢 Focus งานใหม่ที่เพิ่งงอกออกมาทันทีเพื่อให้พิมพ์ต่อได้เลย
+                setTimeout(() => {
+                    const items = document.querySelectorAll('#task-list .task-actual-text');
+                    const target = Array.from(items).find(el => {
+                        const li = el.closest('li');
+                        const taskIdx = parseInt(li.dataset.index);
+                        const tObj = space.tasks[taskIdx];
+                        return tObj && tObj.createdAt === newId;
+                    });
+                    if (target) {
+                        target.focus();
+                        const range = document.createRange();
+                        range.selectNodeContents(target);
+                        const sel = window.getSelection();
+                        sel.removeAllRanges();
+                        sel.addRange(range);
+                    }
+                }, 100);
                 },
                 onAddSubtaskAfter: (space, index, li) => {
                     const subList = li.closest('.subtask-list');
