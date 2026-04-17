@@ -3256,4 +3256,276 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
             }
         });
     }
+}
+
+/**
+ * 🟢 NEW ARCHITECTURE: On-Demand Shared Component Rendering (Mirror Portal)
+ * Renders a full-functional space UI inside a specific target container.
+ * This function encapsulates all event handling and state management for the portal.
+ */
+export function renderSpaceInline(targetSpaceId, targetContainer, options = {}) {
+    const spaceIdStr = String(targetSpaceId);
+    const space = getSpaces().find(s => String(s.id) === spaceIdStr);
+    if (!space || !targetContainer) {
+        console.error(`[renderSpaceInline] Space not found: ${targetSpaceId}`);
+        return;
+    }
+
+    const isProminentHidden = space.hideProminentTasks || false;
+    const isMobile = window.innerWidth <= 768;
+    const currentSort = space.taskSortOrder || 'manual';
+    const showActions = options.showActions !== undefined ? options.showActions : false;
+
+    // Apply sorting if needed
+    if (space.taskSortOrder && space.taskSortOrder !== 'manual') sortSpaceTasks(space);
+
+    const displayTasks = (space.tasks || []).filter(t => t && !t.completed && !t.isDeleted);
+
+    const tasksHTML = displayTasks.map(task => {
+        const originalIndex = space.tasks.indexOf(task);
+        return generateTaskHTML(task, originalIndex, {
+            showSpaceBadge: false,
+            isMasterView: true,
+            spaceId: space.id,
+            isProminentHidden,
+            showActions: showActions,
+            addingSubtaskToId: options.addingSubtaskToId, // 🟢 Fix: Pass the addingSubtaskToId from options
+            isFiltered: false,
+            isMobile,
+        });
+    }).join('');
+
+    targetContainer.innerHTML = `<ul class="task-list master-group-list" data-space-id="${space.id}">${tasksHTML}</ul>`;
+
+    // 🟢 Apply syntax highlighting
+    targetContainer.querySelectorAll('.task-actual-text').forEach(el => applySyntaxHighlighting(el));
+
+    // 🟢 Local Refresh Handler for the portal
+    const onRefresh = () => renderSpaceInline(targetSpaceId, targetContainer, options);
+
+    // 🟢 ENCAPSULATED EVENT DELEGATION: Handle all task actions without global state
+    targetContainer.onclick = async (e) => {
+        const target = e.target;
+        const li = target.closest('li');
+        if (!li) return;
+
+        const idx = parseInt(li.dataset.index);
+        const isSubtask = li.dataset.type === 'subtask';
+        const pIdx = isSubtask ? parseInt(li.closest('.subtask-list').dataset.parentIndex) : null;
+        const task = isSubtask ? space.tasks[pIdx]?.subtasks?.[idx] : space.tasks[idx];
+
+        if (!task) return;
+
+        // 1. Toggle Prominent (Flag)
+        if (target.closest('.btn-prominent-task')) {
+            task.isProminent = !task.isProminent;
+            if (task.isProminent) {
+                // Logic to move to top of its group
+                const [movedTask] = isSubtask ? space.tasks[pIdx].subtasks.splice(idx, 1) : space.tasks.splice(idx, 1);
+                if (!isSubtask) {
+                    space.tasks.unshift(movedTask);
+                } else {
+                    space.tasks[pIdx].subtasks.unshift(movedTask);
+                }
+            }
+            saveData(); onRefresh();
+            return;
+        }
+
+        // 2. Archive / Complete
+        if (target.closest('.archive-task-btn') || target.closest('.archive-subtask-btn')) {
+            task.completed = true;
+            task.completedAt = Date.now();
+            task.isProminent = false;
+            if (task.subtasks) task.subtasks.forEach(s => s.completed = true);
+            saveData(); onRefresh();
+            return;
+        }
+
+        // 3. Delete (to Trash)
+        if (target.closest('.delete-task-btn') || target.closest('.delete-subtask-btn')) {
+            task.isDeleted = true;
+            task.deletedAt = Date.now();
+            const days = getAppSettings().autoDeleteDays || 30;
+            task.expiryAt = task.deletedAt + (days * 24 * 60 * 60 * 1000);
+            saveData(); onRefresh();
+            return;
+        }
+
+        // 4. More Actions Toggle
+        if (target.closest('.toggle-actions-btn')) {
+            const btn = target.closest('.toggle-actions-btn');
+            const actions = li.querySelector('.collapsible-actions');
+            if (actions) {
+                const isExpanded = actions.style.display !== 'none';
+                actions.style.display = isExpanded ? 'none' : 'flex';
+                btn.classList.toggle('expanded', !isExpanded);
+            }
+            return;
+        }
+
+        // 5. Task Link
+        const linkBtn = target.closest('.task-link-btn');
+        if (linkBtn) {
+            if (task.linkData?.url) {
+                window.open(task.linkData.url, '_blank');
+            } else {
+                openTaskLinkModal(idx, isSubtask, pIdx);
+            }
+            return;
+        }
+
+        // 6. Edit Modal
+        if (target.closest('.edit-task-btn') || target.closest('.edit-task-text-btn') || target.closest('.edit-subtask-btn')) {
+            openTaskEditModal(isSubtask ? pIdx : idx, isSubtask, isSubtask ? task.id : null);
+            return;
+        }
+
+        // 7. Add Subtask
+        if (target.closest('.add-subtask-btn')) {
+            // Re-render with add row
+            renderSpaceInline(targetSpaceId, targetContainer, { ...options, addingSubtaskToId: task.createdAt });
+            setTimeout(() => {
+                const input = targetContainer.querySelector(`.subtask-add-input[data-parent="${task.createdAt}"]`);
+                if (input) input.focus();
+            }, 100);
+            return;
+        }
+        
+        // 8. Restore from Trash
+        if (target.closest('.restore-task-btn')) {
+            task.isDeleted = false;
+            task.deletedAt = null;
+            saveData(); onRefresh();
+            return;
+        }
+
+        // 9. Permanent Delete
+        if (target.closest('.delete-task-perm-btn') || target.closest('.delete-subtask-perm-btn')) {
+            if (confirm("Delete permanently?")) {
+                if (isSubtask) space.tasks[pIdx].subtasks.splice(idx, 1);
+                else space.tasks.splice(idx, 1);
+                saveData(); onRefresh();
+            }
+            return;
+        }
+
+        // 10. Calendar Sync
+        if (target.closest('.toggle-calendar-sync-btn')) {
+            if (task.calendarEventId) {
+                const token = await getAuthToken(false);
+                if (token) {
+                    await deleteCalendarEvent(task.calendarEventId, token);
+                    delete task.calendarEventId;
+                    saveData(); onRefresh();
+                }
+            } else {
+                if (!task.dueDate) {
+                    alert("Please set a Due Date first.");
+                    return;
+                }
+                const token = await getAuthToken(true);
+                if (token) {
+                    const event = await createCalendarEvent(task, token);
+                    if (event?.id) {
+                        task.calendarEventId = event.id;
+                        saveData(); onRefresh();
+                    }
+                }
+            }
+            return;
+        }
+    };
+
+    // 🟢 Handle Checkbox Status Toggling
+    targetContainer.onchange = (e) => {
+        if (e.target.type === 'checkbox') {
+            const li = e.target.closest('li');
+            if (!li) return;
+            const idx = parseInt(li.dataset.index);
+            const isSubtask = li.dataset.type === 'subtask';
+            const pIdx = isSubtask ? parseInt(li.closest('.subtask-list').dataset.parentIndex) : null;
+            const task = isSubtask ? space.tasks[pIdx]?.subtasks?.[idx] : space.tasks[idx];
+            
+            if (task) {
+                task.completed = e.target.checked;
+                task.completedAt = task.completed ? Date.now() : null;
+                if (task.completed) task.isProminent = false;
+                saveData();
+                setTimeout(() => onRefresh(), task.completed ? 800 : 0);
+            }
+        }
+    };
+
+    // 🟢 Attach Subtask Event Listeners
+    targetContainer.querySelectorAll('.subtask-list').forEach(subListEl => {
+        attachSubtaskEventListeners(subListEl, space, onRefresh, {}, () => { saveData(); onRefresh(); });
+    });
+
+    // 🟢 Attach Inline Editing Listeners
+    attachTaskInlineEditListeners(targetContainer, () => space, {
+        saveData,
+        onUpdate: onRefresh,
+        onDeleteEmptyTask: (space, index, type, li) => {
+            if (type === 'task') space.tasks.splice(index, 1);
+            else {
+                const subList = li.closest('.subtask-list');
+                const pIdx = parseInt(subList.dataset.parentIndex);
+                space.tasks[pIdx].subtasks.splice(index, 1);
+            }
+            saveData(); onRefresh();
+        },
+        onAddMainTaskAfter: (space, index) => {
+            const newTask = { text: "", completed: false, tags: [], dueDate: null, createdAt: Date.now(), isProminent: false, subtasks: [] };
+            space.tasks.splice(index + 1, 0, newTask);
+            saveData();
+            onRefresh();
+
+            setTimeout(() => {
+                const items = targetContainer.querySelectorAll('.task-actual-text');
+                const target = Array.from(items).find(el => {
+                    const li = el.closest('li');
+                    return li && li.dataset.type === 'task' && parseInt(li.dataset.index) === index + 1;
+                });
+                if (target) {
+                    target.focus();
+                    const range = document.createRange();
+                    range.selectNodeContents(target);
+                    const sel = window.getSelection();
+                    sel.removeAllRanges();
+                    sel.addRange(range);
+                }
+            }, 100);
+        },
+        onAddSubtaskAfter: (space, index, li) => {
+            const subList = li.closest('.subtask-list');
+            if (subList) {
+                const parentId = parseFloat(subList.dataset.parentId);
+                renderSpaceInline(targetSpaceId, targetContainer, { ...options, addingSubtaskToId: parentId });
+                setTimeout(() => {
+                    const input = targetContainer.querySelector(`.subtask-add-input[data-parent="${parentId}"]`);
+                    if (input) input.focus();
+                }, 100);
+            }
+        }
+    });
+
+    // 🟢 Initialize Sortable for the portal list
+    const taskListUI = targetContainer.querySelector('.task-list');
+    if (taskListUI && currentSort === 'manual') {
+        if (taskListUI.sortable) taskListUI.sortable.destroy();
+        taskListUI.sortable = Sortable.create(taskListUI, {
+            group: 'nested-tasks', animation: 150, handle: '.drag-handle', ghostClass: 'sortable-ghost',
+            onStart: () => { document.body.classList.add('is-sorting-tasks'); window.getSelection().removeAllRanges(); },
+            onEnd: (evt) => {
+                const oldIdx = parseInt(evt.item.getAttribute('data-index'));
+                const movedItem = space.tasks.splice(oldIdx, 1)[0];
+                const nextEl = evt.item.nextElementSibling;
+                let targetIdx = nextEl ? parseInt(nextEl.getAttribute('data-index')) : space.tasks.length;
+                if (nextEl && targetIdx > oldIdx) targetIdx--;
+                space.tasks.splice(targetIdx, 0, movedItem);
+                saveData(); onRefresh();
+            }
+        });
+    }
 }      
