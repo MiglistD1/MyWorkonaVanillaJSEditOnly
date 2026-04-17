@@ -1,4 +1,4 @@
-import Sortable from '../sortable.esm.js';
+﻿import Sortable from '../sortable.esm.js';
 import { svgEdit, svgTrashRed, svgRepeat } from '../core/icons.js';
 import { getCurrentSpace, saveData, getShortDate, getAppSettings, setCurrentSpaceId, getSpaces, getFilterTags, loadData, getGlobalLaunchers, getLauncherTags, getCurrentSpaceId, getFilterMode } from '../core/storage.js';
 import { mergeItems } from '../core/firebaseSync.js';
@@ -506,10 +506,85 @@ async function showManualRepeatDatePicker() {
     });
 }
 
+/**
+ * Toggles the "prominent" (flagged) state of a task.
+ * Space-aware: resolves the space via spaceId, NOT getCurrentSpace().
+ * @param {number} spaceId - ID of the space.
+ * @param {number} taskId - task.createdAt (unique ID).
+ * @param {number|null} parentId - parent task's createdAt if subtask, otherwise null.
+ * @returns {boolean} True if the update was applied.
+ */
+export function toggleTaskFlagById(spaceId, taskId, parentId = null) {
+    const space = getSpaces().find(s => s.id === spaceId);
+    if (!space) return false;
+
+    if (parentId !== null) {
+        const parent = space.tasks.find(t => t?.createdAt === parentId);
+        const sub = parent?.subtasks?.find(t => t?.createdAt === taskId);
+        if (!sub) return false;
+        sub.isProminent = !sub.isProminent;
+        saveData();
+        return true;
+    }
+
+    const index = space.tasks.findIndex(t => t?.createdAt === taskId);
+    if (index === -1) return false;
+    const task = space.tasks[index];
+
+    if (task.isProminent) {
+        task.isProminent = false;
+        const settings = getAppSettings();
+        if (settings.focusedTask?.spaceId === spaceId && settings.focusedTask?.createdAt === taskId) {
+            settings.focusedTask = null;
+        }
+        if (typeof task.originalIndex === 'number') {
+            const [movedTask] = space.tasks.splice(index, 1);
+            space.tasks.splice(Math.min(task.originalIndex, space.tasks.length), 0, movedTask);
+            delete movedTask.originalIndex;
+        }
+    } else {
+        task.isProminent = true;
+        task.originalIndex = index;
+        const [movedTask] = space.tasks.splice(index, 1);
+        let lastProminentIdx = -1;
+        for (let i = 0; i < space.tasks.length; i++) {
+            if (space.tasks[i]?.isProminent) lastProminentIdx = i;
+            else break;
+        }
+        space.tasks.splice(lastProminentIdx + 1, 0, movedTask);
+    }
+    saveData();
+    return true;
+}
+
+/**
+ * Toggles the "More Actions" collapsible panel for a task row.
+ * Pure DOM operation — no space context needed.
+ * @param {HTMLElement} triggerBtn - The .toggle-actions-btn element clicked.
+ * @param {string} containerSelector - Selector for closing other open menus first.
+ */
+export function toggleMoreActionsMenu(triggerBtn, containerSelector = '') {
+    const group = triggerBtn.closest('.item-action-group');
+    const menu = group?.querySelector('.collapsible-actions');
+    if (!menu) return;
+    const isHidden = menu.style.display === 'none' || menu.style.display === '';
+    if (isHidden) {
+        if (containerSelector) {
+            document.querySelectorAll(`${containerSelector} .collapsible-actions`).forEach(m => m.style.display = 'none');
+            document.querySelectorAll(`${containerSelector} .toggle-actions-btn`).forEach(b => b.classList.remove('expanded'));
+        }
+        menu.style.display = 'flex';
+        triggerBtn.classList.add('expanded');
+    } else {
+        menu.style.display = 'none';
+        triggerBtn.classList.remove('expanded');
+    }
+}
+
 export function initTodoManager(callbacks) {
     onRenderCallback = callbacks.onRender;
 
-    // 🟢 ระบบ Mobile Tools Menu (3 จุด)
+    // ระบบ Mobile Tools Menu (3 จุด)
     const mobileToolsBtn = document.getElementById('btn-mobile-todo-tools');
     if (mobileToolsBtn) {
         mobileToolsBtn.onclick = (e) => {
@@ -1622,6 +1697,7 @@ export function initTodoManager(callbacks) {
     const handleProminentTaskClick = (e) => {
         const btn = e.target.closest('.btn-prominent-task');
         if (btn) {
+            e.stopPropagation();
             const space = getCurrentSpace();
             const index = parseInt(btn.getAttribute('data-index'));
             const pIdxAttr = btn.getAttribute('data-parent-index');
