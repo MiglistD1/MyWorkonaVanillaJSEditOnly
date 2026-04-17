@@ -706,3 +706,576 @@ label[for="drive-merge-mode"],
 #drive-merge-mode-label {
     display: none !important;
 }
+
+/* ===== Master Todo List — Notion-style Upgrades ===== */
+
+/* --- Search Bar --- */
+.master-search-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--bg-body);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 0 10px;
+    height: 34px;
+    flex: 1 1 160px;
+    max-width: 240px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+.master-search-wrapper:focus-within {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(47, 128, 237, 0.08);
+}
+.master-search-wrapper svg { color: var(--text-muted); flex-shrink: 0; }
+.master-search-input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    color: var(--text-main);
+    font-size: 12px;
+    outline: none;
+    font-family: var(--app-font);
+    min-width: 0;
+}
+.master-search-input::placeholder { color: var(--text-muted); }
+
+/* --- Space Quick Switcher --- */
+.master-space-switcher {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0 10px;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 6px;
+}
+.master-space-switcher-inner {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+.master-space-switcher-inner::-webkit-scrollbar { display: none; }
+
+.space-switcher-pill {
+    flex-shrink: 0;
+    padding: 3px 11px;
+    border-radius: 20px;
+    background: transparent;
+    border: 1px solid transparent;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    color: var(--text-muted);
+    white-space: nowrap;
+    font-family: var(--app-font);
+    line-height: 1.6;
+}
+.space-switcher-pill:hover {
+    background: var(--hover-bg, rgba(0,0,0,0.05));
+    color: var(--text-main);
+}
+.space-switcher-pill.active {
+    background: var(--text-main);
+    color: var(--bg-card, #fff);
+    border-color: transparent;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+}
+.space-switcher-pill.inactive {
+    background: transparent;
+    color: var(--text-muted);
+    opacity: 0.4;
+    border: 1px solid var(--border-color);
+}
+.space-switcher-pill.inactive:hover {
+    opacity: 0.7;
+    background: var(--hover-bg, rgba(0,0,0,0.03));
+}
+.switcher-sep {
+    width: 1px;
+    height: 14px;
+    background: var(--border-color);
+    flex-shrink: 0;
+    margin: 0 2px;
+    align-self: center;
+}
+
+/* --- Folder Pills in Switcher --- */
+.switcher-folder-pill {
+    flex-shrink: 0;
+    padding: 3px 10px;
+    border-radius: 6px;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    font-size: 10px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    color: var(--text-muted);
+    white-space: nowrap;
+    font-family: var(--app-font);
+    line-height: 1.6;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+}
+.switcher-folder-pill:hover {
+    background: var(--hover-bg, rgba(0,0,0,0.04));
+    color: var(--text-main);
+    border-color: var(--text-main);
+}
+.switcher-folder-pill.active {
+    background: var(--primary-color);
+    color: #fff;
+    border-color: var(--primary-color);
+}
+.switcher-folder-pill.has-active:not(.active) {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+    background: rgba(47, 128, 237, 0.08);
+}
+.folder-pill-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--primary-color);
+    color: #fff;
+    border-radius: 99px;
+    font-size: 9px;
+    font-weight: 700;
+    min-width: 15px;
+    height: 15px;
+    padding: 0 3px;
+    margin-left: 4px;
+    line-height: 1;
+    vertical-align: middle;
+}
+.switcher-folder-pill.active .folder-pill-count {
+    background: rgba(255,255,255,0.3);
+}
+
+/* --- View Template Controls --- */
+.master-view-templates {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 2px;
+}
+.master-template-select {
+    height: 24px;
+    padding: 0 6px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--bg-body);
+    color: var(--text-muted);
+    font-size: 10px;
+    font-weight: 600;
+    font-family: var(--app-font);
+    cursor: pointer;
+    outline: none;
+    max-width: 120px;
+}
+.btn-save-view-as {
+    flex-shrink: 0;
+    padding: 0 8px;
+    height: 24px;
+    border-radius: 6px;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-family: var(--app-font);
+    white-space: nowrap;
+    letter-spacing: 0.2px;
+}
+.btn-save-view-as:hover {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+    background: rgba(47, 128, 237, 0.05);
+}
+.btn-manage-templates {
+    flex-shrink: 0;
+    width: 24px; height: 24px;
+    border-radius: 6px;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: flex; align-items: center; justify-content: center;
+    padding: 0;
+}
+.btn-manage-templates:hover, .btn-manage-templates.active {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+    background: rgba(47, 128, 237, 0.06);
+}
+.btn-reset-order {
+    flex-shrink: 0;
+    width: 24px; height: 24px;
+    border-radius: 6px;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    font-size: 14px;
+    line-height: 1;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: flex; align-items: center; justify-content: center;
+    padding: 0;
+}
+.btn-reset-order:hover { border-color: var(--primary-color); color: var(--primary-color); }
+
+/* --- Template Manage Popup --- */
+.master-tpl-popup {
+    position: fixed;
+    z-index: 9999;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+    padding: 12px;
+    min-width: 220px;
+    max-width: 280px;
+    font-family: var(--app-font);
+}
+.tpl-popup-header {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin-bottom: 10px;
+}
+.tpl-popup-save { display: flex; gap: 6px; margin-bottom: 6px; }
+.tpl-name-input {
+    flex: 1; height: 28px; padding: 0 8px;
+    border: 1px solid var(--border-color); border-radius: 6px;
+    font-size: 12px; font-family: var(--app-font);
+    background: var(--bg-body); color: var(--text-main); outline: none;
+}
+.tpl-name-input:focus { border-color: var(--primary-color); }
+.tpl-btn {
+    padding: 0 8px; height: 28px; border-radius: 6px;
+    border: 1px solid var(--border-color); font-size: 11px;
+    font-weight: 600; cursor: pointer; font-family: var(--app-font);
+    background: transparent; color: var(--text-muted); transition: all 0.15s;
+}
+.tpl-btn:hover { border-color: var(--primary-color); color: var(--primary-color); }
+.tpl-btn-primary { background: var(--primary-color); color: #fff; border-color: var(--primary-color); }
+.tpl-btn-primary:hover { opacity: 0.88; color: #fff; border-color: var(--primary-color); }
+.tpl-btn-delete { color: #ef4444; border-color: transparent; padding: 0 6px; }
+.tpl-btn-delete:hover { border-color: #ef4444; background: rgba(239,68,68,0.06); color: #ef4444; }
+.tpl-btn-overwrite { font-size: 13px; padding: 0 5px; }
+.tpl-btn-apply { font-size: 10px; padding: 0 6px; }
+.tpl-popup-list { border-top: 1px solid var(--border-color); padding-top: 8px; display: flex; flex-direction: column; gap: 2px; max-height: 200px; overflow-y: auto; }
+.tpl-popup-row {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 6px; padding: 4px 6px; border-radius: 6px;
+}
+.tpl-popup-row:hover { background: var(--hover-bg, rgba(0,0,0,0.04)); }
+.tpl-name { font-size: 12px; font-weight: 600; color: var(--text-main); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tpl-row-actions { display: flex; gap: 2px; flex-shrink: 0; }
+.tpl-popup-empty { font-size: 11px; color: var(--text-muted); text-align: center; padding: 10px 0 4px; border-top: 1px solid var(--border-color); margin-top: 4px; }
+
+/* --- Folder Section Headers --- */
+.master-folder-section { margin-bottom: 4px; }
+.master-folder-header {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 6px 3px;
+    cursor: pointer;
+    user-select: none;
+    border-radius: 6px;
+    transition: background 0.15s;
+    margin-bottom: 2px;
+}
+.master-folder-header:hover { background: var(--hover-bg, rgba(0,0,0,0.04)); }
+.master-folder-name {
+    font-size: 10.5px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+}
+.master-folder-arrow {
+    display: flex;
+    align-items: center;
+    color: var(--text-muted);
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+}
+.master-folder-arrow.collapsed { transform: rotate(-90deg); }
+.master-folder-body.is-collapsed { display: none; }
+
+/* --- Space Group Drag Handle (6-dot icon) --- */
+.space-group-drag-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    opacity: 0;
+    cursor: grab;
+    transition: opacity 0.15s;
+    flex-shrink: 0;
+    padding: 2px 3px;
+    border-radius: 4px;
+    margin-right: 2px;
+}
+.task-group-details:hover .space-group-drag-handle { opacity: 0.45; }
+.space-group-drag-handle:hover { opacity: 0.9 !important; background: var(--hover-bg, rgba(0,0,0,0.05)); }
+.space-group-drag-handle:active { cursor: grabbing; }
+.task-group-details.sortable-ghost {
+    opacity: 0.35;
+    background: var(--hover-bg, rgba(0,0,0,0.03));
+    border-radius: 8px;
+    outline: 1.5px dashed var(--primary-color);
+}
+
+/* ===== Space Peek Panel ===== */
+.space-peek-panel {
+    position: fixed;
+    z-index: 1500;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.11);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    font-family: var(--app-font);
+    transition: box-shadow 0.2s;
+    min-width: 200px;
+    min-height: 200px;
+    max-height: 80vh;
+    height: auto;
+}
+.space-peek-panel.is-float {
+    resize: both;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.2);
+    width: 280px;
+    height: 480px;
+    max-height: 92vh;
+}
+.space-peek-panel.is-dragging {
+    box-shadow: 0 20px 60px rgba(0,0,0,0.28);
+    opacity: 0.96;
+    transform: scale(1.01);
+    transition: none;
+}
+
+/* Header */
+.spp-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    background: var(--bg-spacebar, var(--bg-body));
+    border-bottom: 1px solid var(--border-color);
+    gap: 6px;
+    flex-shrink: 0;
+    border-radius: 12px 12px 0 0;
+    cursor: default;
+    -webkit-user-select: none;
+    user-select: none;
+}
+.space-peek-panel.is-float .spp-header { cursor: grab; }
+.space-peek-panel.is-dragging .spp-header { cursor: grabbing; }
+.spp-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.spp-header-actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+
+/* Body */
+.spp-body {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-color) transparent;
+}
+.spp-body::-webkit-scrollbar { width: 4px; }
+.spp-body::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 4px; }
+.spp-section {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border-color);
+}
+.spp-section:last-child { border-bottom: none; }
+.spp-section-title {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 7px;
+}
+
+/* Resource list */
+.spp-resource-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 180px;
+    overflow-y: auto;
+}
+.spp-resource-list li {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 4px 6px;
+    border-radius: 6px;
+    font-size: 12px;
+    transition: background 0.12s;
+}
+.spp-resource-list li:hover { background: var(--hover-bg, rgba(0,0,0,0.04)); }
+.spp-resource-list a {
+    color: var(--text-main);
+    text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    font-size: 12px;
+}
+.spp-resource-list a:hover { color: var(--primary-color); text-decoration: underline; }
+.spp-empty { color: var(--text-muted) !important; font-size: 11px; font-style: italic; }
+
+/* Note editor */
+.spp-note-section { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.spp-note-editor {
+    flex: 1;
+    min-height: 100px;
+    font-size: 12.5px;
+    line-height: 1.65;
+    color: var(--text-main);
+    outline: none;
+    padding: 4px 2px;
+    font-family: var(--note-font, var(--app-font));
+    overflow-y: auto;
+    border: none;
+    box-shadow: none;
+    resize: none;
+    margin-top: 0;
+}
+.spp-note-editor:empty::before {
+    content: attr(placeholder);
+    color: var(--text-muted);
+    pointer-events: none;
+    font-style: italic;
+}
+
+/* Keep iframe and setup in peek panel */
+.spp-keep-iframe {
+    width: 100%;
+    flex: 1;
+    border: none;
+    min-height: 200px;
+    display: block;
+}
+.spp-keep-setup {
+    padding: 8px 4px 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+/* Widget grid layout when peek panel is docked inline */
+.master-todo-widget.has-peek-panel {
+    display: grid !important;
+    grid-template-rows: auto 1fr;
+    grid-template-columns: var(--spp-inline-width, 268px) 1fr;
+    min-height: 0;
+    will-change: grid-template-columns;
+}
+.master-todo-widget.has-peek-panel > .card-header {
+    grid-column: 1 / -1;
+    grid-row: 1;
+}
+.master-todo-widget.has-peek-panel > #space-peek-panel.is-inline {
+    grid-column: 1;
+    grid-row: 2;
+    position: relative !important;
+    height: auto !important;
+    max-height: none !important;
+    width: auto !important;
+    min-height: 0 !important;
+    border-radius: 0;
+    border-top: none;
+    border-left: none;
+    border-bottom: none;
+    border-right: 1px solid var(--border-color);
+    box-shadow: none !important;
+}
+.master-todo-widget.has-peek-panel > #master-todo-list-container {
+    grid-column: 2;
+    grid-row: 2;
+    min-width: 0;
+    overflow-y: auto;
+}
+
+/* Suppress all transitions during live resize to eliminate jank */
+.master-todo-widget.is-resizing,
+.master-todo-widget.is-resizing > #space-peek-panel,
+.master-todo-widget.is-resizing > #space-peek-panel .spp-resize-handle,
+.master-todo-widget.is-resizing > #master-todo-list-container { transition: none !important; }
+
+/* Inline resize handle */
+.spp-resize-handle {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 5px;
+    cursor: col-resize;
+    z-index: 2;
+    background: transparent;
+    transition: background 0.15s;
+}
+.spp-resize-handle:hover { background: rgba(47, 128, 237, 0.22); }
+/* Locked peek panel */
+.space-peek-panel.is-locked { resize: none !important; }
+.space-peek-panel.is-locked .spp-resize-handle {
+    cursor: default;
+    pointer-events: none;
+    opacity: 0;
+}
+
+/* Peek trigger button in space headers */
+.btn-space-peek {
+    padding: 2px 4px;
+    opacity: 0.4;
+    border-radius: 4px;
+    transition: opacity 0.15s, color 0.15s, background 0.15s;
+    flex-shrink: 0;
+}
+.btn-space-peek:hover { opacity: 0.9; color: var(--primary-color); }
+.btn-space-peek.is-peeking {
+    opacity: 1 !important;
+    background: var(--primary-color) !important;
+    color: #fff !important;
+    border-color: var(--primary-color) !important;
+}

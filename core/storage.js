@@ -42,6 +42,7 @@ let appSettings = {
   isTasksCollapsed: false,
   isDarkMode: false, quickColors: ["#ff4d4f", "#4a86e8", "#52c41a"],
   quickNoteState: { float: false, collapsed: false, x: 100, y: 100, w: 350, h: 400 },
+  spacePeekSettings: { isLocked: false, inlineWidth: 268, floatWidth: 280, floatHeight: 480 },
   habitState: { open: false, x: 400, y: 80 },
   dashboardQuickNote: { 
     isOpen: false, 
@@ -262,6 +263,7 @@ export async function loadData(onLoadComplete) {
             res.appSettings.dashboardQuickNote.isPinned = false;
         }
         if(!res.appSettings.focusPopupState) res.appSettings.focusPopupState = { isOpen: false, isMinimized: false, x: 100, y: 100, w: 250, h: 150, collapsed: false };
+        if(!res.appSettings.spacePeekSettings) res.appSettings.spacePeekSettings = { isLocked: false, inlineWidth: 268, floatWidth: 280, floatHeight: 480 };
         appSettings = { ...appSettings, ...res.appSettings }; 
     }
     

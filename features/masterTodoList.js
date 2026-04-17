@@ -3,7 +3,7 @@ import Sortable from '../sortable.esm.js';
 import { svgRefresh } from '../core/icons.js';
 import { openTaskEditModal, openTaskLinkModal, isAnyEditableElementFocused, toggleTaskFocus, playTaskCompletedSound, calculateNextDate } from './todoManager.js'; 
 import { handleMiniTagClick } from '../components/modals.js';
-import { generateTaskHTML, attachSubtaskEventListeners, attachTaskInlineEditListeners, handleTagAutocomplete, applySyntaxHighlighting } from '../core/ui-helpers.js';
+import { generateTaskHTML, attachSubtaskEventListeners, attachTaskInlineEditListeners, handleTagAutocomplete, applySyntaxHighlighting, getFaviconUrl, openOrFocusTab } from '../core/ui-helpers.js';
 
 import { renderSidebar } from '../components/sidebar.js';
 import { updateKeepTagButtonState } from './googleKeep.js';
@@ -43,8 +43,30 @@ export const masterTodoListState = {
     isSingleSelectMode: true,
     addingSubtaskToTaskId: null,
     addingSubtaskToSpaceId: null,
-    selectedQuickAddSpaceId: null
+    selectedQuickAddSpaceId: null,
+    searchQuery: '',
+    collapsedFolders: new Set(),
+    activeFolderTab: null,
+    _restoreTaskInputFocus: false
 };
+
+const peekState = { spaceId: null, isFloat: false, floatX: 80, floatY: 80, inlineWidth: 268 };
+let _peekResizeHandler = null;
+
+/**
+ * Wraps renderDefaultDashboard with scroll-position preservation on
+ * #master-todo-list-container, preventing the list from jumping to the top.
+ */
+function refreshWithScroll() {
+    if (!window.renderDefaultDashboard) return;
+    const el = document.getElementById('master-todo-list-container');
+    const top = el?.scrollTop ?? 0;
+    window.renderDefaultDashboard();
+    requestAnimationFrame(() => {
+        const newEl = document.getElementById('master-todo-list-container');
+        if (newEl) newEl.scrollTop = top;
+    });
+}
 
 function applyDateFilter(tasks) {
     const filter = masterTodoListState.dateFilter;
@@ -81,7 +103,12 @@ export function renderMasterHeaderControls() {
                 <svg class="svg-icon-sm" style="transform: ${masterTodoListState.isProgressVisible ? 'rotate(0deg)' : 'rotate(180deg)'}; transition: transform 0.2s;"><use href="#icon-chevron-up"></use></svg>
             </button>
         </div>
-        
+
+        <div class="master-search-wrapper">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <input type="text" id="master-search-input" class="master-search-input" placeholder="Search tasks…" value="${masterTodoListState.searchQuery || ''}">
+        </div>
+
         <div class="task-input-bar master-input-area" style="flex: 1; margin: 0; height: 34px; box-shadow: none;">
             <select id="master-space-selector" class="master-space-select" style="border-radius: 0;">
                 ${allSpaces.map(s => `<option value="${s.id}" ${parseInt(s.id) === parseInt(selectedId) ? 'selected' : ''}>${s.name}</option>`).join('')}
@@ -133,7 +160,22 @@ export function renderMasterTodoList(container) {
 
     initMasterEvents();
 
-    const onRefresh = () => { if (window.renderDefaultDashboard) window.renderDefaultDashboard(); };
+    // 🟢 Restore search input focus after re-render (for real-time filtering)
+    if (masterTodoListState._restoreSearchFocus) {
+        masterTodoListState._restoreSearchFocus = false;
+        const searchEl = document.getElementById('master-search-input');
+        if (searchEl) { searchEl.focus(); const l = searchEl.value.length; searchEl.setSelectionRange(l, l); }
+    }
+    // 🟢 Restore quick-add task input focus after adding a task
+    if (masterTodoListState._restoreTaskInputFocus) {
+        masterTodoListState._restoreTaskInputFocus = false;
+        requestAnimationFrame(() => {
+            const taskEl = document.getElementById('master-task-input');
+            if (taskEl) taskEl.focus();
+        });
+    }
+
+    const onRefresh = () => refreshWithScroll();
 
     // Attach Subtask Listeners
     container.querySelectorAll('.subtask-list').forEach(subListEl => {
@@ -211,6 +253,11 @@ export function renderMasterTodoList(container) {
             }
         }
     });
+
+    // 🟢 Re-inject inline peek panel after DOM rebuild by renderDefaultDashboard
+    if (peekState.spaceId !== null && !peekState.isFloat) {
+        renderSpacePeekPanel(peekState.spaceId);
+    }
 }
 
 function renderProgressSection(allSpaces, totalTasks) {
@@ -219,10 +266,30 @@ function renderProgressSection(allSpaces, totalTasks) {
     const isSingle = settings.masterIsSingleSelectMode ?? masterTodoListState.isSingleSelectMode;
     const isLocked = !!settings.masterIsModeLocked;
 
+    // Named templates (exclude legacy array keys like spaceOrder / activeFilters)
+    const templates = settings.viewTemplates || {};
+    const templateNames = Object.keys(templates).filter(k => templates[k] && typeof templates[k] === 'object' && !Array.isArray(templates[k]));
+
+    // Folder structure for the switcher bar
+    const folderMap = {};
+    allSpaces.forEach(s => {
+        const f = s.folder || 'General';
+        if (!folderMap[f]) folderMap[f] = [];
+        folderMap[f].push(s);
+    });
+    const folderNames = Object.keys(folderMap).sort((a, b) => {
+        if (a === 'General') return -1;
+        if (b === 'General') return 1;
+        return a.localeCompare(b);
+    });
+    const showFolderPills = folderNames.length > 1 || !folderNames.includes('General');
+    const activeFolderTab = masterTodoListState.activeFolderTab;
+    const spacesForActiveFolder = activeFolderTab ? (folderMap[activeFolderTab] || []) : [];
+
     return `
         <div class="master-progress-container">
             <div class="master-progress-info">
-                <div style="display:flex; align-items:center; gap:8px;">
+                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
                     <span style="font-weight:700;">Task Completion</span>                                
                     <button id="btn-master-filter-flagged" class="${masterTodoListState.showOnlyFlagged ? 'active' : ''}" 
                         title="${masterTodoListState.showOnlyFlagged ? 'Show All Tasks' : 'Show Only Flagged Tasks'}">
@@ -245,33 +312,71 @@ function renderProgressSection(allSpaces, totalTasks) {
                             ${isSingle ? 'Single' : 'Multi'}
                         </button>
                     </div>
+                    <div class="master-view-templates">
+                        <select id="master-view-template-select" class="master-template-select" title="Apply a saved view">
+                            <option value="">— View —</option>
+                            ${templateNames.map(n => `<option value="${n}">${n}</option>`).join('')}
+                        </select>
+                        <button id="btn-manage-templates" class="btn-manage-templates" title="Manage view templates"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+                        <button id="btn-reset-order" class="btn-reset-order" title="Reset space order to default">↺</button>
+                    </div>
                 </div>
                 <span id="progress-text" style="font-weight: 700; color: var(--primary-color);">${totalTasks} ${masterTodoListState.showOnlyFlagged ? 'Flagged' : ''} Tasks Remaining</span>
             </div>
             <div style="height: 1px; background: var(--border-color); margin-top: 4px; opacity: 0.5;"></div>
         </div>
 
-        <div class="space-pill-cloud" style="${masterTodoListState.isProgressVisible ? '' : 'display: none;'}">
-            <div class="space-pill all-spaces-pill ${masterTodoListState.activeSpaceFilters.size === 0 ? 'active' : ''}" id="btn-master-filter-all">
-                All Spaces
+        <div class="master-space-switcher" style="${masterTodoListState.isProgressVisible ? '' : 'display: none;'}">
+            <div class="master-space-switcher-inner">
+                <button class="space-switcher-pill all-pill ${masterTodoListState.activeSpaceFilters.size === 0 ? 'active' : ''}" id="btn-master-filter-all">All</button>
+                <div class="switcher-sep"></div>
+                ${showFolderPills ? `
+                    ${folderNames.map(f => {
+                        const hasFilter = masterTodoListState.activeSpaceFilters.size > 0;
+                        const visCount = (folderMap[f] || []).filter(s => !masterTodoListState.activeSpaceFilters.has(s.id)).length;
+                        const hasActive = hasFilter && visCount > 0;
+                        return `<button class="switcher-folder-pill ${activeFolderTab === f ? 'active' : ''} ${hasActive ? 'has-active' : ''}" data-folder="${f}">${f}${hasFilter ? `<span class="folder-pill-count">${visCount}</span>` : ''}</button>`;
+                    }).join('')}
+                    ${activeFolderTab && spacesForActiveFolder.length ? `
+                        <div class="switcher-sep"></div>
+                        ${spacesForActiveFolder.map(s => `
+                            <button class="space-switcher-pill ${masterTodoListState.activeSpaceFilters.has(s.id) ? 'inactive' : 'active'}" data-space-id="${s.id}">${s.name}</button>
+                        `).join('')}
+                    ` : ''}
+                ` : `
+                    ${allSpaces.map(s => `
+                        <button class="space-switcher-pill ${masterTodoListState.activeSpaceFilters.has(s.id) ? 'inactive' : 'active'}" data-space-id="${s.id}">${s.name}</button>
+                    `).join('')}
+                `}
             </div>
-            <div style="width: 1px; height: 16px; background: var(--border-color); margin: 0 8px; align-self: center; opacity: 0.8;"></div>
-            ${allSpaces.map(s => `
-                <div class="space-pill ${masterTodoListState.activeSpaceFilters.has(s.id) ? '' : 'active'}" data-space-id="${s.id}">
-                    ${s.name}
-                </div>
-            `).join('')}
         </div>
     `;
 }
 
 function renderTaskGroups(allSpaces) {
     const isMobile = window.matchMedia("(max-width: 768px)").matches;
+    const settings = getAppSettings();
+    const searchQ = (masterTodoListState.searchQuery || '').toLowerCase().trim();
+
+    // Apply saved space order — flat across all folders
+    const savedOrder = settings.viewTemplates?.spaceOrder || [];
+    if (savedOrder.length > 0) {
+        allSpaces = [...allSpaces].sort((a, b) => {
+            const ai = savedOrder.indexOf(a.id), bi = savedOrder.indexOf(b.id);
+            if (ai === -1 && bi === -1) return 0;
+            if (ai === -1) return 1;
+            if (bi === -1) return -1;
+            return ai - bi;
+        });
+    }
+
+    const sixDotHandle = `<span class="space-group-drag-handle" title="Drag to reorder"><svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor"><circle cx="2" cy="2" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg></span>`;
+
     return allSpaces.map(space => {
         const isHidden = masterTodoListState.activeSpaceFilters.has(space.id);
         const tasks = space.tasks || [];
         const isSpaceProminentHidden = space.hideProminentTasks || false;
-        
+
         // 🟢 จัดเรียงตามคำสั่งของ Space ก่อนกรอง
         if (space.taskSortOrder && space.taskSortOrder !== 'manual') sortSpaceTasks(space);
 
@@ -280,7 +385,6 @@ function renderTaskGroups(allSpaces) {
 
         let displayTasks = tasks.filter(t => {
             if (!t || t.completed || t.isDeleted) return false;
-            
             // 🟢 ซ่อนงานทำซ้ำในอนาคตที่ไม่ได้ติดธง และไม่ใช่การกู้คืน (wasRegenerated !== false)
             if (t.repeatConfig?.isRepeating && !t.isProminent && t.dueDate && t.wasRegenerated !== false) {
                 const taskDue = new Date(t.dueDate);
@@ -296,18 +400,25 @@ function renderTaskGroups(allSpaces) {
 
         displayTasks = applyDateFilter(displayTasks);
 
+        // 🟢 Apply search query filter
+        if (searchQ) {
+            displayTasks = displayTasks.filter(t => (t.text || '').toLowerCase().includes(searchQ));
+        }
+
         if (displayTasks.length === 0) return '';
         const currentSort = space.taskSortOrder || 'manual';
 
         return `
             <details class="task-group-details" data-space-id="${space.id}" ${isHidden ? 'style="display:none;"' : 'open'}>
                 <summary class="task-group-summary" style="border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-bottom: 12px; background: rgba(0,0,0,0.01);">
+                    ${sixDotHandle}
                     <div style="display:flex; align-items:center; gap:8px; flex-wrap: wrap; flex: 1; min-width: 0;">
                         <span class="group-title">${space.name} (${displayTasks.length})</span>
                         <button class="btn-icon btn-master-space-toggle-prominent" data-space-id="${space.id}" title="Toggle Next Up Visibility" style="padding:2px; opacity: ${isSpaceProminentHidden ? '0.3' : '0.8'};">
-                            <svg class="svg-icon-sm" style="color: ${isSpaceProminentHidden ? 'inherit' : 'var(--primary-color)'};"><use href="#icon-flag"></use></svg>
+                            <svg class="svg-icon-sm" style="color: ${isSpaceProminentHidden ? 'inherit' : 'var(--primary-color)'}"><use href="#icon-flag"></use></svg>
                         </button>
                         <button class="btn btn-outline btn-master-goto-space" data-space-id="${space.id}" style="padding: 2px 8px; font-size: 10px; height: 20px; border-radius: 4px; font-weight: 600; margin-left: 4px;">open space</button>
+                        <button class="btn-icon btn-space-peek" data-space-id="${space.id}" title="Peek this space" style="margin-left:2px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg></button>
                         <select class="btn-master-space-sort" data-space-id="${space.id}" title="Sort Space Tasks" style="font-family: var(--app-font); font-size: 9px; font-weight: 700; padding: 1px 6px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-body); color: var(--text-main); cursor: pointer; outline: none; margin-left: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
                             <option value="manual" ${currentSort === 'manual' ? 'selected' : ''}>⇅ Man</option>
                             <option value="date" ${currentSort === 'date' ? 'selected' : ''}>📅 Date</option>
@@ -321,12 +432,12 @@ function renderTaskGroups(allSpaces) {
                         const originalIndex = space.tasks.indexOf(task);
                         return generateTaskHTML(task, originalIndex, {
                             showSpaceBadge: false,
-                            isMasterView: true, //
+                            isMasterView: true,
                             spaceId: space.id,
                             isProminentHidden: isSpaceProminentHidden,
                             showActions: masterTodoListState.showMasterTaskActions,
                             addingSubtaskToId: (masterTodoListState.addingSubtaskToSpaceId === space.id) ? masterTodoListState.addingSubtaskToTaskId : null,
-                            isFiltered: false, // บังคับให้ปุ่มลากแสดงผลในหน้า Master View
+                            isFiltered: false,
                             isMobile,
                         });
                     }).join('')}
@@ -334,6 +445,417 @@ function renderTaskGroups(allSpaces) {
             </details>
         `;
     }).join('');
+}
+
+// ===== Space Peek Panel =====
+function openInlinePeekDOM(panel) {
+    const widget = document.querySelector('.master-todo-widget');
+    const container = document.getElementById('master-todo-list-container');
+    if (!widget || !container) return;
+    panel.style.cssText = '';
+    widget.style.setProperty('--spp-inline-width', `${peekState.inlineWidth}px`);
+    if (panel.parentElement !== widget) {
+        widget.insertBefore(panel, container);
+    }
+    widget.classList.add('has-peek-panel');
+}
+
+function renderSpacePeekPanel(spaceId) {
+    const space = getSpaces().find(s => s.id === spaceId);
+    if (!space) return;
+
+    const noteContent = space.quickNote || '';
+    const isKeepMode = !!(space.quickNoteKeepMode);
+    const keepUrl = space.quickNoteKeepUrl || '';
+    const resources = (space.resources || []).filter(r => !r.isDeleted && !r.isArchived);
+    const sppSettings = getAppSettings().spacePeekSettings || {};
+    const isLocked = !!(sppSettings.isLocked);
+    if (isLocked && !peekState.isFloat) peekState.inlineWidth = sppSettings.inlineWidth || 268;
+
+    const floatSvg = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>`;
+    const dockSvg = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="10" y1="14" x2="3" y2="21"/><line x1="21" y1="3" x2="14" y2="10"/></svg>`;
+    const panelSvg = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>`;
+    const openLockSvg = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>`;
+    const closedLockSvg = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`;
+
+    let panel = document.getElementById('space-peek-panel');
+    const wasFloat = panel?.classList.contains('is-float');
+    const savedH = panel?.style.height;
+    const savedW = panel?.style.width;
+    const savedL = panel?.style.left;
+    const savedT = panel?.style.top;
+
+    if (!panel) {
+        panel = document.createElement('div');
+        panel.id = 'space-peek-panel';
+        if (peekState.isFloat) document.body.appendChild(panel);
+    }
+
+    panel.className = `space-peek-panel ${peekState.isFloat ? 'is-float' : 'is-inline'}${isLocked ? ' is-locked' : ''}`;
+
+    const keepNoteArea = isKeepMode
+        ? (keepUrl
+            ? `<iframe class="spp-keep-iframe" src="about:blank" data-src="${keepUrl}" style="min-height:200px;"></iframe>`
+            : `<div class="spp-keep-setup">
+                <p style="font-size:11px;color:var(--text-muted);text-align:center;margin:0 0 8px;">Connect a Google Keep URL:</p>
+                <input type="text" class="spp-keep-input settings-input" placeholder="https://keep.google.com/\u2026" style="font-size:12px;">
+                <button class="btn btn-primary spp-keep-save" style="width:100%;justify-content:center;padding:6px;margin-top:6px;">Connect</button>
+               </div>`)
+        : `<div class="spp-note-editor note-area" contenteditable="true" data-space-id="${spaceId}" placeholder="Quick notes for ${space.name}\u2026">${noteContent}</div>`;
+
+    panel.innerHTML = `
+        <div class="spp-header" id="spp-drag-handle">
+            <div class="spp-title">${panelSvg} ${space.name}</div>
+            <div class="spp-header-actions">
+                <button class="btn-icon spp-float-btn" title="${peekState.isFloat ? 'Dock panel' : 'Float panel'}" style="opacity:0.6;">${peekState.isFloat ? dockSvg : floatSvg}</button>
+                <button class="btn-icon spp-lock-btn" title="${isLocked ? 'Unlock size (right-click to reset)' : 'Lock current size'}" style="opacity:${isLocked ? '1' : '0.5'};color:${isLocked ? '#ef4444' : '#22c55e'}">${isLocked ? closedLockSvg : openLockSvg}</button>
+                <button class="btn-icon spp-close-btn" title="Close peek" style="opacity:0.5;font-size:14px;line-height:1;">\u2715</button>
+            </div>
+        </div>
+        <div class="spp-body">
+            <div class="spp-section">
+                <div class="spp-section-title">Resources (${resources.length})</div>
+                <ul class="spp-resource-list">
+                    ${resources.length
+                        ? resources.map(r => `<li>
+                            <img src="${getFaviconUrl(r.url, r.favIconUrl)}" class="favicon-img" style="width:13px;height:13px;border-radius:2px;flex-shrink:0;">
+                            <a href="${r.url}" data-res-url="${r.url}" title="${r.url}">${r.title || r.url}</a>
+                          </li>`).join('')
+                        : '<li class="spp-empty">No resources in this space.</li>'}
+                </ul>
+            </div>
+            <div class="spp-section spp-note-section">
+                <div class="spp-section-title" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                    <span>Quick Note</span>
+                    <div class="keep-btn-group" style="display:flex;gap:2px;background:rgba(245,158,11,0.1);padding:2px;border-radius:5px;border:1px solid rgba(245,158,11,0.2);">
+                        <button class="btn-icon spp-keep-toggle" title="Toggle Google Keep Mode" style="opacity:${isKeepMode ? '1' : '0.5'};"><svg class="svg-icon-sm"><use href="#icon-keep"></use></svg></button>
+                        <button class="btn-icon spp-keep-external" title="Open Keep in New Tab" style="display:${isKeepMode && keepUrl ? 'inline-flex' : 'none'};color:#d97706;"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="11" x2="21" y2="3"/></svg></button>
+                    </div>
+                </div>
+                ${keepNoteArea}
+            </div>
+        </div>
+        <div class="spp-resize-handle"></div>
+    `;
+
+    if (!peekState.isFloat) {
+        openInlinePeekDOM(panel);
+    } else {
+        if (panel.parentElement !== document.body) document.body.appendChild(panel);
+        if (isLocked) {
+            panel.style.width = `${sppSettings.floatWidth || 280}px`;
+            panel.style.height = `${sppSettings.floatHeight || 480}px`;
+        } else if (wasFloat && savedW) {
+            panel.style.width = savedW;
+            panel.style.height = savedH;
+        }
+        panel.style.left = savedL || `${peekState.floatX}px`;
+        panel.style.top = savedT || `${peekState.floatY}px`;
+    }
+
+    // Load Keep iframe without reload if URL unchanged
+    const iframe = panel.querySelector('.spp-keep-iframe');
+    if (iframe && iframe.dataset.src && iframe.dataset.loadedUrl !== iframe.dataset.src) {
+        iframe.src = iframe.dataset.src;
+        iframe.dataset.loadedUrl = iframe.dataset.src;
+    }
+
+    panel.querySelector('.spp-close-btn').onclick = () => {
+        peekState.spaceId = null;
+        panel.remove();
+        document.querySelector('.master-todo-widget')?.classList.remove('has-peek-panel');
+        document.querySelectorAll('.btn-space-peek.is-peeking').forEach(b => b.classList.remove('is-peeking'));
+    };
+
+    panel.querySelector('.spp-float-btn').onclick = () => {
+        if (!peekState.isFloat) {
+            const rect = panel.getBoundingClientRect();
+            peekState.floatX = rect.left;
+            peekState.floatY = rect.top;
+            peekState.isFloat = true;
+            document.querySelector('.master-todo-widget')?.classList.remove('has-peek-panel');
+            panel.remove();
+            document.body.appendChild(panel);
+        } else {
+            peekState.isFloat = false;
+        }
+        renderSpacePeekPanel(peekState.spaceId);
+    };
+
+    panel.querySelector('.spp-lock-btn')?.addEventListener('click', () => {
+        const s = getAppSettings();
+        if (!s.spacePeekSettings) s.spacePeekSettings = { isLocked: false, inlineWidth: 268, floatWidth: 280, floatHeight: 480 };
+        if (!s.spacePeekSettings.isLocked) {
+            if (!peekState.isFloat) {
+                s.spacePeekSettings.inlineWidth = peekState.inlineWidth;
+            } else {
+                s.spacePeekSettings.floatWidth = panel.offsetWidth;
+                s.spacePeekSettings.floatHeight = panel.offsetHeight;
+            }
+        }
+        s.spacePeekSettings.isLocked = !s.spacePeekSettings.isLocked;
+        saveData();
+        renderSpacePeekPanel(peekState.spaceId);
+    });
+
+    panel.querySelector('.spp-lock-btn')?.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        const s = getAppSettings();
+        if (!s.spacePeekSettings) s.spacePeekSettings = {};
+        s.spacePeekSettings.isLocked = false;
+        s.spacePeekSettings.inlineWidth = 268;
+        s.spacePeekSettings.floatWidth = 280;
+        s.spacePeekSettings.floatHeight = 480;
+        peekState.inlineWidth = 268;
+        document.querySelector('.master-todo-widget')?.style.setProperty('--spp-inline-width', '268px');
+        saveData();
+        renderSpacePeekPanel(peekState.spaceId);
+    });
+
+    panel.querySelector('.spp-keep-toggle')?.addEventListener('click', () => {
+        const sp = getSpaces().find(s => s.id === spaceId);
+        if (!sp) return;
+        sp.quickNoteKeepMode = !sp.quickNoteKeepMode;
+        saveData();
+        renderSpacePeekPanel(spaceId);
+    });
+
+    panel.querySelector('.spp-keep-external')?.addEventListener('click', () => {
+        const sp = getSpaces().find(s => s.id === spaceId);
+        if (sp?.quickNoteKeepUrl) window.open(sp.quickNoteKeepUrl, '_blank');
+    });
+
+    const keepSaveBtn = panel.querySelector('.spp-keep-save');
+    if (keepSaveBtn) {
+        keepSaveBtn.onclick = () => {
+            const url = panel.querySelector('.spp-keep-input')?.value.trim();
+            if (url) {
+                const sp = getSpaces().find(s => s.id === spaceId);
+                if (sp) { sp.quickNoteKeepUrl = url; saveData(); }
+                renderSpacePeekPanel(spaceId);
+            }
+        };
+    }
+
+    const editor = panel.querySelector('.spp-note-editor');
+    if (editor) {
+        editor.oninput = () => {
+            const sp = getSpaces().find(s => s.id === spaceId);
+            if (sp) { sp.quickNote = editor.innerHTML; saveData(); }
+        };
+    }
+
+    panel.querySelectorAll('.spp-resource-list a[data-res-url]').forEach(a => {
+        a.addEventListener('click', (e) => { e.preventDefault(); openOrFocusTab(a.dataset.resUrl); });
+    });
+
+    setupPeekDrag(panel);
+    setupInlineResize(panel);
+}
+
+function setupInlineResize(panel) {
+    const handle = panel.querySelector('.spp-resize-handle');
+    if (!handle || peekState.isFloat) return;
+
+    let isResizing = false, startX = 0, startW = 0, rafId = null;
+
+    const onDown = (e) => {
+        if (getAppSettings().spacePeekSettings?.isLocked) return;
+        isResizing = true;
+        startX = e.clientX;
+        startW = peekState.inlineWidth;
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        // Suppress transitions during drag
+        document.querySelector('.master-todo-widget')?.classList.add('is-resizing');
+        // Full-screen overlay so the mouse never slips into iframes or scroll areas
+        const ov = document.createElement('div');
+        ov.style.cssText = 'position:fixed;inset:0;z-index:99999;cursor:col-resize;';
+        document.body.appendChild(ov);
+        handle._resizeOverlay = ov;
+        e.preventDefault();
+    };
+    const onMove = (e) => {
+        if (!isResizing) return;
+        const x = e.clientX; // capture before async
+        if (rafId) cancelAnimationFrame(rafId); // always use latest position
+        rafId = requestAnimationFrame(() => {
+            const newW = Math.max(180, Math.min(600, startW + (x - startX)));
+            peekState.inlineWidth = newW;
+            document.querySelector('.master-todo-widget')?.style.setProperty('--spp-inline-width', `${newW}px`);
+            rafId = null;
+        });
+    };
+    const onUp = () => {
+        if (!isResizing) return;
+        if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+        isResizing = false;
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        document.querySelector('.master-todo-widget')?.classList.remove('is-resizing');
+        handle._resizeOverlay?.remove();
+        handle._resizeOverlay = null;
+        // Persist final width only once, only if lock is active
+        const s = getAppSettings();
+        if (s.spacePeekSettings?.isLocked) {
+            s.spacePeekSettings.inlineWidth = peekState.inlineWidth;
+            saveData();
+        }
+    };
+
+    if (handle._inDownHandler) handle.removeEventListener('mousedown', handle._inDownHandler);
+    if (handle._inMoveHandler) document.removeEventListener('mousemove', handle._inMoveHandler);
+    if (handle._inUpHandler) document.removeEventListener('mouseup', handle._inUpHandler);
+    handle._inDownHandler = onDown;
+    handle._inMoveHandler = onMove;
+    handle._inUpHandler = onUp;
+    handle.addEventListener('mousedown', onDown);
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+}
+
+function setupPeekDrag(panel) {
+    const header = panel.querySelector('#spp-drag-handle');
+    if (!header) return;
+    if (panel._peekMoveHandler) document.removeEventListener('mousemove', panel._peekMoveHandler);
+    if (panel._peekUpHandler) document.removeEventListener('mouseup', panel._peekUpHandler);
+
+    let isDragging = false, ox = 0, oy = 0;
+    header.onmousedown = (e) => {
+        if (e.target.closest('button') || !peekState.isFloat) return;
+        isDragging = true;
+        panel.classList.add('is-dragging');
+        const rect = panel.getBoundingClientRect();
+        ox = e.clientX - rect.left;
+        oy = e.clientY - rect.top;
+        document.body.style.userSelect = 'none';
+        panel.style.transition = 'none';
+    };
+    const onMove = (e) => {
+        if (!isDragging) return;
+        const x = Math.max(0, Math.min(e.clientX - ox, window.innerWidth - panel.offsetWidth));
+        const y = Math.max(0, Math.min(e.clientY - oy, window.innerHeight - 40));
+        panel.style.left = `${x}px`;
+        panel.style.top = `${y}px`;
+    };
+    const onUp = () => {
+        if (!isDragging) return;
+        isDragging = false;
+        panel.classList.remove('is-dragging');
+        document.body.style.userSelect = '';
+        panel.style.transition = '';
+        const rect = panel.getBoundingClientRect();
+        peekState.floatX = rect.left;
+        peekState.floatY = rect.top;
+    };
+    panel._peekMoveHandler = onMove;
+    panel._peekUpHandler = onUp;
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+}
+
+function openTemplateManagePopup(anchorEl, onRefresh) {
+    document.getElementById('master-tpl-popup')?.remove();
+    anchorEl.classList.toggle('active', true);
+
+    const settings = getAppSettings();
+    const templates = settings.viewTemplates || {};
+    const tplNames = Object.keys(templates).filter(k => templates[k] && typeof templates[k] === 'object' && !Array.isArray(templates[k]));
+
+    const popup = document.createElement('div');
+    popup.id = 'master-tpl-popup';
+    popup.className = 'master-tpl-popup';
+    popup.innerHTML = `
+        <div class="tpl-popup-header">View Templates</div>
+        <div class="tpl-popup-save">
+            <input type="text" id="tpl-new-name" class="tpl-name-input" placeholder="New template name…">
+            <button id="tpl-btn-save-new" class="tpl-btn tpl-btn-primary">Save</button>
+        </div>
+        ${tplNames.length ? `
+            <div class="tpl-popup-list">
+                ${tplNames.map(n => `
+                    <div class="tpl-popup-row">
+                        <span class="tpl-name" title="${n}">${n}</span>
+                        <div class="tpl-row-actions">
+                            <button class="tpl-btn tpl-btn-apply" data-name="${n}" title="Apply this template">Apply</button>
+                            <button class="tpl-btn tpl-btn-overwrite" data-name="${n}" title="Overwrite with current layout">↺</button>
+                            <button class="tpl-btn tpl-btn-delete" data-name="${n}" title="Delete">✕</button>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        ` : '<div class="tpl-popup-empty">No templates saved yet.</div>'}
+    `;
+
+    document.body.appendChild(popup);
+    const rect = anchorEl.getBoundingClientRect();
+    const popupW = 250;
+    const left = Math.min(rect.left + window.scrollX, window.innerWidth - popupW - 10);
+    popup.style.top = `${rect.bottom + window.scrollY + 6}px`;
+    popup.style.left = `${left}px`;
+
+    const getSpaceOrder = () => Array.from(document.querySelectorAll('.task-group-details[data-space-id]')).map(el => parseInt(el.dataset.spaceId));
+
+    popup.querySelector('#tpl-btn-save-new').onclick = () => {
+        const name = popup.querySelector('#tpl-new-name').value.trim();
+        if (!name) return;
+        const s = getAppSettings();
+        if (!s.viewTemplates) s.viewTemplates = {};
+        const spaceOrder = getSpaceOrder();
+        s.viewTemplates[name] = { spaceOrder, activeFilters: Array.from(masterTodoListState.activeSpaceFilters) };
+        s.viewTemplates.spaceOrder = spaceOrder;
+        saveData();
+        popup.remove();
+        anchorEl.classList.remove('active');
+        onRefresh();
+    };
+
+    popup.querySelectorAll('.tpl-btn-apply').forEach(btn => {
+        btn.onclick = () => {
+            const tpl = getAppSettings().viewTemplates?.[btn.dataset.name];
+            if (!tpl) return;
+            const s = getAppSettings();
+            s.viewTemplates.spaceOrder = tpl.spaceOrder || [];
+            masterTodoListState.activeSpaceFilters = new Set((tpl.activeFilters || []).map(id => parseInt(id)));
+            saveData();
+            popup.remove();
+            anchorEl.classList.remove('active');
+            onRefresh();
+        };
+    });
+
+    popup.querySelectorAll('.tpl-btn-overwrite').forEach(btn => {
+        btn.onclick = () => {
+            const s = getAppSettings();
+            const spaceOrder = getSpaceOrder();
+            s.viewTemplates[btn.dataset.name] = { spaceOrder, activeFilters: Array.from(masterTodoListState.activeSpaceFilters) };
+            s.viewTemplates.spaceOrder = spaceOrder;
+            saveData();
+            popup.remove();
+            anchorEl.classList.remove('active');
+            onRefresh();
+        };
+    });
+
+    popup.querySelectorAll('.tpl-btn-delete').forEach(btn => {
+        btn.onclick = () => {
+            const s = getAppSettings();
+            delete s.viewTemplates[btn.dataset.name];
+            saveData();
+            popup.remove();
+            anchorEl.classList.remove('active');
+            onRefresh();
+        };
+    });
+
+    const closeOnOutside = (e) => {
+        if (!popup.contains(e.target) && e.target !== anchorEl) {
+            popup.remove();
+            anchorEl.classList.remove('active');
+            document.removeEventListener('click', closeOnOutside, true);
+        }
+    };
+    setTimeout(() => document.addEventListener('click', closeOnOutside, true), 0);
 }
 
 export function initMasterEvents() {
@@ -367,7 +889,7 @@ export function initMasterEvents() {
         };
     }
 
-    const onRefresh = () => { if (window.renderDefaultDashboard) window.renderDefaultDashboard(); };
+    const onRefresh = () => refreshWithScroll();
 
     if (addBtn) addBtn.onclick = async () => {
         let text = taskInput.value.trim();
@@ -403,6 +925,7 @@ export function initMasterEvents() {
             targetSpace.tasks.push(newTask);
             if (targetSpace.taskSortOrder && targetSpace.taskSortOrder !== 'manual') sortSpaceTasks(targetSpace);
             taskInput.value = ''; taskInput.disabled = false; taskInput.placeholder = "Quick add task...";
+            masterTodoListState._restoreTaskInputFocus = true;
             saveData(); onRefresh();
         }
     };
@@ -439,9 +962,9 @@ export function initMasterEvents() {
     };
 
     const allPill = document.getElementById('btn-master-filter-all');
-    if (allPill) allPill.onclick = () => { masterTodoListState.activeSpaceFilters.clear(); onRefresh(); };
+    if (allPill) allPill.onclick = () => { masterTodoListState.activeSpaceFilters.clear(); masterTodoListState.activeFolderTab = null; onRefresh(); };
 
-    document.querySelectorAll('.space-pill').forEach(pill => {
+    document.querySelectorAll('.space-switcher-pill').forEach(pill => {
         if (pill.id === 'btn-master-filter-all') return;
         pill.onclick = (e) => {
             const sid = parseInt(pill.dataset.spaceId);
@@ -467,6 +990,119 @@ export function initMasterEvents() {
             onRefresh();
         };
     });
+
+    // 🟢 Search Input — triggers full refresh but restores focus via _restoreSearchFocus flag
+    const searchInput = document.getElementById('master-search-input');
+    if (searchInput) {
+        searchInput.oninput = () => {
+            masterTodoListState.searchQuery = searchInput.value;
+            masterTodoListState._restoreSearchFocus = true;
+            onRefresh();
+        };
+    }
+
+    // 🟢 Manage Templates gear button — opens custom popup
+    const manageBtn = document.getElementById('btn-manage-templates');
+    if (manageBtn) manageBtn.onclick = () => openTemplateManagePopup(manageBtn, onRefresh);
+
+    // 🟢 View Template select — quick-apply a saved template
+    const templateSelect = document.getElementById('master-view-template-select');
+    if (templateSelect) {
+        templateSelect.onchange = () => {
+            const name = templateSelect.value;
+            if (!name) return;
+            const settings = getAppSettings();
+            const tpl = settings.viewTemplates?.[name];
+            if (!tpl || typeof tpl !== 'object' || Array.isArray(tpl)) return;
+            settings.viewTemplates.spaceOrder = tpl.spaceOrder || [];
+            masterTodoListState.activeSpaceFilters = new Set((tpl.activeFilters || []).map(id => parseInt(id)));
+            saveData();
+            onRefresh();
+            setTimeout(() => { const sel = document.getElementById('master-view-template-select'); if (sel) sel.value = ''; }, 100);
+        };
+    }
+
+    // 🟢 Reset Order — clear saved space order to restore default
+    const resetOrderBtn = document.getElementById('btn-reset-order');
+    if (resetOrderBtn) resetOrderBtn.onclick = () => {
+        const settings = getAppSettings();
+        if (settings.viewTemplates) settings.viewTemplates.spaceOrder = [];
+        saveData();
+        onRefresh();
+    };
+
+    // 🟢 Folder pills in switcher — toggle active folder to reveal its spaces
+    document.querySelectorAll('.switcher-folder-pill').forEach(pill => {
+        pill.onclick = () => {
+            const folder = pill.dataset.folder;
+            masterTodoListState.activeFolderTab = masterTodoListState.activeFolderTab === folder ? null : folder;
+            onRefresh();
+        };
+    });
+
+    // 🟢 Space sort select
+    document.querySelectorAll('.btn-master-space-sort').forEach(sel => {
+        sel.addEventListener('change', (e) => {
+            e.stopPropagation();
+            const sid = parseInt(sel.dataset.spaceId);
+            const space = getSpaces().find(s => s.id === sid);
+            if (space) { space.taskSortOrder = sel.value; saveData(); onRefresh(); }
+        });
+    });
+
+    // 🟢 Space Peek buttons — toggle inline/float peek panel per space
+    document.querySelectorAll('.btn-space-peek').forEach(btn => {
+        btn.onclick = (e) => {
+            e.stopPropagation();
+            const sid = parseInt(btn.dataset.spaceId);
+            if (peekState.spaceId === sid) {
+                peekState.spaceId = null;
+                document.getElementById('space-peek-panel')?.remove();
+                document.querySelector('.master-todo-widget')?.classList.remove('has-peek-panel');
+                document.querySelectorAll('.btn-space-peek.is-peeking').forEach(b => b.classList.remove('is-peeking'));
+            } else {
+                peekState.spaceId = sid;
+                peekState.isFloat = false;
+                document.querySelectorAll('.btn-space-peek.is-peeking').forEach(b => b.classList.remove('is-peeking'));
+                btn.classList.add('is-peeking');
+                renderSpacePeekPanel(sid);
+            }
+        };
+    });
+
+    // Re-highlight active peek button after re-render
+    if (peekState.spaceId !== null) {
+        const activeBtn = document.querySelector(`.btn-space-peek[data-space-id="${peekState.spaceId}"]`);
+        if (activeBtn) activeBtn.classList.add('is-peeking');
+    }
+
+    // Reposition inline panel on resize / scroll
+    if (_peekResizeHandler) {
+        window.removeEventListener('resize', _peekResizeHandler);
+        document.removeEventListener('scroll', _peekResizeHandler, true);
+    }
+    _peekResizeHandler = () => { /* inline panel auto-resizes via CSS grid; float is user-positioned */ };
+    window.addEventListener('resize', _peekResizeHandler);
+    document.addEventListener('scroll', _peekResizeHandler, true);
+
+    // 🟢 Single flat Sortable on master-groups-container — cross-folder drag & drop
+    if (groupContainer) {
+        Sortable.create(groupContainer, {
+            animation: 150,
+            handle: '.space-group-drag-handle',
+            draggable: '.task-group-details',
+            ghostClass: 'sortable-ghost',
+            filter: 'input, select, button, .task-list',
+            preventOnFilter: false,
+            onEnd: () => {
+                const settings = getAppSettings();
+                if (!settings.viewTemplates) settings.viewTemplates = {};
+                settings.viewTemplates.spaceOrder = Array.from(document.querySelectorAll('.task-group-details[data-space-id]'))
+                    .map(el => parseInt(el.dataset.spaceId));
+                saveData();
+            }
+        });
+    }
 
     if (groupContainer) {
         // ⌨️ จัดการทางลัดเครื่องหมาย ">" สำหรับช่องกรอก Subtask ในหน้า Master View
@@ -641,9 +1277,7 @@ export function initMasterEvents() {
 
             saveData(true);
             // 4. Re-render dashboard after animation
-            setTimeout(() => {
-                if (window.renderDefaultDashboard) window.renderDefaultDashboard();
-            }, isChecked ? 800 : 0);
+            setTimeout(() => refreshWithScroll(), isChecked ? 800 : 0);
         });
 
         // 🟢 Unified Event Delegation for all Master List actions
