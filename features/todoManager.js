@@ -1,4 +1,4 @@
-﻿import Sortable from '../sortable.esm.js';
+import Sortable from '../sortable.esm.js';
 import { svgEdit, svgTrashRed, svgRepeat } from '../core/icons.js';
 import { getCurrentSpace, saveData, getShortDate, getAppSettings, setCurrentSpaceId, getSpaces, getFilterTags, loadData, getGlobalLaunchers, getLauncherTags, getCurrentSpaceId, getFilterMode } from '../core/storage.js';
 import { mergeItems } from '../core/firebaseSync.js';
@@ -506,85 +506,10 @@ async function showManualRepeatDatePicker() {
     });
 }
 
-/**
- * Toggles the "prominent" (flagged) state of a task.
- * Space-aware: resolves the space via spaceId, NOT getCurrentSpace().
- * @param {number} spaceId - ID of the space.
- * @param {number} taskId - task.createdAt (unique ID).
- * @param {number|null} parentId - parent task's createdAt if subtask, otherwise null.
- * @returns {boolean} True if the update was applied.
- */
-export function toggleTaskFlagById(spaceId, taskId, parentId = null) {
-    const space = getSpaces().find(s => s.id === spaceId);
-    if (!space) return false;
-
-    if (parentId !== null) {
-        const parent = space.tasks.find(t => t?.createdAt === parentId);
-        const sub = parent?.subtasks?.find(t => t?.createdAt === taskId);
-        if (!sub) return false;
-        sub.isProminent = !sub.isProminent;
-        saveData();
-        return true;
-    }
-
-    const index = space.tasks.findIndex(t => t?.createdAt === taskId);
-    if (index === -1) return false;
-    const task = space.tasks[index];
-
-    if (task.isProminent) {
-        task.isProminent = false;
-        const settings = getAppSettings();
-        if (settings.focusedTask?.spaceId === spaceId && settings.focusedTask?.createdAt === taskId) {
-            settings.focusedTask = null;
-        }
-        if (typeof task.originalIndex === 'number') {
-            const [movedTask] = space.tasks.splice(index, 1);
-            space.tasks.splice(Math.min(task.originalIndex, space.tasks.length), 0, movedTask);
-            delete movedTask.originalIndex;
-        }
-    } else {
-        task.isProminent = true;
-        task.originalIndex = index;
-        const [movedTask] = space.tasks.splice(index, 1);
-        let lastProminentIdx = -1;
-        for (let i = 0; i < space.tasks.length; i++) {
-            if (space.tasks[i]?.isProminent) lastProminentIdx = i;
-            else break;
-        }
-        space.tasks.splice(lastProminentIdx + 1, 0, movedTask);
-    }
-    saveData();
-    return true;
-}
-
-/**
- * Toggles the "More Actions" collapsible panel for a task row.
- * Pure DOM operation — no space context needed.
- * @param {HTMLElement} triggerBtn - The .toggle-actions-btn element clicked.
- * @param {string} containerSelector - Selector for closing other open menus first.
- */
-export function toggleMoreActionsMenu(triggerBtn, containerSelector = '') {
-    const group = triggerBtn.closest('.item-action-group');
-    const menu = group?.querySelector('.collapsible-actions');
-    if (!menu) return;
-    const isHidden = menu.style.display === 'none' || menu.style.display === '';
-    if (isHidden) {
-        if (containerSelector) {
-            document.querySelectorAll(`${containerSelector} .collapsible-actions`).forEach(m => m.style.display = 'none');
-            document.querySelectorAll(`${containerSelector} .toggle-actions-btn`).forEach(b => b.classList.remove('expanded'));
-        }
-        menu.style.display = 'flex';
-        triggerBtn.classList.add('expanded');
-    } else {
-        menu.style.display = 'none';
-        triggerBtn.classList.remove('expanded');
-    }
-}
-
 export function initTodoManager(callbacks) {
     onRenderCallback = callbacks.onRender;
 
-    // ระบบ Mobile Tools Menu (3 จุด)
+    // 🟢 ระบบ Mobile Tools Menu (3 จุด)
     const mobileToolsBtn = document.getElementById('btn-mobile-todo-tools');
     if (mobileToolsBtn) {
         mobileToolsBtn.onclick = (e) => {
@@ -1274,11 +1199,17 @@ export function initTodoManager(callbacks) {
     document.querySelectorAll('.note-toolbar select').forEach(el => { el.addEventListener('change', (e) => { document.execCommand(e.target.dataset.cmd, false, e.target.value); getCurrentSpace().note = document.getElementById('workspace-note').innerHTML; saveData(); }); });
     
 
-
     // 🟢 Smart Checkbox Logic for Workspace Note
     const CHECKBOX_HTML = '<label class="google-task-checkbox" contenteditable="false" style="display:inline-flex; align-items:center; margin-right:8px; vertical-align:middle;"><input type="checkbox"> <div class="checkmark-circle"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg></div></label>&nbsp;';
 
     workspaceNote.addEventListener('keydown', (e) => {
+        if (e.key === 'Tab') {
+            e.preventDefault();
+            document.execCommand(e.shiftKey ? 'outdent' : 'indent', false, null);
+            getCurrentSpace().note = workspaceNote.innerHTML;
+            saveData();
+            return;
+        }
         if (e.key === 'Enter') {
             const selection = window.getSelection();
             if (!selection.rangeCount) return;
@@ -1322,6 +1253,36 @@ export function initTodoManager(callbacks) {
         }
     });
 
+    // 🟢 Markdown Auto-Formatting (type '* ' for bullet, '[] ' for checkbox)
+    workspaceNote.addEventListener('input', () => {
+        const sel = window.getSelection();
+        if (!sel || !sel.rangeCount) return;
+        const range = sel.getRangeAt(0);
+        const node = range.startContainer;
+        if (node.nodeType !== 3) return;
+        const text = node.textContent;
+        const offset = range.startOffset;
+        if (offset >= 2 && text.slice(0, 2) === '* ') {
+            const del = document.createRange();
+            del.setStart(node, 0); del.setEnd(node, 2);
+            sel.removeAllRanges(); sel.addRange(del);
+            document.execCommand('delete', false, null);
+            document.execCommand('insertUnorderedList', false, null);
+            getCurrentSpace().note = workspaceNote.innerHTML;
+            saveData();
+            return;
+        }
+        if (offset >= 3 && text.slice(0, 3) === '[] ') {
+            const del = document.createRange();
+            del.setStart(node, 0); del.setEnd(node, 3);
+            sel.removeAllRanges(); sel.addRange(del);
+            document.execCommand('delete', false, null);
+            document.execCommand('insertHTML', false, CHECKBOX_HTML);
+            getCurrentSpace().note = workspaceNote.innerHTML;
+            saveData();
+        }
+    });
+
     // 🟢 New Formatting Buttons for Workspace Note (Google Docs Style)
     const bindNoteCmd = (id, cmd, value = null) => {
         const btn = document.getElementById(id);
@@ -1342,11 +1303,6 @@ export function initTodoManager(callbacks) {
     bindNoteCmd('btn-note-bullet-list', 'insertUnorderedList');
     bindNoteCmd('btn-note-numbered-list', 'insertOrderedList');
     bindNoteCmd('btn-note-reset-format', 'removeFormat');
-    bindNoteCmd('btn-note-left', 'justifyLeft');
-    bindNoteCmd('btn-note-center', 'justifyCenter');
-    bindNoteCmd('btn-note-right', 'justifyRight');
-    bindNoteCmd('btn-note-indent', 'indent');
-    bindNoteCmd('btn-note-outdent', 'outdent');
     bindNoteCmd('btn-note-hr', 'insertHorizontalRule');
     
     // Special Case: Checkbox
@@ -1360,6 +1316,22 @@ export function initTodoManager(callbacks) {
             getCurrentSpace().note = document.getElementById('workspace-note').innerHTML;
             saveData();
         });
+    }
+
+    // More Actions dropdown toggle
+    const btnMoreActions = document.getElementById('btn-note-more-actions');
+    const noteMorePopup = document.getElementById('note-more-popup');
+    if (btnMoreActions && noteMorePopup) {
+        btnMoreActions.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            noteMorePopup.classList.toggle('is-open');
+        });
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.note-more-actions-wrapper')) {
+                noteMorePopup.classList.remove('is-open');
+            }
+        }, true);
     }
 
     // Clear Archive Button
@@ -1697,7 +1669,6 @@ export function initTodoManager(callbacks) {
     const handleProminentTaskClick = (e) => {
         const btn = e.target.closest('.btn-prominent-task');
         if (btn) {
-            e.stopPropagation();
             const space = getCurrentSpace();
             const index = parseInt(btn.getAttribute('data-index'));
             const pIdxAttr = btn.getAttribute('data-parent-index');

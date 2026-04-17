@@ -1,7 +1,7 @@
 import { getSpaces, saveData, getAppSettings, setCurrentSpaceId, getFilterTags, loadData } from '../core/storage.js';
 import Sortable from '../sortable.esm.js';
 import { svgRefresh } from '../core/icons.js';
-import { openTaskEditModal, openTaskLinkModal, isAnyEditableElementFocused, toggleTaskFocus, playTaskCompletedSound, calculateNextDate, toggleTaskFlagById, toggleMoreActionsMenu } from './todoManager.js';
+import { openTaskEditModal, openTaskLinkModal, isAnyEditableElementFocused, toggleTaskFocus, playTaskCompletedSound, calculateNextDate } from './todoManager.js'; 
 import { handleMiniTagClick } from '../components/modals.js';
 import { generateTaskHTML, attachSubtaskEventListeners, attachTaskInlineEditListeners, handleTagAutocomplete, applySyntaxHighlighting, getFaviconUrl, openOrFocusTab } from '../core/ui-helpers.js';
 
@@ -46,27 +46,11 @@ export const masterTodoListState = {
     selectedQuickAddSpaceId: null,
     searchQuery: '',
     collapsedFolders: new Set(),
-    activeFolderTab: null,
-    _restoreTaskInputFocus: false
+    activeFolderTab: null
 };
 
 const peekState = { spaceId: null, isFloat: false, floatX: 80, floatY: 80, inlineWidth: 268 };
 let _peekResizeHandler = null;
-
-/**
- * Wraps renderDefaultDashboard with scroll-position preservation on
- * #master-todo-list-container, preventing the list from jumping to the top.
- */
-function refreshWithScroll() {
-    if (!window.renderDefaultDashboard) return;
-    const el = document.getElementById('master-todo-list-container');
-    const top = el?.scrollTop ?? 0;
-    window.renderDefaultDashboard();
-    requestAnimationFrame(() => {
-        const newEl = document.getElementById('master-todo-list-container');
-        if (newEl) newEl.scrollTop = top;
-    });
-}
 
 function applyDateFilter(tasks) {
     const filter = masterTodoListState.dateFilter;
@@ -166,16 +150,8 @@ export function renderMasterTodoList(container) {
         const searchEl = document.getElementById('master-search-input');
         if (searchEl) { searchEl.focus(); const l = searchEl.value.length; searchEl.setSelectionRange(l, l); }
     }
-    // 🟢 Restore quick-add task input focus after adding a task
-    if (masterTodoListState._restoreTaskInputFocus) {
-        masterTodoListState._restoreTaskInputFocus = false;
-        requestAnimationFrame(() => {
-            const taskEl = document.getElementById('master-task-input');
-            if (taskEl) taskEl.focus();
-        });
-    }
 
-    const onRefresh = () => refreshWithScroll();
+    const onRefresh = () => { if (window.renderDefaultDashboard) window.renderDefaultDashboard(); };
 
     // Attach Subtask Listeners
     container.querySelectorAll('.subtask-list').forEach(subListEl => {
@@ -889,7 +865,7 @@ export function initMasterEvents() {
         };
     }
 
-    const onRefresh = () => refreshWithScroll();
+    const onRefresh = () => { if (window.renderDefaultDashboard) window.renderDefaultDashboard(); };
 
     if (addBtn) addBtn.onclick = async () => {
         let text = taskInput.value.trim();
@@ -925,7 +901,6 @@ export function initMasterEvents() {
             targetSpace.tasks.push(newTask);
             if (targetSpace.taskSortOrder && targetSpace.taskSortOrder !== 'manual') sortSpaceTasks(targetSpace);
             taskInput.value = ''; taskInput.disabled = false; taskInput.placeholder = "Quick add task...";
-            masterTodoListState._restoreTaskInputFocus = true;
             saveData(); onRefresh();
         }
     };
@@ -1277,7 +1252,9 @@ export function initMasterEvents() {
 
             saveData(true);
             // 4. Re-render dashboard after animation
-            setTimeout(() => refreshWithScroll(), isChecked ? 800 : 0);
+            setTimeout(() => {
+                if (window.renderDefaultDashboard) window.renderDefaultDashboard();
+            }, isChecked ? 800 : 0);
         });
 
         // 🟢 Unified Event Delegation for all Master List actions
@@ -1287,8 +1264,21 @@ export function initMasterEvents() {
             // 🔘 1. Task Actions Toggle (The circle icon)
             const toggleBtn = target.closest('.toggle-actions-btn');
             if (toggleBtn) {
-                e.stopPropagation(); e.preventDefault();
-                toggleMoreActionsMenu(toggleBtn, '#master-groups-container');
+                const group = toggleBtn.closest('.item-action-group');
+                const menu = group?.querySelector('.collapsible-actions');
+                if (menu) {
+                    const isHidden = menu.style.display === 'none' || menu.style.display === '';
+                    if (isHidden) {
+                        // Close other menus first for a clean experience
+                        document.querySelectorAll('#master-groups-container .collapsible-actions').forEach(m => m.style.display = 'none');
+                        document.querySelectorAll('#master-groups-container .toggle-actions-btn').forEach(b => b.classList.remove('expanded'));
+                        menu.style.display = 'flex';
+                        toggleBtn.classList.add('expanded');
+                    } else {
+                        menu.style.display = 'none';
+                        toggleBtn.classList.remove('expanded');
+                    }
+                }
                 return;
             }
 
@@ -1476,74 +1466,45 @@ export function initMasterEvents() {
                 return;
             }
 
-            // 🔘 Toggle Subtask List Visibility (Master View)
-            const toggleSubsBtn = target.closest('.toggle-subtasks-btn');
-            if (toggleSubsBtn) {
-                const idx = parseInt(toggleSubsBtn.dataset.index);
-                const sid = parseInt(toggleSubsBtn.dataset.spaceId);
-                const space = getSpaces().find(s => s.id === sid);
-                if (space?.tasks[idx]) { space.tasks[idx].subtasksHidden = !space.tasks[idx].subtasksHidden; saveData(); onRefresh(); }
-                return;
-            }
-
-            // 🔘 Restore Task from Trash (Master View)
-            const restoreBtn = target.closest('.restore-task-btn');
-            if (restoreBtn) {
-                const idx = parseInt(restoreBtn.dataset.index);
-                const sid = parseInt(restoreBtn.dataset.spaceId);
-                const space = getSpaces().find(s => s.id === sid);
-                const task = space?.tasks[idx];
-                if (task) {
-                    task.isDeleted = false; task.deletedAt = null; task.expiryAt = null;
-                    (task.subtasks || []).forEach(s => { s.isDeleted = false; s.deletedAt = null; s.expiryAt = null; });
-                    saveData(); onRefresh();
-                }
-                return;
-            }
-
-            // 🔘 Permanent Delete Task (Master View)
-            const permDelBtn = target.closest('.delete-task-perm-btn');
-            if (permDelBtn) {
-                const idx = parseInt(permDelBtn.dataset.index);
-                const sid = parseInt(permDelBtn.dataset.spaceId);
-                const space = getSpaces().find(s => s.id === sid);
-                if (space && confirm('Delete task permanently?')) { space.tasks.splice(idx, 1); saveData(); onRefresh(); }
-                return;
-            }
-
-            // 🔘 Permanent Delete Subtask (Master View)
-            const permDelSubBtn = target.closest('.delete-subtask-perm-btn');
-            if (permDelSubBtn) {
-                const pIdx = parseInt(permDelSubBtn.dataset.parentIndex);
-                const sIdx = parseInt(permDelSubBtn.dataset.subIndex);
-                const sid = parseInt(permDelSubBtn.closest('li')?.dataset.spaceId);
-                const space = getSpaces().find(s => s.id === sid);
-                if (space && confirm('Delete subtask permanently?')) { space.tasks[pIdx]?.subtasks?.splice(sIdx, 1); saveData(); onRefresh(); }
-                return;
-            }
-
-            // 🔘 Tag Editor — explicitly set space context to override global activeSpace (= 0 in master view)
-            const tagBtn = target.closest('.btn-edit-tags');
-            if (tagBtn) {
-                const sid = parseInt(tagBtn.dataset.spaceId);
-                if (!isNaN(sid)) { setCurrentSpaceId(sid); window._isModalOpenedFromCommandCenter = true; }
-                handleMiniTagClick(tagBtn, onRefresh);
-                return;
-            }
-
             // 🔘 7. Task Item General Logic (Flag, Edit, Delete)
             const taskItem = target.closest('li[data-type]');
             if (!taskItem) return;
             const spaceId = parseInt(taskItem.dataset.spaceId);
             const taskIndex = parseInt(taskItem.dataset.index);
             
-            // Handle Flagging (Prominent) — delegated to shared, space-aware handler
+            // Handle Flagging (Prominent)
             if (target.closest('.btn-prominent-task')) {
-                e.stopPropagation(); e.preventDefault();
-                const tid = parseInt(taskItem.dataset.taskId);
-                const parentId = taskItem.closest('.subtask-list')?.dataset.parentId;
-                const pid = parentId ? parseInt(parentId) : null;
-                if (toggleTaskFlagById(spaceId, tid, pid)) onRefresh();
+                const btn = target.closest('.btn-prominent-task');
+                const pIdxAttr = btn.getAttribute('data-parent-index');
+                const pIdx = pIdxAttr !== null ? parseInt(pIdxAttr) : null;
+                const space = getSpaces().find(s => s.id === spaceId);
+                let task = (pIdx !== null) ? space.tasks[pIdx]?.subtasks?.[taskIndex] : space.tasks[taskIndex];
+                
+                if (task) {
+                    if (task.isProminent) {
+                        task.isProminent = false;
+                        const settings = getAppSettings();
+                        if (settings.focusedTask?.spaceId === spaceId && settings.focusedTask?.createdAt === task.createdAt) {
+                            settings.focusedTask = null;
+                        }
+                        if (typeof task.originalIndex === 'number') {
+                            const [movedTask] = space.tasks.splice(taskIndex, 1);
+                            space.tasks.splice(Math.min(task.originalIndex, space.tasks.length), 0, movedTask);
+                            delete task.originalIndex;
+                        }
+                    } else {
+                        task.isProminent = true; 
+                        task.originalIndex = taskIndex;
+                        const [movedTask] = space.tasks.splice(taskIndex, 1);
+                        let lastProminentIdx = -1;
+                        for (let i = 0; i < space.tasks.length; i++) {
+                            if (space.tasks[i].isProminent) lastProminentIdx = i;
+                            else break;
+                        }
+                        space.tasks.splice(lastProminentIdx + 1, 0, movedTask);
+                    }
+                    saveData(); onRefresh();
+                }
                 return;
             }
 
@@ -1572,7 +1533,7 @@ export function initMasterEvents() {
                     } else setCurrentSpaceId(0);
                 }
             }
-        }, true);
+        });
 
         // 🔘 10. Global listener to close popups when clicking outside
         if (!window._isSfMasterClickInitialized) {

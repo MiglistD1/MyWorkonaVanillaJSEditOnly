@@ -419,17 +419,17 @@ export function generateTaskHTML(task, index, {
         actionButtons += `<div class="collapsible-actions" style="display: flex; align-items: center; gap: 6px;">${collapsibleActionsContent}</div>`;
     } else {
         // If global toggle is OFF, render the "More Actions" button and the collapsible actions hidden by default
-        actionButtons += `<span class="toggle-actions-btn circle-icon" title="More Actions" onclick="event.stopPropagation();"></span>`;
+        actionButtons += `<span class="toggle-actions-btn circle-icon" title="More Actions"></span>`;
         actionButtons += `<div class="collapsible-actions" style="display: none; align-items: center; gap: 6px;">${collapsibleActionsContent}</div>`;
     }
 
     const itemType = isSubtask ? 'subtask' : 'task';
     return ` 
-    <li class="${isSubtask ? 'subtask-item' : 'task-item'} ${draggableClass} ${prominentClass} ${focusActiveClass} ${templateClass}" data-index="${index}" data-type="${itemType}" data-space-id="${spaceId ?? ''}" data-task-id="${task.createdAt ?? ''}" style="list-style: none; width: 100%; margin-bottom: 0px; border-bottom: 1px solid transparent; opacity: ${isActuallyDeleted ? '0.7' : '1'};">
+    <li class="${isSubtask ? 'subtask-item' : 'task-item'} ${draggableClass} ${prominentClass} ${focusActiveClass} ${templateClass}" data-index="${index}" data-type="${itemType}" data-space-id="${spaceId || ''}" style="list-style: none; width: 100%; margin-bottom: 0px; border-bottom: 1px solid transparent; opacity: ${isActuallyDeleted ? '0.7' : '1'};">
         <div class="item-main-row" style="display: flex; align-items: center; gap: 2px; padding: 2px 0; width: 100%; min-height: 28px;">
             ${handleHTML}
             <div class="focus-trigger-container" style="display: flex; align-items: center; gap: 2px; ${(isProminentHidden && !task.isProminent) ? 'display: none;' : ''}">
-                <button class="btn-icon btn-prominent-task ${task.isProminent ? 'active' : ''}" data-index="${index}" ${isSubtask ? `data-parent-index="${parentIndex}"` : ''} ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="Mark as Next Up" style="margin: 0; padding: 2px; flex-shrink: 0; color: ${task.isProminent ? 'var(--primary-color)' : 'var(--text-muted)'}; display: ${isProminentHidden ? 'none' : 'inline-flex'};" data-focus-trigger="true" onclick="event.stopPropagation();">
+                <button class="btn-icon btn-prominent-task ${task.isProminent ? 'active' : ''}" data-index="${index}" ${isSubtask ? `data-parent-index="${parentIndex}"` : ''} ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="Mark as Next Up" style="margin: 0; padding: 2px; flex-shrink: 0; color: ${task.isProminent ? 'var(--primary-color)' : 'var(--text-muted)'}; display: ${isProminentHidden ? 'none' : 'inline-flex'};" data-focus-trigger="true">
                     <svg class="svg-icon-sm"><use href="#icon-flag"></use></svg>
                 </button>
             </div>
