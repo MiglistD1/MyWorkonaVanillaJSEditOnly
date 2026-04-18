@@ -38,6 +38,7 @@ export function checkAndResetHabits(space) {
 // --------------------------------------------------
 
 export function toggleHabitModal(space) {
+    if (!space) return;
     const settings = getAppSettings();
     settings.habitState.open = !settings.habitState.open;
     saveData();
@@ -49,6 +50,7 @@ export function toggleHabitModal(space) {
 }
 
 export function openHabitModal(space) {
+    if (!space) return;
     let modal = document.getElementById('habit-modal');
     if (!modal) {
         const modalHTML = ` 
@@ -430,6 +432,7 @@ function updateHabitToggleUI() {
 }
 
 export function renderHabitList(space) {
+    if (!space) return;
     // 🟢 ป้องกันการวาดทับเฉพาะตอนกำลังพิมพ์ชื่อ Habit เท่านั้น (เพื่อให้การติ๊ก Checkbox ยังอัปเดตได้)
     const activeEl = document.activeElement;
     if (activeEl && (activeEl.id === 'new-habit-input' || activeEl.classList.contains('habit-text-content'))) {

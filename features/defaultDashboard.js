@@ -1,4 +1,4 @@
-import { getSpaces, getAppSettings, saveData, getFilterTags, getCurrentSpace } from '../core/storage.js';
+import { getSpaces, getAppSettings, saveData, getFilterTags, getCurrentSpace, getCurrentSpaceId } from '../core/storage.js';
 import { updateKeepTagButtonState, openKeepWithTag } from './googleKeep.js';
 import { renderMasterTodoList, renderMasterHeaderControls, initMasterEvents, masterTodoListState as commandCenterState } from './masterTodoList.js';
 import { renderSmartFlow, initSmartFlow, flowState, showFocusPopup, formatFocusTime } from './smartFlow.js';
@@ -38,7 +38,12 @@ export async function renderDefaultDashboard() {
     await initSmartFlow(); 
     const settings = getAppSettings();
 
-    const currentSpace = getCurrentSpace();
+    // 🟢 FIX: ในหน้า Command Center (Space 0) ให้คำนวณจาก Space ที่เลือกใน Quick Add Dropdown
+    const sidForHabits = getCurrentSpaceId() === 0 
+        ? (commandCenterState.selectedQuickAddSpaceId || (allSpaces.length > 0 ? allSpaces[0].id : null))
+        : getCurrentSpaceId();
+    
+    const currentSpace = getSpaces().find(s => s.id === sidForHabits);
     const habits = currentSpace?.habits || [];
     const hTotal = habits.length;
     const hDone = habits.filter(h => h.completed).length;
@@ -57,6 +62,13 @@ export async function renderDefaultDashboard() {
     } else {
         habitStatusStyle = 'color: #10b981; border: 1px solid #10b981; background: rgba(16, 185, 129, 0.1);';
     }
+
+    // 🟢 Capture scroll positions RIGHT BEFORE innerHTML to prevent inaccuracies
+    const dashScroll = container.scrollTop;
+    const todoScroller = document.getElementById('master-todo-list-container');
+    const todoScroll = todoScroller ? todoScroller.scrollTop : 0;
+    const flowScroller = document.getElementById('smart-flow-container');
+    const flowScroll = flowScroller ? flowScroller.scrollTop : 0;
 
     // 1. Render Dashboard Wrapper
     container.innerHTML = `
@@ -214,7 +226,14 @@ export async function renderDefaultDashboard() {
     // Habit Tracker Toggle
     const habitToggleBtn = container.querySelector('.btn-habit-toggle');
     if (habitToggleBtn) {
-        habitToggleBtn.onclick = () => toggleHabitModal(getCurrentSpace());
+        habitToggleBtn.onclick = () => {
+            let space = getCurrentSpace();
+            if (!space) {
+                const sid = commandCenterState.selectedQuickAddSpaceId || (getSpaces().length > 0 ? getSpaces()[0].id : null);
+                space = getSpaces().find(s => s.id === sid);
+            }
+            if (space) toggleHabitModal(space);
+        };
     }
 
     // 3. Global Dashboard UI Updates
@@ -223,6 +242,21 @@ export async function renderDefaultDashboard() {
     // Attached to window for masterTodoList.js callbacks
     window.renderDefaultDashboard = renderDefaultDashboard;
     initMasterEvents(); // 🟢 สั่งรัน Event Listeners หลังจากวาดหน้าจอเสร็จ
+
+    // 🟢 Robust Scroll Restoration
+    const restoreScrolls = () => {
+        const newDash = document.getElementById('default-dashboard-container');
+        if (newDash) newDash.scrollTop = dashScroll;
+        
+        const newTodo = document.getElementById('master-todo-list-container');
+        if (newTodo) newTodo.scrollTop = todoScroll;
+        
+        const newFlow = document.getElementById('smart-flow-container');
+        if (newFlow) newFlow.scrollTop = flowScroll;
+    };
+
+    restoreScrolls(); // Sync restore
+    requestAnimationFrame(restoreScrolls); // Async backup for DOM flow
 }
 
 /**

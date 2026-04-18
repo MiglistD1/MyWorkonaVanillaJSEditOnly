@@ -1,5 +1,6 @@
 import { svgTag, dragHandleSvg, svgEdit, svgTrashRed, svgPencil, svgRestore, svgArchive, svgRepeat, svgManualRepeat } from './icons.js';
-import { getShortDate, getAppSettings, getUnitCharFromThai, getFilterTags } from './storage.js';
+import { getShortDate, getAppSettings, getUnitCharFromThai, getFilterTags, getSpaces } from './storage.js';
+import { processTaskMirroring, syncMirroredTask } from '../features/todoManager.js';
 
 export function generateMiniTagsBtn(itemTags, type, index, parentIndex = null, spaceId = null) {
   const count = itemTags ? itemTags.length : 0;
@@ -144,6 +145,7 @@ export function generateTaskHTML(task, index, {
     isTrash = false, // New parameter for Trash view
     addingSubtaskToId = null,
     nextDueDate = null, // New: Next date for repeating tasks
+    subtaskNumber = null, // 🟢 New: ลำดับตัวเลขสำหรับงานย่อย
 } = {}) {
     if (!task) return '';
 
@@ -239,6 +241,18 @@ export function generateTaskHTML(task, index, {
     const isFuture = (dueDateObj && dueDateObj > today && !task.completed && !task.isDeleted) || (!!nextDueDate && !task.isDeleted);
     const isSynced = !!task.calendarEventId;
 
+    // 🔗 Mirror Rendering Logic
+    let mirrorBadgeHTML = '';
+    if (task.isMirror) {
+        const context = task.parentContext ? `[${task.parentContext}] ` : '';
+        // 🟢 ปรับให้มินิมอลเหลือแค่โซ่เดียว และใส่ class ให้คุมสไตล์ง่ายๆ
+        mirrorBadgeHTML = `<span class="mirror-badge" title="Mirrored from another space">${context}🔗</span>`;
+    }
+    let sourceIconHTML = '';
+    if (!task.isMirror && /@sp\[[^\]]+\]\/\[[^\]]+\]\/\[[^\]]+\]/i.test(task.text)) {
+        sourceIconHTML = `<span class="mirror-icon" title="Shared to another space">↗</span>`;
+    }
+
     const textStyle = (isCompletedOrDeleted || isActuallyDeleted) 
         ? "word-break: break-word; white-space: normal; line-height: 1.4; color: var(--text-muted); text-decoration: line-through; opacity: 0.7;" 
         : `word-break: break-word; white-space: normal; line-height: 1.4; color: ${task.isProminent ? 'var(--primary-color)' : (isSynced ? '#166534' : 'var(--text-main)')}; ${(task.isProminent || isSynced) ? 'font-weight: 700;' : ''}`;
@@ -294,6 +308,7 @@ export function generateTaskHTML(task, index, {
     if (!isSubtask) {
         let subItems = '';
         if (task.subtasks && task.subtasks.length > 0) {
+            let activeSubtaskCounter = 0; // 🟢 ตัวนับสำหรับงานย่อยที่ยังไม่เสร็จ
             subItems = task.subtasks.map((sub, subIdx) => {
                 // 🟢 ซ่อนงานย่อยที่เสร็จแล้วหากเปิดโหมดซ่อนไว้
                 if (task.completedSubtasksHidden && sub.completed) return '';
@@ -301,10 +316,18 @@ export function generateTaskHTML(task, index, {
                 // 🟢 ซ่อนงานย่อยที่ยังไม่เสร็จหากเปิดโหมดซ่อนไว้
                 if (task.pendingSubtasksHidden && !sub.completed) return '';
 
+                // 🟢 คำนวณลำดับตัวเลข: นับข้ามรายการที่เสร็จแล้ว
+                let currentNum = null;
+                if (!sub.completed) {
+                    activeSubtaskCounter++;
+                    currentNum = activeSubtaskCounter;
+                }
+
                 return generateTaskHTML(sub, subIdx, { 
                     depth: depth + 1, parentIndex: index, isFiltered, showActions, 
                     isMasterView, spaceId, showSpaceBadge, spaceName,
-                    isProminentHidden
+                    isProminentHidden,
+                    subtaskNumber: currentNum // 🟢 ส่งตัวเลขลำดับไปวาดผล
                 });
             }).join('');
         }
@@ -425,16 +448,22 @@ export function generateTaskHTML(task, index, {
 
     const itemType = isSubtask ? 'subtask' : 'task';
     return ` 
-    <li class="${isSubtask ? 'subtask-item' : 'task-item'} ${draggableClass} ${prominentClass} ${focusActiveClass} ${templateClass}" data-index="${index}" data-type="${itemType}" data-space-id="${spaceId || ''}" style="list-style: none; width: 100%; margin-bottom: 0px; border-bottom: 1px solid transparent; opacity: ${isActuallyDeleted ? '0.7' : '1'};">
-        <div class="item-main-row" style="display: flex; align-items: center; gap: 2px; padding: 2px 0; width: 100%; min-height: 28px;">
+    <li class="${isSubtask ? 'subtask-item' : 'task-item'} ${draggableClass} ${prominentClass} ${focusActiveClass} ${templateClass}" data-index="${index}" data-type="${itemType}" data-space-id="${spaceId || ''}" style="list-style: none; width: 100%; margin-bottom: 0px; border-bottom: 1px solid transparent; opacity: ${isActuallyDeleted ? '0.7' : '1'}; position: relative;">
+        <div class="item-main-row" style="display: flex; align-items: center; gap: 1px; padding: 2px 0; width: 100%; min-height: 28px;">
             ${handleHTML}
-            <div class="focus-trigger-container" style="display: flex; align-items: center; gap: 2px; ${(isProminentHidden && !task.isProminent) ? 'display: none;' : ''}">
-                <button class="btn-icon btn-prominent-task ${task.isProminent ? 'active' : ''}" data-index="${index}" ${isSubtask ? `data-parent-index="${parentIndex}"` : ''} ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="Mark as Next Up" style="margin: 0; padding: 2px; flex-shrink: 0; color: ${task.isProminent ? 'var(--primary-color)' : 'var(--text-muted)'}; display: ${isProminentHidden ? 'none' : 'inline-flex'};" data-focus-trigger="true">
-                    <svg class="svg-icon-sm"><use href="#icon-flag"></use></svg>
-                </button>
+            <div class="focus-trigger-container" style="display: flex; align-items: center; gap: 0px; ${(!isSubtask && isProminentHidden && !task.isProminent) ? 'display: none;' : ''}">
+                ${(isSubtask && !task.isMirror) ? `
+                    <div class="subtask-number" style="width: 18px; text-align: center; color: #b91c1c; font-weight: 800; font-size: 12px; flex-shrink: 0; margin-right: 0px; font-family: var(--app-font);">
+                        ${subtaskNumber ? subtaskNumber + '.' : ''}
+                    </div>
+                ` : `
+                    <button class="btn-icon btn-prominent-task ${task.isProminent ? 'active' : ''}" data-index="${index}" ${isSubtask ? `data-parent-index="${parentIndex}"` : ''} ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="Mark as Next Up" style="margin: 0; padding: 2px; flex-shrink: 0; color: ${task.isProminent ? 'var(--primary-color)' : 'var(--text-muted)'}; display: ${isProminentHidden ? 'none' : 'inline-flex'};" data-focus-trigger="true">
+                        <svg class="svg-icon-sm"><use href="#icon-flag"></use></svg>
+                    </button>
+                `}
             </div>
 
-            <label class="google-task-checkbox" style="margin-right: 8px;">
+            <label class="google-task-checkbox" style="margin-right: 4px;">
                 <input type="checkbox" class="${checkboxClass}" ${checkboxDataAttrs} ${isActuallyDeleted ? 'checked' : (task.completed ? 'checked' : '')}>
                 <div class="checkmark-circle" style="${isActuallyDeleted ? 'background-color: #ef4444; border-color: #ef4444;' : ''}">
                     <svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" fill="none" stroke="white" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
@@ -446,7 +475,9 @@ export function generateTaskHTML(task, index, {
                     ${calendarIcon}
                     ${dateDisplay ? `<span class="task-date" style="${dateBadgeStyle} margin-right: 4px;">${dateDisplay}</span>` : ''}
                     ${isActuallyDeleted ? `<span class="task-date" style="${dateBadgeStyle} margin-right: 4px;">${getTrashCountdownText(task, getAppSettings().autoDeleteDays)}</span>` : ''}
+                    ${mirrorBadgeHTML}
                     <span class="task-actual-text" contenteditable="true" style="display: inline; vertical-align: middle; outline: none; ${textStyle}">${task.text}</span>
+                    ${sourceIconHTML}
                     ${repeatIcon}
                     ${showSpaceBadge ? `<span class="space-tag" style="margin-left: 8px; vertical-align: middle; display: inline-flex;">${spaceName}</span>` : ''}
                 </div>
@@ -541,6 +572,7 @@ export function attachTaskInlineEditListeners(container, getSpaceFn, callbacks =
         if (e.target.classList.contains('task-actual-text')) {
             if (e.key === 'Enter') {
                 e.preventDefault();
+                e.target.dataset.isSubmitting = "true"; // 🟢 บายพาสโหมด DND เพื่อให้หน้าจอยอมวาดช่องงานใหม่
                 e.target.dataset.wasEnter = "true"; // 🟢 มาร์คไว้ว่าจบด้วยการกด Enter
                 e.target.blur(); // Trigger the blur event to save
             } else if (e.key === 'Escape') {
@@ -569,6 +601,10 @@ export function attachTaskInlineEditListeners(container, getSpaceFn, callbacks =
     container.addEventListener('blur', async (e) => {
         if (e.target.classList.contains('task-actual-text')) {
             const wasEnter = e.target.dataset.wasEnter === "true";
+            const isSubmitting = e.target.dataset.isSubmitting === "true";
+            
+            // 🟢 ล้างสถานะทันที เพื่อป้องกัน Infinite Loop เมื่อ saveData ไปกระตุ้นการเรนเดอร์ใหม่
+            delete e.target.dataset.isSubmitting;
             delete e.target.dataset.wasEnter;
 
             const li = e.target.closest('li');
@@ -647,6 +683,9 @@ export function attachTaskInlineEditListeners(container, getSpaceFn, callbacks =
                 }
 
                 taskObj.text = newText;
+                const parentTask = (type === 'subtask') ? space.tasks[parseInt(li.closest('.subtask-list').dataset.parentIndex)] : null;
+                processTaskMirroring(taskObj, space.id, parentTask);
+                syncMirroredTask(taskObj, space.id);
                 
                 // Google Tasks Sync
                 if (textChanged && taskObj.googleTaskId && getGoogleAuthToken && getGoogleAuthToken() && fetchGoogleAPI) {
@@ -714,7 +753,11 @@ export function applySyntaxHighlighting(el) {
         .replace(/(@รางวัล_([^\s]+))/gi, (match, p1, p2) => {
             return `<span class="hl-reward" data-type="big"><span class="sf-reward-syntax">@รางวัล_</span>${p2}</span>`;
         })
-        .replace(/(^|\s)(#[^\s#]+)/g, '$1<span class="hl-tag">$2</span>');
+        .replace(/(^|\s)(#[^\s#]+)/g, '$1<span class="hl-tag">$2</span>')
+        .replace(/(@sp\[[^\]]+\]\/\[[^\]]+\]\/\[[^\]]+\])/gi, (match) => {
+            // 🟢 ลบไอคอน 🔗 ออกจากตรงนี้ และใช้ class คุมการซ่อนข้อความ
+            return `<span class="hl-mirror"><span class="sf-mirror-text">${match}</span></span>`;
+        });
 
     if (el.innerHTML !== highlighted) {
         el.innerHTML = highlighted;
@@ -824,6 +867,75 @@ export function handleTagAutocomplete(e, getTagsFn) {
                 }, moneyMatch ? '💰' : (timeMatch ? '⏳' : '🎁'));
                 return;
             }
+        }
+    }
+
+    // 🟢 2. จัดการ @sp (Space Mirror) Autocomplete
+    if (lastWord.startsWith('@sp')) {
+        const query = lastWord.substring(3).toLowerCase();
+        const allSpaces = getSpaces().filter(s => !s.isDeleted);
+        const settings = getAppSettings();
+
+        // 1. Calculate Folder Order (Sync with sidebar logic)
+        const allFolderNamesInUse = new Set(['General']);
+        allSpaces.filter(s => !s.isArchived).forEach(s => allFolderNamesInUse.add(s.folder || 'General'));
+        if (settings.folderIcons) Object.keys(settings.folderIcons).forEach(f => allFolderNamesInUse.add(f));
+        if (settings.folderThemes) Object.keys(settings.folderThemes).forEach(f => allFolderNamesInUse.add(f));
+
+        const customOrder = settings.folderOrder || [];
+        const orderedCustom = customOrder.filter(f => f !== 'General' && allFolderNamesInUse.has(f));
+        const remaining = Array.from(allFolderNamesInUse).filter(f => f !== 'General' && !orderedCustom.includes(f)).sort();
+        const folderOrder = ['General', ...orderedCustom, ...remaining];
+
+        const filteredFolders = folderOrder.filter(f => f.toLowerCase().includes(query));
+
+        if (filteredFolders.length > 0) {
+            // Level 1: Folders
+            showTagAutocompleteDropdown(input, filteredFolders, (selectedFolderName) => {
+                // Level 2: Spaces within selected Folder
+                const spacesInFolder = allSpaces
+                    .filter(s => !s.isArchived && (s.folder || 'General') === selectedFolderName)
+                    .sort((a, b) => {
+                        // 🟢 Sync with Sidebar sorting logic: Numbers first, then Alphabetical
+                        const matchA = a.name.match(/^(\d+)/);
+                        const matchB = b.name.match(/^(\d+)/);
+                        const numA = matchA ? parseInt(matchA[1], 10) : Infinity;
+                        const numB = matchB ? parseInt(matchB[1], 10) : Infinity;
+                        if (numA !== numB) return numA - numB;
+                        return a.name.localeCompare(b.name);
+                    });
+
+                setTimeout(() => {
+                    showTagAutocompleteDropdown(input, spacesInFolder.map(s => s.name), (selectedSpaceName) => {
+                        // Level 3: To-Do Lists within selected Space
+                        const selectedSpace = allSpaces.find(s => s.name === selectedSpaceName);
+                        const mainTasks = (selectedSpace.tasks || []).filter(t => !t.completed && !t.isDeleted);
+
+                        // 🟢 แก้ไข: ตัด [ ] ออกจากชื่อ Main List เพื่อไม่ให้ Regex พัง
+                        const listOptions = ["🏠 Main List", ...mainTasks.map(t => t.text)];
+                        
+                        setTimeout(() => {
+                            showTagAutocompleteDropdown(input, listOptions, (selectedListName) => {
+                                const selectedTask = mainTasks.find(t => t.text === selectedListName);
+
+                                // 🟢 Finalize Selection: Store metadata for processing during task creation
+                                input.dataset.mirrorMetadata = JSON.stringify({
+                                    targetFolderName: selectedFolderName,
+                                    targetSpaceId: selectedSpace.id,
+                                    targetListName: selectedListName,
+                                    targetParentTaskId: selectedTask ? selectedTask.createdAt : null
+                                });
+
+                                const before = textBeforeCursor.substring(0, textBeforeCursor.length - lastWord.length);
+                                const after = value.substring(cursorFallback);
+                                const completion = `@sp[${selectedFolderName}]/[${selectedSpaceName}]/[${selectedListName}]`;
+                                insertAutocompleteText(input, before, completion, after, isContentEditable);
+                            }, '📋');
+                        }, 10);
+                    }, '🚀');
+                }, 10);
+            }, '📂');
+            return;
         }
     }
 

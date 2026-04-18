@@ -70,13 +70,76 @@
 #btn-delete-launcher:hover svg { color: #ffffff !important; }
 
 /* --- Tasks & Sub-tasks --- */
-.subtask-list {
+.subtask-list:not(:empty) {
     list-style: none;
     padding: 0;
     margin: 0px -4px 8px 10px; /* 🟢 ร้นระยะย่อหน้าให้งานย่อยขยับเข้ามาชิดซ้ายมากขึ้น */
     border-left: 1px solid var(--border-color);
     padding-left: 12px; /* 🟢 ลดช่องไฟหลังเส้นขอบ เพื่อให้ไอคอนงานย่อยไม่ลอยห่างเกินไป */
+}
+.subtask-list {
     min-height: 8px;
+    transition: all 0.2s ease;
+}
+
+/* 🚫 2. ปิดระบบช่องว่างและเส้นขอบแนวตั้ง (|) ขณะลากงาน เพื่อไม่ให้งานขยับเลื่อน */
+body.is-sorting-tasks .task-item, 
+body.is-sorting-tasks .subtask-item,
+body.is-sorting-tasks .subtask-list {
+    transition: none !important; /* ปิดแอนิเมชั่นเพื่อความแม่นยำในการวาง */
+}
+
+/* 🚫 1. ลบขีดแนวตั้ง (|) และพื้นที่ว่างทิ้งทันทีหากไม่มีงานย่อย (แก้ปัญหาขีดโผล่กวนสายตา) */
+body.is-sorting-tasks .subtask-list:empty,
+.subtask-list:empty { 
+    padding: 0 !important; 
+    min-height: 0 !important;
+    margin: 0 !important;
+    border-left: none !important;
+    background: transparent !important;
+}
+
+/* 🟢 2. ปรับปรุงพื้นที่ Nest ให้เป็น Drop Zone ขนาดใหญ่ (Instant Target) */
+body.is-sorting-tasks .task-item > .subtask-list:empty {
+    position: absolute;
+    right: 35px;
+    top: 0;
+    width: 90px; 
+    height: 100%; /* ขยายเต็มแถวเพื่อให้ลากใส่ได้ง่ายขึ้นมาก */
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    pointer-events: all;
+}
+
+body.is-sorting-tasks .task-item > .subtask-list:empty::after {
+    content: '↳ Nest';
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 60px;
+    height: 24px;
+    border: 2px dashed var(--primary-color); /* เพิ่มความหนาของเส้นประ */
+    background: color-mix(in srgb, var(--primary-color), transparent 94%);
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 900;
+    color: var(--primary-color);
+    opacity: 0.3;
+    transition: all 0.1s ease-in-out;
+}
+
+/* 🔥 3. เอฟเฟกต์เรืองแสง "โดดเด่น" เมื่อลากงานมาโดน (Hover Feedback) */
+/* ใช้ .sortable-ghost เพื่อตรวจจับว่ารายการกำลังจะถูกหย่อนลงไปในกล่องนี้ */
+body.is-sorting-tasks .task-item > .subtask-list:empty:hover::after,
+body.is-sorting-tasks .task-item > .subtask-list:empty:has(.sortable-ghost)::after {
+    opacity: 1;
+    background: var(--primary-color) !important;
+    color: white !important;
+    border-style: solid;
+    box-shadow: 0 0 20px var(--primary-color);
+    transform: scale(1.1);
 }
 .subtask-item { display: flex; align-items: center; gap: 6px; padding: 3px 0; transition: opacity 0.2s; cursor: default; }
 .subtask-text { font-size: 13px; color: var(--text-main); flex: 1; }
@@ -181,6 +244,60 @@ body.is-sorting-tasks .smart-flow-desc {
     border-width: 3.5px;
     transform: scale(1.2);
     box-shadow: 0 0 8px rgba(255, 0, 0, 0.2);
+}
+
+.minimalist-floating-header {
+    background: var(--bg-color);
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    padding: 10px 14px;
+    margin-bottom: 8px;
+    border: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.master-space-header-content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+}
+
+.minimalist-floating-header .group-title {
+    font-weight: 700;
+}
+
+.master-space-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.btn-master-space-tool {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-body);
+    color: var(--text-muted);
+}
+
+.btn-master-space-tool:hover {
+    color: var(--text-main);
+    background: var(--hover-bg);
+}
+
+.btn-master-space-tool.is-active {
+    color: var(--primary-color);
+    border-color: rgba(47, 128, 237, 0.3);
+    background: rgba(47, 128, 237, 0.08);
 }
 
 .collapsible-actions { 
@@ -520,6 +637,41 @@ body.is-sorting-tasks .smart-flow-desc {
     animation: sf-focus-shine 2s infinite ease-in-out; transform: scale(1.01); z-index: 10; margin: 4px 0 !important; border-radius: 8px !important; transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
+/* 🔗 Mirror Task Styling */
+.mirror-badge {
+    font-size: 10px;
+    color: var(--text-muted);
+    font-weight: 700;
+    margin-right: 4px;
+    opacity: 0.7;
+}
+
+.mirror-icon {
+    font-size: 11px;
+    color: var(--primary-color);
+    margin-left: 4px;
+    font-style: normal;
+    opacity: 0.6;
+    cursor: default;
+}
+
+/* 🟢 ซ่อนแท็ก @sp ในงานต้นฉบับเมื่อไม่ได้แก้ไข */
+.hl-mirror {
+    display: none;
+}
+
+/* แสดงแท็กเมื่อกำลังแก้ไข (Focus) เท่านั้น */
+[contenteditable="true"]:focus .hl-mirror {
+    display: inline-block;
+    opacity: 0.4;
+    font-size: 0.85em;
+    font-weight: normal;
+    border: 1px dashed var(--border-color);
+    padding: 0 4px;
+    border-radius: 4px;
+    margin-left: 5px;
+}
+
 .sf-habit-indicator-badge { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; padding: 1px 8px; border-radius: 10px; font-size: 9px; font-weight: 800; display: inline-flex; align-items: center; gap: 3px; text-transform: uppercase; vertical-align: middle; }
 .dark-mode .sf-habit-indicator-badge { background: rgba(22, 163, 74, 0.15); color: #4ade80; border-color: rgba(34, 197, 94, 0.3); }
 .sf-focus-indicator-badge { background: #e0f2fe; color: #0284c7; border: 1px solid #93c5fd; padding: 1px 8px; border-radius: 10px; font-size: 9px; font-weight: 800; display: inline-flex; align-items: center; gap: 3px; text-transform: uppercase; vertical-align: middle; }
@@ -611,11 +763,23 @@ body.is-sorting-tasks .smart-flow-desc {
 }
 #btn-master-add-task { padding: 0 15px; height: 100%; border-radius: 0 6px 6px 0; flex-shrink: 1; min-width: fit-content; transition: all 0.3s ease; }
 
-.task-group-details { margin-bottom: 12px; border: 1px solid transparent; border-radius: 8px; transition: all 0.2s; }
-.task-group-details[open] { background: rgba(0,0,0,0.01); border-color: var(--border-color); }
-.task-group-summary { list-style: none; display: flex; align-items: center; justify-content: space-between; padding: 10px 15px; cursor: pointer; user-select: none; border-radius: 8px; }
+/* 🟢 Notion-style Space Card in Master List */
+.task-group-details { 
+    margin-bottom: 20px; 
+    border: 1px solid var(--border-color); 
+    border-radius: 12px; 
+    background: var(--bg-card);
+    overflow: hidden; /* เพื่อให้ส่วน Portal ที่มีพื้นหลังไม่ล้นขอบมน */
+    box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+    transition: border-color 0.2s ease;
+}
+.task-group-details:hover { border-color: var(--primary-color); }
+
+.task-group-summary { list-style: none; display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; cursor: pointer; user-select: none; border-radius: 0; }
 .group-chevron::after { content: ''; display: inline-block; width: 6px; height: 6px; border-right: 2px solid var(--text-muted); border-bottom: 2px solid var(--text-muted); transform: rotate(-45deg); transition: transform 0.2s; }
 .task-group-details[open] .group-chevron::after { transform: rotate(45deg); }
+
+.minimalist-floating-header { box-shadow: none; border: none; margin-bottom: 0; background: transparent; }
 
 .minimized-bubble {
     width: 44px; height: 44px; border-radius: 50%; background: var(--bg-card); border: 2px solid var(--primary-color);
@@ -1273,11 +1437,7 @@ label[for="drive-merge-mode"],
 
 /* Peek trigger button in space headers */
 .btn-space-peek {
-    padding: 2px 4px;
-    opacity: 0.4;
-    border-radius: 4px;
-    transition: opacity 0.15s, color 0.15s, background 0.15s;
-    flex-shrink: 0;
+    flex-shrink: 0; /* รูปร่างหลักจะอิงตาม btn-master-space-tool */
 }
 .btn-space-peek:hover { opacity: 0.9; color: var(--primary-color); }
 .btn-space-peek.is-peeking {
@@ -1285,4 +1445,84 @@ label[for="drive-merge-mode"],
     background: var(--primary-color) !important;
     color: #fff !important;
     border-color: var(--primary-color) !important;
+}
+
+/* 🟢 Notion-style Folder Dropdown */
+.sf-folder-dropdown {
+    position: fixed;
+    z-index: 110000;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+    padding: 8px;
+    min-width: 220px;
+    max-height: 450px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    animation: sf-dropdown-in 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+@keyframes sf-dropdown-in {
+    from { opacity: 0; transform: translateY(-12px) scale(0.92); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.sf-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-main);
+}
+.sf-dropdown-item:hover { background: var(--hover-bg, rgba(0,0,0,0.05)); }
+.sf-dropdown-item.active { 
+    color: var(--primary-color); 
+    background: color-mix(in srgb, var(--primary-color), transparent 90%) !important;
+    box-shadow: 0 0 10px color-mix(in srgb, var(--primary-color), transparent 80%);
+}
+.sf-dropdown-item.active .checkmark-circle { background-color: var(--primary-color); border-color: var(--primary-color); box-shadow: 0 0 8px var(--primary-color); }
+
+/* 🟢 Master Space Toolbar - Floating UI for Mobile */
+.btn-mobile-space-toolbar-trigger { display: none !important; }
+
+@media (max-width: 768px) {
+    .btn-mobile-space-toolbar-trigger { 
+        display: flex !important; 
+        padding: 4px; 
+        background: var(--bg-body); 
+        border-radius: 8px; 
+        border: 1px solid var(--border-color);
+    }
+    .master-space-toolbar { position: relative; }
+    .master-space-toolbar-items {
+        display: none;
+        position: absolute;
+        right: 0;
+        top: calc(100% + 8px);
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 10px;
+        box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+        z-index: 5000;
+        gap: 12px;
+        align-items: center;
+        white-space: nowrap;
+        animation: sf-dropdown-in 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+    }
+    .master-space-toolbar-items.is-active { display: flex; }
+    .master-space-toolbar-items button { transform: scale(1.1); }
+}
+
+/* 🟢 Master Portal Compartment */
+.master-portal-wrapper {
+    background: color-mix(in srgb, var(--bg-body), transparent 70%);
+    border-top: 1px solid var(--border-color);
+    padding: 12px 16px 16px 16px !important;
 }

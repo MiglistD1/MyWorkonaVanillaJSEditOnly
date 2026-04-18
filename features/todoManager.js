@@ -24,6 +24,13 @@ function sortSpaceTasks(space) {
         if (a.isProminent && !b.isProminent) return -1;
         if (!a.isProminent && b.isProminent) return 1;
 
+        // 🟢 Requirement: Within flagged tasks, sort by flagging time (ASC)
+        if (a.isProminent && b.isProminent) {
+            const timeA = a.prominentAt || 0;
+            const timeB = b.prominentAt || 0;
+            if (timeA !== timeB) return timeA - timeB;
+        }
+
         if (space.taskSortOrder === 'name') {
             return (a.text || "").localeCompare(b.text || "");
         } else if (space.taskSortOrder === 'date') {
@@ -130,6 +137,217 @@ export function toggleTaskFocus(spaceId, taskIndex, isSubtask, parentIndex = nul
         onRenderCallback();
     }
 }
+
+/** 🔗 Helper: Process @sp mirror trigger and create pointers */
+export function processTaskMirroring(task, sourceSpaceId, parentTask = null) {
+    if (task.isMirror) return; // Prevention: Don't mirror a mirror
+
+    // 1. Extract metadata from text (standard syntax) or object metadata (autocomplete result)
+    const mirrorRegex = /@sp\[([^\]]+)\]\/\[([^\]]+)\]\/\[([^\]]+)\]/i;
+    const match = task.text.match(mirrorRegex);
+    
+    if (!match && !task.mirrorTarget) return;
+
+    const targetFolderName = match ? match[1] : task.mirrorTarget?.targetFolderName;
+    const targetSpaceName = match ? match[2] : task.mirrorTarget?.targetSpaceName;
+    const targetSpaceId = task.mirrorTarget?.targetSpaceId;
+    const targetParentTaskId = task.mirrorTarget?.targetParentTaskId;
+
+    // 2. 🟢 สำคัญมาก: ห้ามลบข้อความจากตัวแปร task (ต้นฉบับ) ตรงๆ 
+    // ให้สร้างตัวแปรใหม่สำหรับส่งไปให้งานปลายทาง (Mirror) เท่านั้น
+    const cleanedTextForMirror = task.text.replace(mirrorRegex, '').trim() || task.text.trim();
+    const allSpaces = getSpaces();
+    const targetSpace = targetSpaceId ? allSpaces.find(s => s.id === targetSpaceId) : allSpaces.find(s => s.name === targetSpaceName && (s.folder || 'General') === targetFolderName);
+
+    if (targetSpace && !targetSpace.isDeleted && !targetSpace.isArchived) {
+        if (!targetSpace.tasks) targetSpace.tasks = [];
+        
+        // Prevent creating duplicate mirrors if editing
+        const masterId = task.createdAt || task.id;
+        const existingMirror = targetSpace.tasks.find(t => t.isMirror && t.originalTaskId === masterId);
+        if (existingMirror) return;
+
+        const pointerTask = {
+            text: cleanedTextForMirror, // ปลายทางได้ข้อความที่สะอาด
+            completed: task.completed,
+            createdAt: Date.now() + Math.random(),
+            isMirror: true,
+            originalTaskId: task.createdAt || task.id,
+            originalSpaceId: sourceSpaceId,
+            dueDate: task.dueDate || null,
+            tags: [...(task.tags || [])]
+        };
+
+        if (parentTask) {
+            pointerTask.parentContext = parentTask.text;
+        }
+
+        // 🟢 Logic ใหม่: ถ้าเลือก Task ปลายทางไว้ ให้เอาไปเสียบเป็น Subtask ของงานนั้น
+        if (targetParentTaskId) {
+            const parentInTarget = targetSpace.tasks.find(t => t.createdAt === targetParentTaskId);
+            if (parentInTarget) {
+                if (!parentInTarget.subtasks) parentInTarget.subtasks = [];
+                parentInTarget.subtasks.push(pointerTask);
+            } else {
+                targetSpace.tasks.push(pointerTask);
+            }
+        } else {
+            targetSpace.tasks.push(pointerTask);
+        }
+    }
+}
+
+/** 🔗 Helper: Synchronize mirrored tasks across spaces */
+export function syncMirroredTask(updatedTask, sourceSpaceId) {
+    const mirrorRegex = /@sp\[([^\]]+)\]\/\[([^\]]+)\]\/\[([^\]]+)\]/gi;
+    const allSpaces = getSpaces();
+    const isPointer = updatedTask.isMirror;
+    const masterId = isPointer ? updatedTask.originalTaskId : (updatedTask.createdAt || updatedTask.id);
+    const masterSpaceId = isPointer ? updatedTask.originalSpaceId : sourceSpaceId;
+    const affectedSpaceIds = new Set();
+
+    allSpaces.forEach(space => {
+        let spaceChanged = false;
+        if (!space.tasks) return;
+        
+        const syncNode = (task) => {
+            const isTargetMaster = (!task.isMirror && (task.createdAt === masterId || task.id === masterId) && space.id === masterSpaceId);
+            const isTargetPointer = (task.isMirror && task.originalTaskId === masterId && task.originalSpaceId === masterSpaceId);
+
+            if ((isTargetMaster || isTargetPointer) && task !== updatedTask) {
+                // 🟢 หาข้อความที่ไม่มีโค้ด @sp
+                const incomingCleanText = updatedTask.text.replace(mirrorRegex, '').trim();
+
+                if (task.isMirror) {
+                    // ฝั่งปลายทาง: เก็บแค่ชื่อสะอาดๆ
+                    task.text = incomingCleanText;
+                } else {
+                    // ฝั่งต้นฉบับ: ต้องรักษาแท็ก @sp เดิมของตัวเองไว้ ห้ามโดนชื่อจากปลายทางมาลบทิ้ง
+                    const currentMatch = task.text.match(mirrorRegex);
+                    const myTag = currentMatch ? currentMatch[0] : "";
+                    task.text = `${incomingCleanText} ${myTag}`.trim();
+                }
+                task.completed = updatedTask.completed;
+                task.dueDate = updatedTask.dueDate;
+                task.tags = [...(updatedTask.tags || [])];
+                spaceChanged = true;
+            }
+            if (task.subtasks) task.subtasks.forEach(syncNode);
+        };
+
+        space.tasks.forEach(syncNode);
+        if (spaceChanged) affectedSpaceIds.add(space.id);
+    });
+
+    // 🎯 Targeted Re-render: Update only the affected portal containers in Master List
+    if (affectedSpaceIds.size > 0 && getCurrentSpaceId() === 0) {
+        affectedSpaceIds.forEach(sid => {
+            if (sid !== sourceSpaceId) {
+                const portal = document.getElementById(`portal-${sid}`);
+                if (portal) {
+                    renderSpaceInline(sid, portal);
+                }
+            }
+        });
+    }
+}
+
+/** 🛡️ Helper: Find mirror instances of a task across all spaces */
+function getMirrorsForTask(task, sourceSpaceId) {
+    const mirrors = [];
+    const masterId = task.isMirror ? task.originalTaskId : (task.createdAt || task.id);
+    const masterSpaceId = task.isMirror ? task.originalSpaceId : sourceSpaceId;
+
+    getSpaces().forEach(s => {
+        const scan = (list) => {
+            if (!list) return;
+            list.forEach(t => {
+                if (t.isMirror && t.originalTaskId === masterId && t.originalSpaceId === masterSpaceId && t !== task) {
+                    mirrors.push({ space: s, task: t, list });
+                }
+                if (t.subtasks) scan(t.subtasks);
+            });
+        };
+        scan(s.tasks);
+    });
+    return mirrors;
+}
+
+/** 🟢 Helper: Initialize Nested Sortable for Task Lists (Shared by Space View and Mirror Portal) */
+function initNestedSortable(container, space, refreshFn, disabled = false) {
+    const initList = (el) => {
+        if (el.sortable) el.sortable.destroy();
+        el.sortable = Sortable.create(el, {
+            group: 'nested-tasks', // ใช้กลุ่มเดียวกันเพื่อให้ลากข้ามไปมาระหว่างชั้นได้
+            animation: 150,
+            handle: '.drag-handle',
+            ghostClass: 'sortable-ghost',
+            disabled: disabled,
+            onStart: () => { 
+                document.body.classList.add('is-sorting-tasks'); 
+                window.getSelection().removeAllRanges(); 
+            },
+            onEnd: (evt) => {
+                document.body.classList.remove('is-sorting-tasks');
+                const { from, to, item } = evt;
+                if (from === to && evt.oldIndex === evt.newIndex) return;
+
+                // 1. ระบุพื้นที่ทำงานต้นทางและปลายทาง (รองรับ Master List)
+                const getSpaceFromEl = (listEl) => {
+                    const sid = listEl.closest('[data-space-id]')?.dataset.spaceId;
+                    return getSpaces().find(s => String(s.id) === String(sid)) || space;
+                };
+
+                const srcSpace = getSpaceFromEl(from);
+                const destSpace = getSpaceFromEl(to);
+                if (!srcSpace || !destSpace) return;
+
+                // 2. ดึงข้อมูลออกจาก Array ต้นทาง
+                const fromIsSub = from.classList.contains('subtask-list');
+                const itemIdx = parseInt(item.getAttribute('data-index'));
+                let movedItem;
+
+                if (fromIsSub) {
+                    const pIdFrom = parseFloat(from.dataset.parentId);
+                    const pTaskFrom = srcSpace.tasks.find(t => t.createdAt === pIdFrom);
+                    movedItem = pTaskFrom?.subtasks?.splice(itemIdx, 1)[0];
+                } else {
+                    movedItem = srcSpace.tasks.splice(itemIdx, 1)[0];
+                }
+
+                if (!movedItem) return;
+
+                // 3. คำนวณตำแหน่งและแทรกเข้าสู่ปลายทาง
+                const toIsSub = to.classList.contains('subtask-list');
+                const pIdTo = toIsSub ? parseFloat(to.dataset.parentId) : null;
+                const targetParent = toIsSub ? destSpace.tasks.find(t => t.createdAt === pIdTo) : null;
+                
+                if (toIsSub && targetParent) {
+                    if (!targetParent.subtasks) targetParent.subtasks = [];
+                    targetParent.subtasksHidden = false; // 🟢 ขยายรายการอัตโนมัติเมื่อเอางานใหม่มาใส่
+                }
+
+                const targetArray = toIsSub ? targetParent?.subtasks : destSpace.tasks;
+                if (!targetArray) return;
+
+                const nextEl = item.nextElementSibling;
+                let finalIdx = nextEl ? parseInt(nextEl.getAttribute('data-index')) : targetArray.length;
+
+                if (from === to && finalIdx > itemIdx) finalIdx--;
+                targetArray.splice(finalIdx, 0, movedItem);
+
+                saveData(true);
+                refreshFn();
+            }
+        });
+    };
+
+    // หารายการทั้งหมดที่ต้องทำเป็นพื้นที่ลากวาง
+    const lists = container.querySelectorAll('.task-list, .subtask-list');
+    lists.forEach(initList);
+    if (container.classList.contains('task-list')) initList(container);
+}
+
 let onRenderCallback = () => {};
 
 let _fromCommandCenter = false;
@@ -138,6 +356,7 @@ const svgBreakLink = `<svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" s
 
 let editingTaskLocalIndex = null;
 let editingSubtaskLocalId = null;
+let editingTaskSpaceId = null;
 let editingLinkTaskIdx = null;
 let editingLinkSubIdx = null;
 let editingLinkSpaceId = null;
@@ -509,6 +728,10 @@ async function showManualRepeatDatePicker() {
 export function initTodoManager(callbacks) {
     onRenderCallback = callbacks.onRender;
 
+    // 🟢 FIX: ย้ายการประกาศตัวแปรไว้ด้านบนเพื่อป้องกัน ReferenceError (Temporal Dead Zone)
+    const btnCollapseAll = document.getElementById('btn-collapse-all-subtasks');
+    const btnExpandAll = document.getElementById('btn-expand-all-subtasks');
+
     // 🟢 ระบบ Mobile Tools Menu (3 จุด)
     const mobileToolsBtn = document.getElementById('btn-mobile-todo-tools');
     if (mobileToolsBtn) {
@@ -698,6 +921,66 @@ export function initTodoManager(callbacks) {
         templateBtn.style.cssText = baseStyle;
         
         sortSelect.parentNode.insertBefore(templateBtn, habitBtn ? habitBtn.nextSibling : sortSelect.nextSibling);
+    }
+
+    // 🟢 New: "Go to Master" Button - Navigates to Command Center and ensures this Space is visible
+    let goToMasterBtn = document.getElementById('btn-go-to-master');
+    if (btnCollapseAll && !goToMasterBtn) {
+        goToMasterBtn = document.createElement('button');
+        goToMasterBtn.id = 'btn-go-to-master';
+        goToMasterBtn.className = 'btn btn-outline';
+        goToMasterBtn.title = 'Open in Command Center (Command)';
+        const isMob = window.innerWidth <= 768;
+        // Use Target/Home icon to represent the "Center"
+        goToMasterBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="${isMob ? '' : 'margin-right:6px;'}"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>${isMob ? '' : ' Command'}`;
+        
+        const baseStyle = `display: inline-flex; align-items: center; justify-content: center; margin-left: 8px; padding: ${isMob ? '0' : '2px 8px'}; height: ${isMob ? '30px' : '27px'}; width: ${isMob ? '30px' : 'auto'}; font-size: 11px; font-weight: 700; color: var(--text-muted); border: 1px solid var(--border-color); background: var(--bg-card); transition: all 0.3s ease;`;
+        goToMasterBtn.style.cssText = baseStyle;
+
+        // 🟢 1. ย้ายมาอยู่ด้านขวาของปุ่ม Collapse All
+        btnCollapseAll.parentNode.insertBefore(goToMasterBtn, btnCollapseAll.nextSibling);
+
+        goToMasterBtn.onclick = () => {
+            const sid = getCurrentSpaceId();
+            if (sid === 0) return;
+
+            if (window.masterTodoListState) {
+                const settings = getAppSettings();
+                const isHidden = window.masterTodoListState.activeSpaceFilters.has(sid);
+
+                // 🟢 หาก Space ถูกซ่อนอยู่ ให้บังคับเปิดและย้ายไปล่างสุดของรายการ (กรณีเปิดใหม่)
+                if (isHidden) {
+                    window.masterTodoListState.activeSpaceFilters.delete(sid);
+                    
+                    if (!settings.viewTemplates) settings.viewTemplates = {};
+                    let currentOrder = settings.viewTemplates.spaceOrder || [];
+                    
+                    // ย้าย ID ไปไว้ท้ายสุดของลำดับการจัดเรียงในหน้า Master List
+                    currentOrder = currentOrder.filter(id => parseInt(id) !== parseInt(sid));
+                    currentOrder.push(sid);
+                    settings.viewTemplates.spaceOrder = currentOrder;
+                }
+                window.masterTodoListState.selectedQuickAddSpaceId = sid;
+            }
+
+            setCurrentSpaceId(0);
+            saveData(true);
+            if (typeof window.renderAll === 'function') window.renderAll();
+            
+            // เลื่อนหน้าจอไปยังกลุ่มงานของ Space นั้นในหน้า Master ทันที
+            setTimeout(() => {
+                const targetEl = document.querySelector(`.task-group-details[data-space-id="${sid}"]`);
+                if (targetEl) {
+                    targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    
+                    // ✨ เพิ่มแอนิเมชั่นเน้นกรอบของ Space เพื่อให้เห็นตำแหน่งชัดเจน
+                    targetEl.style.transition = 'box-shadow 0.5s ease, border-color 0.5s ease';
+                    targetEl.style.boxShadow = '0 0 20px var(--primary-color)';
+                    targetEl.style.borderColor = 'var(--primary-color)';
+                    setTimeout(() => { targetEl.style.boxShadow = ''; targetEl.style.borderColor = ''; }, 1500);
+                }
+            }, 450);
+        };
     }
 
     if (sortSelect) {
@@ -1006,8 +1289,7 @@ export function initTodoManager(callbacks) {
         });
     }
 
-    // 🟢 Expand All Subtasks
-    const btnExpandAll = document.getElementById('btn-expand-all-subtasks');
+    // 🟢 Expand All Subtasks (Logic Binding)
     if (btnExpandAll) {
         btnExpandAll.onclick = () => {
             const space = getCurrentSpace();
@@ -1017,8 +1299,7 @@ export function initTodoManager(callbacks) {
         };
     }
 
-    // 🟢 Collapse All Subtasks
-    const btnCollapseAll = document.getElementById('btn-collapse-all-subtasks');
+    // 🟢 Collapse All Subtasks (Logic Binding)
     if (btnCollapseAll) {
         btnCollapseAll.onclick = () => {
             const space = getCurrentSpace();
@@ -1538,6 +1819,22 @@ export function initTodoManager(callbacks) {
             const pIdx = parseInt(btn.getAttribute('data-parent-index'));
             const sIdx = parseInt(btn.getAttribute('data-sub-index'));
             if (space.tasks[pIdx]?.subtasks) {
+                const subtask = space.tasks[pIdx].subtasks[sIdx];
+
+                // 🛡️ Deletion Safety for Subtasks
+                if (!subtask.isMirror) {
+                    const mirrors = getMirrorsForTask(subtask, space.id);
+                    if (mirrors.length > 0) {
+                        const names = [...new Set(mirrors.map(m => m.space.name))].join(', ');
+                        if (confirm(`This subtask is mirrored in [${names}]. Delete from all locations?`)) {
+                            mirrors.forEach(m => {
+                                const mIdx = m.list.indexOf(m.task);
+                                if (mIdx > -1) m.list.splice(mIdx, 1);
+                            });
+                        }
+                    }
+                }
+
                 space.tasks[pIdx].subtasks.splice(sIdx, 1);
                 saveData();
                 onRenderCallback();
@@ -1554,6 +1851,21 @@ export function initTodoManager(callbacks) {
         if (e.target.closest('.delete-task-btn')) { 
             const idx = parseInt(e.target.closest('.delete-task-btn').getAttribute('data-index')); 
             const task = space.tasks[idx];
+
+            // 🛡️ Deletion Safety: Prompt if this is a master task with active mirrors
+            if (!task.isMirror) {
+                const mirrors = getMirrorsForTask(task, space.id);
+                if (mirrors.length > 0) {
+                    const names = [...new Set(mirrors.map(m => m.space.name))].join(', ');
+                    if (confirm(`This task is mirrored in [${names}]. Delete from all locations?`)) {
+                        mirrors.forEach(m => {
+                            const mIdx = m.list.indexOf(m.task);
+                            if (mIdx > -1) m.list.splice(mIdx, 1);
+                        });
+                    }
+                }
+            }
+
             task.isDeleted = true;
             task.deletedAt = Date.now();
             const days = getAppSettings().autoDeleteDays || 30;
@@ -1674,18 +1986,12 @@ export function initTodoManager(callbacks) {
             const pIdxAttr = btn.getAttribute('data-parent-index');
             const pIdx = pIdxAttr !== null ? parseInt(pIdxAttr) : null;
 
+            const list = (pIdx !== null) ? space.tasks[pIdx]?.subtasks : space.tasks;
             let task;
-            if (pIdx !== null) {
-                task = space.tasks[pIdx]?.subtasks?.[index];
-                if (task) {
-                    task.isProminent = !task.isProminent;
-                    saveData();
-                    onRenderCallback();
-                }
-                return;
-            }
+            if (pIdx !== null) task = list?.[index];
+            else task = space.tasks[index];
 
-            task = space.tasks[index];
+            if (!task) return;
 
             if (task.isProminent) {
                 task.isProminent = false;
@@ -1695,34 +2001,37 @@ export function initTodoManager(callbacks) {
                     settings.focusedTask = null;
                 }
 
-                // ย้ายกลับไปยังตำแหน่งเดิมหากมีการบันทึกไว้
-                if (typeof task.originalIndex === 'number') {
-                    const targetIndex = task.originalIndex;
-                    const [movedTask] = space.tasks.splice(index, 1);
-                    // ป้องกันกรณี index เปลี่ยนแปลงไปมากจนเกินอาเรย์ (เช่น มีการลบงานอื่นออก)
-                    const finalIndex = Math.min(targetIndex, space.tasks.length);
-                    space.tasks.splice(finalIndex, 0, movedTask);
-                    delete task.originalIndex; // ลบค่าบันทึกทิ้งหลังจากย้ายกลับแล้ว
+                // 🟢 FIX: เมื่อปิดธง ให้เลื่อนงานลงมาอยู่ลำดับแรกของงานปกติ (ต่ำกว่าธงที่เหลือ)
+                const [movedTask] = list.splice(index, 1);
+                let targetIndex = 0;
+                for (let i = 0; i < list.length; i++) {
+                    if (list[i].isProminent) targetIndex = i + 1;
+                    else break;
                 }
+                // หากมีลำดับเดิมที่เคยเซฟไว้ ให้พยายามย้ายกลับไปตรงนั้น (แต่ต้องไม่สูงกว่าธง)
+                if (typeof task.originalIndex === 'number') {
+                    targetIndex = Math.max(targetIndex, Math.min(task.originalIndex, list.length));
+                    delete task.originalIndex;
+                }
+                list.splice(targetIndex, 0, movedTask);
             } else {
                 // อนุญาตให้เลือกเน้นงานได้หลายงานพร้อมกัน
                 task.isProminent = true;
+                task.prominentAt = Date.now(); // 🟢 Set timestamp
+
 
                 // บันทึกตำแหน่งเดิมไว้ก่อนย้าย (เพื่อเอากลับมาที่เดิมเมื่อเลิกติดธง)
                 task.originalIndex = index; 
-                const [movedTask] = space.tasks.splice(index, 1);
+                const [movedTask] = list.splice(index, 1);
                 
                 // 🟢 ค้นหาตำแหน่งสุดท้ายของกลุ่มงานที่ติดธงอยู่แล้ว
                 let lastProminentIdx = -1;
-                for (let i = 0; i < space.tasks.length; i++) {
-                    if (space.tasks[i].isProminent) {
-                        lastProminentIdx = i;
-                    } else {
-                        break; // งานติดธงจะอยู่บนสุดเสมอ จึงหยุดหาได้ทันทีที่เจองานปกติ
-                    }
+                for (let i = 0; i < list.length; i++) {
+                    if (list[i].isProminent) lastProminentIdx = i;
+                    else break;
                 }
                 // แทรกต่อท้ายกลุ่มงานที่ติดธงล่าสุด
-                space.tasks.splice(lastProminentIdx + 1, 0, movedTask);
+                list.splice(lastProminentIdx + 1, 0, movedTask);
             }
             saveData();
             onRenderCallback();
@@ -1860,6 +2169,7 @@ export function initTodoManager(callbacks) {
             if (subtask) {
                 subtask.completed = isChecked;
                 // 🌟 เรียก Reward Scanner สำหรับงานย่อย
+                syncMirroredTask(subtask, space.id);
                 if (isChecked && window.processRewardScanner) {
                     window.processRewardScanner(subtask.text, false, { x: e.clientX, y: e.clientY }, 'task', space.id);
                 }
@@ -1914,10 +2224,6 @@ export function initTodoManager(callbacks) {
                 if (futureTaskIdx > -1) {
                     space.tasks.splice(futureTaskIdx, 1);
                 }
-
-                // 🟢 ย้ายกลับมาไว้บนสุดของรายการ To-do เพื่อให้ผู้ใช้เห็นการเปลี่ยนแปลงชัดเจน
-                const [restoredTask] = space.tasks.splice(index, 1);
-                space.tasks.unshift(restoredTask);
             }
 
                 if (task.subtasks) {
@@ -1928,6 +2234,8 @@ export function initTodoManager(callbacks) {
                 }
                 console.log(`[handleTaskChange] Repeating task ${task.text} (ID: ${task.id}) completed: ${isChecked}.`);
 
+                syncMirroredTask(task, space.id);
+
             } else if (task.calendarEventId) {
                 // 🟢 NEW: สำหรับงานที่ซิงค์ปฏิทิน ให้ถือว่าเป็นการ Complete (ย้ายเข้าส่วน Synced Calendar) แทนการลงถังขยะ
                 task.completed = isChecked;
@@ -1937,6 +2245,7 @@ export function initTodoManager(callbacks) {
                 if (task.subtasks) {
                     task.subtasks.forEach(sub => { sub.completed = isChecked; });
                 }
+                syncMirroredTask(task, space.id);
                 console.log(`[handleTaskChange] Task ${task.text} (ID: ${task.id}) with calendarEventId: ${task.calendarEventId} is now completed: ${isChecked}. isDeleted: ${task.isDeleted}`);
             } else {
                 // For non-repeating tasks, use the existing logic (mark as deleted when checked)
@@ -1959,9 +2268,8 @@ export function initTodoManager(callbacks) {
                     task.deletedAt = null;
                     task.expiryAt = null;
                     if (task.subtasks) task.subtasks.forEach(sub => { sub.isDeleted = false; sub.completed = false; });
-                    const [restoredTask] = space.tasks.splice(index, 1);
-                    space.tasks.unshift(restoredTask);
                 }
+                syncMirroredTask(task, space.id);
             }
 
             if (task.calendarEventId) {
@@ -2046,8 +2354,12 @@ export function initTodoManager(callbacks) {
 
             if (value && task) {
                 if (!task.subtasks) task.subtasks = [];
-                task.subtasks.push({ id: Date.now(), text: value, completed: false });
+                const mirrorMetadata = input.dataset.mirrorMetadata ? JSON.parse(input.dataset.mirrorMetadata) : null;
+                const newSub = { id: Date.now(), text: value, completed: false, createdAt: Date.now(), mirrorTarget: mirrorMetadata };
+                task.subtasks.push(newSub);
+                processTaskMirroring(newSub, space.id, task);
                 input.value = ''; // 🟢 ล้างข้อความในช่องพิมพ์ทันทีเพื่อป้องกันการส่งซ้ำ
+                delete input.dataset.mirrorMetadata;
                 saveData();
                 // We keep addingSubtaskToTaskId as pId to trigger the next input rendering
             } else if (!shouldCreateMain) {
@@ -2855,6 +3167,7 @@ async function addTask() {
         }
 
         space.tasks.push(newTask); 
+        processTaskMirroring(newTask, space.id);
         currentTaskRepeatConfig = { isRepeating: false, frequency: 'daily', interval: 1 }; // Reset UI and state after add
         const repeatBtn = document.getElementById('btn-task-repeat');
         if (repeatBtn) {
@@ -2894,12 +3207,15 @@ async function addTask() {
     } 
 }
 
-export function openTaskEditModal(idx, fromCommandCenter = false, subId = null) {
+export function openTaskEditModal(idx, fromCommandCenter = false, subId = null, spaceId = null) {
     _fromCommandCenter = fromCommandCenter;
     editingTaskLocalIndex = idx;
     editingSubtaskLocalId = subId;
+    editingTaskSpaceId = spaceId;
     
-    const space = getCurrentSpace();
+    const spaces = getSpaces();
+  // 🟢 ค้นหา Space จาก ID ที่ส่งมา (กรณีเปิดจาก Master List) หรือใช้พื้นที่ปัจจุบัน
+    const space = spaceId ? spaces.find(s => s.id === spaceId) : getCurrentSpace();
     if (!space || !space.tasks) return;
 
     let task = space.tasks[idx];
@@ -2920,13 +3236,16 @@ export function openTaskEditModal(idx, fromCommandCenter = false, subId = null) 
 }
 
 async function saveEditedTask() {
-    // ใน Master View, getCurrentSpace() จะคืนค่า Space ที่เราสับเปลี่ยนไว้ก่อนเปิด Modal
-    const space = getCurrentSpace(); 
+    const spaces = getSpaces();
+    // 🟢 ใช้ Space ID ที่บันทึกไว้ตอนเปิด Modal เพื่อเซฟข้อมูลลงจุดเดิมให้ถูกต้อง
+    const space = editingTaskSpaceId ? spaces.find(s => s.id === editingTaskSpaceId) : getCurrentSpace();
     if (!space) return;
 
     let task = space.tasks[editingTaskLocalIndex];
+    let parentTask = null;
     
     if (editingSubtaskLocalId) {
+        parentTask = task;
         task = task.subtasks.find(s => s.id === editingSubtaskLocalId);
     }
 
@@ -2958,6 +3277,8 @@ async function saveEditedTask() {
     task.text = newName;
     task.dueDate = newDate || null;
     task.repeatConfig = { ...editingTaskRepeatConfig };
+    processTaskMirroring(task, space.id, parentTask);
+    syncMirroredTask(task, space.id);
 
     try {
         const token = await getAuthToken(false);
@@ -3010,6 +3331,8 @@ export function openTaskLinkModal(idx, isSubtask, pIdx = null, spaceId = null) {
         editingLinkSubIdx = null;
     }
     editingLinkSpaceId = spaceId;
+  // 🟢 บันทึกสถานะว่าเปิดจาก Command Center หรือไม่ เพื่อให้ตอนเซฟสั่งรีเฟรชหน้า Dashboard ได้ถูกต้อง
+  window._isModalOpenedFromCommandCenter = (getCurrentSpaceId() === 0);
 
     let task;
     if (spaceId === 'sandbox') {
@@ -3240,21 +3563,8 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
     [taskListUI, archiveListUI, trashListUI, repeatingWaitingListUI, calendarSyncListUI].forEach(c => c && c.querySelectorAll('.task-actual-text').forEach(el => applySyntaxHighlighting(el)));
 
     if (!isFiltered && taskListUI) {
-        if (taskListUI.sortable) taskListUI.sortable.destroy();
-        taskListUI.sortable = Sortable.create(taskListUI, { 
-            group: 'nested-tasks', animation: 150, handle: '.drag-handle', ghostClass: 'sortable-ghost',
-            disabled: space.isArchived || (space.taskSortOrder !== 'manual' && !!space.taskSortOrder),
-            onStart: () => { document.body.classList.add('is-sorting-tasks'); window.getSelection().removeAllRanges(); },
-            onEnd: function (evt) { 
-                const oldIdx = parseInt(evt.item.getAttribute('data-index'));
-                const movedItem = space.tasks.splice(oldIdx, 1)[0];
-                const nextEl = evt.item.nextElementSibling;
-                let targetIdx = nextEl ? parseInt(nextEl.getAttribute('data-index')) : space.tasks.length;
-                if (nextEl && targetIdx > oldIdx) targetIdx--;
-                space.tasks.splice(targetIdx, 0, movedItem);
-                saveData(); onRenderCallback(); 
-            }
-        });
+        const isDisabled = space.isArchived || (space.taskSortOrder !== 'manual' && !!space.taskSortOrder);
+        initNestedSortable(taskListUI, space, onRenderCallback, isDisabled);
     }
 }
 
@@ -3265,21 +3575,86 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
  */
 export function renderSpaceInline(targetSpaceId, targetContainer, options = {}) {
     const spaceIdStr = String(targetSpaceId);
+
+    // 🛑 1. "Do Not Disturb" Mode: ป้องกัน UI รีเฟรชขณะกำลังพิมพ์
+    const active = document.activeElement;
+    // 🔘 FIX: ตรวจสอบสถานะการยืนยัน (isSubmitting) เพื่อให้การ Mirror อัปเดตทันทีที่กด Enter
+    const isSubmitting = active?.dataset?.isSubmitting === "true";
+
+    if (active && targetContainer.contains(active) && !isSubmitting) {
+        if (active.classList.contains('task-actual-text') || 
+            active.classList.contains('subtask-add-input') ||
+            active.classList.contains('subtask-inline-input') ||
+            ((active.tagName === 'INPUT' && active.type !== 'checkbox') || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT')) {
+            return;
+        }
+    }
+
+    // 🟢 1. Proper Cleanup: Clear content and listeners before setting innerHTML
+    if (targetContainer) {
+        targetContainer.innerHTML = '';
+        targetContainer.onclick = null;
+        targetContainer.onchange = null;
+        targetContainer.onkeydown = null;
+    }
+
     const space = getSpaces().find(s => String(s.id) === spaceIdStr);
     if (!space || !targetContainer) {
-        console.error(`[renderSpaceInline] Space not found: ${targetSpaceId}`);
+        console.warn('[MirrorPortal] renderSpaceInline:early-return', {
+            targetSpaceId,
+            foundSpace: !!space,
+            hasContainer: !!targetContainer,
+        });
         return;
     }
 
     const isProminentHidden = space.hideProminentTasks || false;
     const isMobile = window.innerWidth <= 768;
     const currentSort = space.taskSortOrder || 'manual';
-    const showActions = options.showActions !== undefined ? options.showActions : false;
+    const showActions = space.showTaskActions || false;
 
     // Apply sorting if needed
     if (space.taskSortOrder && space.taskSortOrder !== 'manual') sortSpaceTasks(space);
 
-    const displayTasks = (space.tasks || []).filter(t => t && !t.completed && !t.isDeleted);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    let displayTasks = (space.tasks || []).filter(t => {
+        if (!t || t.completed || t.isDeleted) return false;
+
+        // 🟢 กรองงานทำซ้ำในอนาคตออก (เพื่อให้ตรงกับ Logic ในหน้า Space)
+        const taskDue = t.dueDate ? new Date(t.dueDate).setHours(0,0,0,0) : null;
+        const isRepeating = t.repeatConfig && t.repeatConfig.isRepeating;
+        const isUpcoming = !t.isProminent && isRepeating && taskDue && taskDue > today.getTime() && t.wasRegenerated !== false;
+        return !isUpcoming;
+    });
+
+    // 🟢 Apply Command Center Global Filters (Flagged / Date / Search)
+    if (window.masterTodoListState) {
+        const state = window.masterTodoListState;
+        if (state.showOnlyFlagged) {
+            displayTasks = displayTasks.filter(t => t && t.isProminent);
+        }
+        if (state.dateFilter && state.dateFilter !== 'all') {
+            const filter = state.dateFilter;
+            const todayTime = today.getTime();
+            displayTasks = displayTasks.filter(t => {
+                if (!t.dueDate) return filter === 'no-date';
+                if (filter === 'no-date') return false;
+                const d = new Date(t.dueDate);
+                d.setHours(0, 0, 0, 0);
+                const dt = d.getTime();
+                if (filter === 'past')   return dt < todayTime;
+                if (filter === 'today')  return dt === todayTime;
+                if (filter === 'future') return dt > todayTime;
+                return false;
+            });
+        }
+        if (state.searchQuery) {
+            const q = state.searchQuery.toLowerCase().trim();
+            displayTasks = displayTasks.filter(t => (t.text || '').toLowerCase().includes(q));
+        }
+    }
 
     const tasksHTML = displayTasks.map(task => {
         const originalIndex = space.tasks.indexOf(task);
@@ -3295,17 +3670,92 @@ export function renderSpaceInline(targetSpaceId, targetContainer, options = {}) 
         });
     }).join('');
 
-    targetContainer.innerHTML = `<ul class="task-list master-group-list" data-space-id="${space.id}">${tasksHTML}</ul>`;
+    const nativeMirrorControls = `
+        <div class="mirror-native-controls" style="display:none;" data-space-id="${space.id}">
+            <button type="button" id="btn-toggle-task-actions" data-space-id="${space.id}"></button>
+            <button type="button" id="btn-toggle-prominent-tasks" data-space-id="${space.id}"></button>
+            <button type="button" id="btn-expand-all-subtasks" data-space-id="${space.id}"></button>
+            <button type="button" id="btn-collapse-all-subtasks" data-space-id="${space.id}"></button>
+        </div>
+    `;
+
+    const portalHtml = tasksHTML || `<div class="mirror-portal-empty" style="padding: 8px 0; color: var(--text-muted); font-size: 12px;">No active tasks in this space.</div>`;
+
+    targetContainer.innerHTML = tasksHTML
+        ? `${nativeMirrorControls}<ul class="task-list master-group-list mirror-portal-content" data-space-id="${space.id}">${tasksHTML}</ul>`
+        : `${nativeMirrorControls}<div class="mirror-portal-content mirror-portal-empty" data-space-id="${space.id}">${portalHtml}</div>`;
+
+    // 🟢 Local Refresh Handler for the portal
+    const onRefresh = () => {
+        // 🔘 FIX: ใช้ Closure-safe options เพื่อป้องกันการนำค่าเก่ามาวาดทับ
+        if (targetContainer._renderTimeout) return;
+        targetContainer._renderTimeout = setTimeout(() => {
+            delete targetContainer._renderTimeout;
+            
+            const currentInDom = document.getElementById(`portal-${targetSpaceId}`) || targetContainer;
+            if (!document.body.contains(currentInDom)) return; // ป้องกันการวาดลงกล่องที่ถูกลบไปแล้ว
+
+            // 🔘 FIX: ดึงสถานะล่าสุดจาก Global State และตรวจสอบ Space ID ให้ตรงกันเป๊ะๆ
+            // ป้องกันปัญหา "ช่องกรอกกระโดด" ข้าม Main Task หรือข้าม Space
+            const globalAddingId = (window.masterTodoListState && String(window.masterTodoListState.addingSubtaskToSpaceId) === spaceIdStr)
+                ? window.masterTodoListState.addingSubtaskToTaskId
+                : null;
+
+            const currentOptions = { ...options, addingSubtaskToId: globalAddingId };
+            renderSpaceInline(targetSpaceId, currentInDom, currentOptions);
+        }, 10); // หน่วง 10ms เพื่อให้ Event Queue เคลียร์ค่าค้างเก่า
+    };
+
+    const mirrorToggleActionsBtn = targetContainer.querySelector('#btn-toggle-task-actions');
+    const mirrorToggleProminentBtn = targetContainer.querySelector('#btn-toggle-prominent-tasks');
+    const mirrorExpandAllBtn = targetContainer.querySelector('#btn-expand-all-subtasks');
+    const mirrorCollapseAllBtn = targetContainer.querySelector('#btn-collapse-all-subtasks');
+
+    if (mirrorToggleActionsBtn) {
+        mirrorToggleActionsBtn.onclick = () => {
+            const s = getSpaces().find(sp => String(sp.id) === spaceIdStr);
+            if (!s) return;
+            s.showTaskActions = !s.showTaskActions;
+            saveData();
+            onRefresh();
+        };
+    }
+    if (mirrorToggleProminentBtn) {
+        mirrorToggleProminentBtn.onclick = () => {
+            const s = getSpaces().find(sp => String(sp.id) === spaceIdStr);
+            if (!s) return;
+            s.hideProminentTasks = !s.hideProminentTasks;
+            saveData();
+            onRefresh();
+        };
+    }
+    if (mirrorExpandAllBtn) {
+        mirrorExpandAllBtn.onclick = () => {
+            const s = getSpaces().find(sp => String(sp.id) === spaceIdStr);
+            s?.tasks?.forEach(t => { if (t.subtasks?.length > 0) t.subtasksHidden = false; });
+            saveData();
+            onRefresh();
+        };
+    }
+    if (mirrorCollapseAllBtn) {
+        mirrorCollapseAllBtn.onclick = () => {
+            const s = getSpaces().find(sp => String(sp.id) === spaceIdStr);
+            s?.tasks?.forEach(t => { if (t.subtasks?.length > 0) t.subtasksHidden = true; });
+            saveData();
+            onRefresh();
+        };
+    }
 
     // 🟢 Apply syntax highlighting
     targetContainer.querySelectorAll('.task-actual-text').forEach(el => applySyntaxHighlighting(el));
 
-    // 🟢 Local Refresh Handler for the portal
-    const onRefresh = () => renderSpaceInline(targetSpaceId, targetContainer, options);
-
     // 🟢 ENCAPSULATED EVENT DELEGATION: Handle all task actions without global state
     targetContainer.onclick = async (e) => {
         const target = e.target;
+        // 🔘 ดึงข้อมูล Fresh จาก Source ทุกครั้งที่คลิกเพื่อป้องกัน State Ghosting
+        const space = getSpaces().find(s => String(s.id) === spaceIdStr);
+        if (!space) return;
+
         const li = target.closest('li');
         if (!li) return;
 
@@ -3316,18 +3766,61 @@ export function renderSpaceInline(targetSpaceId, targetContainer, options = {}) 
 
         if (!task) return;
 
+        // 🔘 0. Subtask Specific Controls (Master View Portal)
+        // ปุ่มเปิด/ปิดแถบเมนู Subtask Options
+        if (target.closest('.toggle-subtask-controls-btn')) {
+            task.subtaskControlsOpen = !task.subtaskControlsOpen;
+            saveData(); onRefresh();
+            return;
+        }
+
+        // ปุ่มซ่อน/แสดงงานย่อยที่ "ยังไม่เสร็จ" (Pending)
+        if (target.closest('.hide-pending-subtasks-btn')) {
+            task.pendingSubtasksHidden = !task.pendingSubtasksHidden;
+            saveData(); onRefresh();
+            return;
+        }
+
+        // ปุ่มซ่อน/แสดงงานย่อยที่ "เสร็จแล้ว" (Completed)
+        if (target.closest('.hide-completed-subtasks-btn')) {
+            task.completedSubtasksHidden = !task.completedSubtasksHidden;
+            saveData(); onRefresh();
+            return;
+        }
+
+        // ปุ่ม ยุบ/ขยาย รายการงานย่อยทั้งหมด
+        if (target.closest('.toggle-subtasks-btn')) {
+            task.subtasksHidden = !task.subtasksHidden;
+            saveData(); onRefresh();
+            return;
+        }
+
         // 1. Toggle Prominent (Flag)
         if (target.closest('.btn-prominent-task')) {
             task.isProminent = !task.isProminent;
+            const list = isSubtask ? space.tasks[pIdx].subtasks : space.tasks;
+
             if (task.isProminent) {
-                // Logic to move to top of its group
-                const [movedTask] = isSubtask ? space.tasks[pIdx].subtasks.splice(idx, 1) : space.tasks.splice(idx, 1);
-                if (!isSubtask) {
-                    space.tasks.unshift(movedTask);
-                } else {
-                    space.tasks[pIdx].subtasks.unshift(movedTask);
+                task.prominentAt = Date.now(); // 🟢 Set timestamp
+                
+                // 🟢 Logic: Move to the end of the flagged group (Requirement: first stays on top)
+                const [movedTask] = list.splice(idx, 1);
+                let lastIdx = -1;
+                for (let i = 0; i < list.length; i++) {
+                    if (list[i].isProminent) lastIdx = i; else break;
                 }
+                list.splice(lastIdx + 1, 0, movedTask);
+            } else {
+                // 🟢 FIX: เมื่อปิดธงใน Master List ให้เลื่อนงานลงมาต่ำกว่ากลุ่มธงทันที
+                const [movedTask] = list.splice(idx, 1);
+                let targetIdx = 0;
+                for (let i = 0; i < list.length; i++) {
+                    if (list[i].isProminent) targetIdx = i + 1;
+                    else break;
+                }
+                list.splice(targetIdx, 0, movedTask);
             }
+
             saveData(); onRefresh();
             return;
         }
@@ -3370,14 +3863,16 @@ export function renderSpaceInline(targetSpaceId, targetContainer, options = {}) 
             if (task.linkData?.url) {
                 window.open(task.linkData.url, '_blank');
             } else {
-                openTaskLinkModal(idx, isSubtask, pIdx);
+                // 🟢 FIX: ต้องส่ง space.id เข้าไปด้วยเพื่อให้หน้าต่าง Link ค้นหางานเจอในโหมด Master List
+                openTaskLinkModal(idx, isSubtask, pIdx, space.id);
             }
             return;
         }
 
         // 6. Edit Modal
         if (target.closest('.edit-task-btn') || target.closest('.edit-task-text-btn') || target.closest('.edit-subtask-btn')) {
-            openTaskEditModal(isSubtask ? pIdx : idx, isSubtask, isSubtask ? task.id : null);
+            // 🟢 FIX: ส่ง space.id ไปด้วยเพื่อให้ Modal เข้าถึงข้อมูลงานได้จากหน้า Master List
+            openTaskEditModal(isSubtask ? pIdx : idx, true, isSubtask ? (task.id || task.createdAt) : null, space.id);
             return;
         }
 
@@ -3446,26 +3941,58 @@ export function renderSpaceInline(targetSpaceId, targetContainer, options = {}) 
             const isSubtask = li.dataset.type === 'subtask';
             const pIdx = isSubtask ? parseInt(li.closest('.subtask-list').dataset.parentIndex) : null;
             const task = isSubtask ? space.tasks[pIdx]?.subtasks?.[idx] : space.tasks[idx];
-            
+
             if (task) {
-                task.completed = e.target.checked;
-                task.completedAt = task.completed ? Date.now() : null;
-                if (task.completed) task.isProminent = false;
-                saveData();
-                setTimeout(() => onRefresh(), task.completed ? 800 : 0);
+                const isChecked = e.target.checked;
+                
+                // 🟢 Sync logic with handleTaskChange (Matching Native Space View)
+                if (task.repeatConfig?.isRepeating || task.calendarEventId) {
+                    task.completed = isChecked;
+                    task.completedAt = isChecked ? Date.now() : null;
+                    task.isProminent = false;
+                    if (task.subtasks) task.subtasks.forEach(s => s.completed = isChecked);
+                } else {
+                    if (isChecked) {
+                        task.isDeleted = true;
+                        task.deletedAt = Date.now();
+                        const days = getAppSettings().autoDeleteDays || 30;
+                        task.expiryAt = task.deletedAt + (days * 24 * 60 * 60 * 1000);
+                        task.completed = false;
+                        task.isProminent = false;
+                        if (task.subtasks) task.subtasks.forEach(s => { s.isDeleted = true; s.completed = false; });
+                    } else {
+                        task.completed = false;
+                        task.isDeleted = false;
+                    }
+                }
+
+                // 🌟 Quest Loot Scanner
+                if (isChecked && window.processRewardScanner) {
+                    window.processRewardScanner(task.text, false, { x: e.clientX, y: e.clientY }, 'task', space.id);
+                }
+
+                syncMirroredTask(task, space.id);
+
+                saveData(true); // บันทึกทันทีเพื่อให้ Mirror Portal ดึงข้อมูลใหม่ไปวาด
+                onRefresh(); // 🟢 No more 800ms delay
             }
         }
     };
 
     // 🟢 Attach Subtask Event Listeners
     targetContainer.querySelectorAll('.subtask-list').forEach(subListEl => {
-        attachSubtaskEventListeners(subListEl, space, onRefresh, {}, () => { saveData(); onRefresh(); });
+        attachSubtaskEventListeners(subListEl, space, onRefresh, {}, () => { 
+            // 🔘 FIX: ใช้ DOM Lookup สำหรับ subtask refresh
+            const freshC = document.getElementById(`portal-${targetSpaceId}`) || targetContainer;
+            saveData(true); 
+            renderSpaceInline(targetSpaceId, freshC, options);
+        });
     });
 
     // 🟢 Attach Inline Editing Listeners
     attachTaskInlineEditListeners(targetContainer, () => space, {
         saveData,
-        onUpdate: onRefresh,
+        onUpdate: () => onRefresh(),
         onDeleteEmptyTask: (space, index, type, li) => {
             if (type === 'task') space.tasks.splice(index, 1);
             else {
@@ -3473,13 +4000,13 @@ export function renderSpaceInline(targetSpaceId, targetContainer, options = {}) 
                 const pIdx = parseInt(subList.dataset.parentIndex);
                 space.tasks[pIdx].subtasks.splice(index, 1);
             }
-            saveData(); onRefresh();
+            saveData(true); onRefresh();
         },
         onAddMainTaskAfter: (space, index) => {
             const newTask = { text: "", completed: false, tags: [], dueDate: null, createdAt: Date.now(), isProminent: false, subtasks: [] };
             space.tasks.splice(index + 1, 0, newTask);
-            saveData();
-            onRefresh();
+            saveData(true);
+            onRefresh(); // 🟢 สั่งวาดทันทีเพื่อให้ Mirror Task โผล่ขึ้นมา
 
             setTimeout(() => {
                 const items = targetContainer.querySelectorAll('.task-actual-text');
@@ -3500,32 +4027,122 @@ export function renderSpaceInline(targetSpaceId, targetContainer, options = {}) 
         onAddSubtaskAfter: (space, index, li) => {
             const subList = li.closest('.subtask-list');
             if (subList) {
-                const parentId = parseFloat(subList.dataset.parentId);
-                renderSpaceInline(targetSpaceId, targetContainer, { ...options, addingSubtaskToId: parentId });
+                const parentId = parseFloat(subList.dataset.parentId || li.closest('li')?.dataset.id);
+                
+                
+                if (window.masterTodoListState) {
+                    window.masterTodoListState.addingSubtaskToTaskId = parentId;
+                    window.masterTodoListState.addingSubtaskToSpaceId = space.id;
+                }
+
+ onRefresh(); // 🟢 ใช้ onRefresh ที่อัปเดตออปชันตาม Global State แล้ว
                 setTimeout(() => {
                     const input = targetContainer.querySelector(`.subtask-add-input[data-parent="${parentId}"]`);
                     if (input) input.focus();
                 }, 100);
             }
+        },
+        onConvertToSubtask: (space, index, taskObj, cleanedText) => {
+            if (index === 0) return;
+            const parentTask = space.tasks[index - 1];
+            if (!parentTask) return;
+            if (!parentTask.subtasks) parentTask.subtasks = [];
+            const textToUse = cleanedText || taskObj.text;
+            parentTask.subtasks.push({ id: Date.now(), text: textToUse, completed: false });
+            space.tasks.splice(index, 1);
+            saveData();
+            onRefresh();
         }
     });
 
+    targetContainer.onkeydown = (e) => {
+        const input = e.target;
+        if (!input.classList.contains('subtask-add-input')) return;
+
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            e.stopPropagation();
+            input.dataset.isSubmitting = "true";
+            const pId = parseFloat(input.getAttribute('data-parent'));
+            let value = input.value.trim();
+            const parentIdx = space.tasks.findIndex(t => t.createdAt === pId);
+            const task = space.tasks[parentIdx];
+
+            let shouldCreateMain = false;
+            const lowerValue = value.toLowerCase();
+            if (lowerValue === '>m') {
+                value = '';
+                shouldCreateMain = true;
+            } else if (lowerValue.endsWith('>m')) {
+                value = value.slice(0, -2).trim();
+                shouldCreateMain = true;
+            }
+
+            // 🟢 ปรับปรุงตรรกะ: ถ้าช่องว่าง หรือใช้ทางลัด >m ให้ปิดช่องกรอก (null) ถ้ามีข้อความให้เปิดต่อ (pId)
+            const nextAddingId = (value && !shouldCreateMain) ? pId : null;
+
+            
+            if (window.masterTodoListState) {
+                window.masterTodoListState.addingSubtaskToTaskId = nextAddingId;
+                window.masterTodoListState.addingSubtaskToSpaceId = nextAddingId ? space.id : null;
+            }
+
+            if (value && task) {
+                if (!task.subtasks) task.subtasks = [];
+                const mirrorMetadata = input.dataset.mirrorMetadata ? JSON.parse(input.dataset.mirrorMetadata) : null;
+                const newSub = { id: Date.now(), text: value, completed: false, createdAt: Date.now(), mirrorTarget: mirrorMetadata };
+                task.subtasks.push(newSub);
+                processTaskMirroring(newSub, space.id, task);
+                input.value = ''; 
+                delete input.dataset.mirrorMetadata;
+                saveData(true); // 🟢 บันทึกทันทีเพื่อให้ Mirror Portal ดึงข้อมูลใหม่
+            }
+
+            // 🟢 Sync Global State ทันทีที่กด Enter
+            onRefresh(); 
+
+            if (shouldCreateMain && parentIdx !== -1) {
+                const newId = Date.now();
+                const newTask = { text: "", completed: false, tags: [], dueDate: null, createdAt: newId, googleTaskId: null, isProminent: false, subtasks: [] };
+                space.tasks.splice(parentIdx + 1, 0, newTask);
+                saveData(true);
+                // 🔘 FIX: ใช้ DOM Lookup เพื่อวาดงานที่งอกมาจากการกด Enter
+                const c = document.getElementById(`portal-${targetSpaceId}`) || targetContainer;
+                renderSpaceInline(targetSpaceId, c, nextOptions);
+
+                setTimeout(() => {
+                    const items = targetContainer.querySelectorAll('.task-actual-text');
+                    const target = Array.from(items).find(el => {
+                        const li = el.closest('li');
+                        return li && li.dataset.type === 'task' && space.tasks[parseInt(li.dataset.index)]?.createdAt === newId;
+                    });
+                    if (target) {
+                        target.focus();
+                        const range = document.createRange();
+                        range.selectNodeContents(target);
+                        const sel = window.getSelection();
+                        sel.removeAllRanges();
+                        sel.addRange(range);
+                    }
+                }, 100);
+            } else {
+                setTimeout(() => {
+                    const newInput = targetContainer.querySelector(`.subtask-add-input[data-parent="${pId}"]`);
+                    if (newInput) newInput.focus();
+                }, 100);
+            }
+        }
+
+        if (e.key === 'Escape') {
+            renderSpaceInline(targetSpaceId, targetContainer, { ...options, addingSubtaskToId: null });
+        }
+    };
+
     // 🟢 Initialize Sortable for the portal list
     const taskListUI = targetContainer.querySelector('.task-list');
-    if (taskListUI && currentSort === 'manual') {
-        if (taskListUI.sortable) taskListUI.sortable.destroy();
-        taskListUI.sortable = Sortable.create(taskListUI, {
-            group: 'nested-tasks', animation: 150, handle: '.drag-handle', ghostClass: 'sortable-ghost',
-            onStart: () => { document.body.classList.add('is-sorting-tasks'); window.getSelection().removeAllRanges(); },
-            onEnd: (evt) => {
-                const oldIdx = parseInt(evt.item.getAttribute('data-index'));
-                const movedItem = space.tasks.splice(oldIdx, 1)[0];
-                const nextEl = evt.item.nextElementSibling;
-                let targetIdx = nextEl ? parseInt(nextEl.getAttribute('data-index')) : space.tasks.length;
-                if (nextEl && targetIdx > oldIdx) targetIdx--;
-                space.tasks.splice(targetIdx, 0, movedItem);
-                saveData(); onRefresh();
-            }
-        });
+    if (taskListUI) {
+        const isMasterFiltered = window.masterTodoListState && (window.masterTodoListState.showOnlyFlagged || window.masterTodoListState.dateFilter !== 'all' || window.masterTodoListState.searchQuery);
+        const isDisabled = currentSort !== 'manual' || isMasterFiltered;
+        initNestedSortable(taskListUI, space, onRefresh, isDisabled);
     }
 }      

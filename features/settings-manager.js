@@ -78,6 +78,17 @@ export function applyAppSettings() {
             box-sizing: border-box !important;
         }
 
+        
+        .master-space-switcher-inner {
+            display: flex !important;
+            flex-wrap: wrap !important;
+             gap: 8px 6px !important;
+            align-items: center !important;
+            width: 100% !important;
+        }
+
+    
+
         /* 🟢 Sync Drag Handle & Checkbox Colors (Global) */
         .maintask-drag-handle { color: var(--primary-color) !important; opacity: 0.8 !important; }
         .subtask-drag-handle { color: #10b981 !important; opacity: 0.8 !important; }
@@ -104,6 +115,8 @@ export function applyAppSettings() {
             background-color: #10b981 !important;
             border-color: #10b981 !important;
         }
+
+        
 
         /* 🟢 1. สำหรับจอเล็กที่เริ่มจัดคอลัมน์แนวตั้ง (Tablet/Small Desktop) แต่ยังไม่ถึงระดับมือถือ */
         @media (max-width: 1100px) {
