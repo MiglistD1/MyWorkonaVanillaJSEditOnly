@@ -138,141 +138,6 @@ export function toggleTaskFocus(spaceId, taskIndex, isSubtask, parentIndex = nul
     }
 }
 
-/** 🔗 Helper: Process @sp mirror trigger and create pointers */
-export function processTaskMirroring(task, sourceSpaceId, parentTask = null) {
-    if (task.isMirror) return; // Prevention: Don't mirror a mirror
-
-    // 1. Extract metadata from text (standard syntax) or object metadata (autocomplete result)
-    const mirrorRegex = /@sp\[([^\]]+)\]\/\[([^\]]+)\]\/\[([^\]]+)\]/i;
-    const match = task.text.match(mirrorRegex);
-    
-    if (!match && !task.mirrorTarget) return;
-
-    const targetFolderName = match ? match[1] : task.mirrorTarget?.targetFolderName;
-    const targetSpaceName = match ? match[2] : task.mirrorTarget?.targetSpaceName;
-    const targetSpaceId = task.mirrorTarget?.targetSpaceId;
-    const targetParentTaskId = task.mirrorTarget?.targetParentTaskId;
-
-    // 2. 🟢 สำคัญมาก: ห้ามลบข้อความจากตัวแปร task (ต้นฉบับ) ตรงๆ 
-    // ให้สร้างตัวแปรใหม่สำหรับส่งไปให้งานปลายทาง (Mirror) เท่านั้น
-    const cleanedTextForMirror = task.text.replace(mirrorRegex, '').trim() || task.text.trim();
-    const allSpaces = getSpaces();
-    const targetSpace = targetSpaceId ? allSpaces.find(s => s.id === targetSpaceId) : allSpaces.find(s => s.name === targetSpaceName && (s.folder || 'General') === targetFolderName);
-
-    if (targetSpace && !targetSpace.isDeleted && !targetSpace.isArchived) {
-        if (!targetSpace.tasks) targetSpace.tasks = [];
-        
-        // Prevent creating duplicate mirrors if editing
-        const masterId = task.createdAt || task.id;
-        const existingMirror = targetSpace.tasks.find(t => t.isMirror && t.originalTaskId === masterId);
-        if (existingMirror) return;
-
-        const pointerTask = {
-            text: cleanedTextForMirror, // ปลายทางได้ข้อความที่สะอาด
-            completed: task.completed,
-            createdAt: Date.now() + Math.random(),
-            isMirror: true,
-            originalTaskId: task.createdAt || task.id,
-            originalSpaceId: sourceSpaceId,
-            dueDate: task.dueDate || null,
-            tags: [...(task.tags || [])]
-        };
-
-        if (parentTask) {
-            pointerTask.parentContext = parentTask.text;
-        }
-
-        // 🟢 Logic ใหม่: ถ้าเลือก Task ปลายทางไว้ ให้เอาไปเสียบเป็น Subtask ของงานนั้น
-        if (targetParentTaskId) {
-            const parentInTarget = targetSpace.tasks.find(t => t.createdAt === targetParentTaskId);
-            if (parentInTarget) {
-                if (!parentInTarget.subtasks) parentInTarget.subtasks = [];
-                parentInTarget.subtasks.push(pointerTask);
-            } else {
-                targetSpace.tasks.push(pointerTask);
-            }
-        } else {
-            targetSpace.tasks.push(pointerTask);
-        }
-    }
-}
-
-/** 🔗 Helper: Synchronize mirrored tasks across spaces */
-export function syncMirroredTask(updatedTask, sourceSpaceId) {
-    const mirrorRegex = /@sp\[([^\]]+)\]\/\[([^\]]+)\]\/\[([^\]]+)\]/gi;
-    const allSpaces = getSpaces();
-    const isPointer = updatedTask.isMirror;
-    const masterId = isPointer ? updatedTask.originalTaskId : (updatedTask.createdAt || updatedTask.id);
-    const masterSpaceId = isPointer ? updatedTask.originalSpaceId : sourceSpaceId;
-    const affectedSpaceIds = new Set();
-
-    allSpaces.forEach(space => {
-        let spaceChanged = false;
-        if (!space.tasks) return;
-        
-        const syncNode = (task) => {
-            const isTargetMaster = (!task.isMirror && (task.createdAt === masterId || task.id === masterId) && space.id === masterSpaceId);
-            const isTargetPointer = (task.isMirror && task.originalTaskId === masterId && task.originalSpaceId === masterSpaceId);
-
-            if ((isTargetMaster || isTargetPointer) && task !== updatedTask) {
-                // 🟢 หาข้อความที่ไม่มีโค้ด @sp
-                const incomingCleanText = updatedTask.text.replace(mirrorRegex, '').trim();
-
-                if (task.isMirror) {
-                    // ฝั่งปลายทาง: เก็บแค่ชื่อสะอาดๆ
-                    task.text = incomingCleanText;
-                } else {
-                    // ฝั่งต้นฉบับ: ต้องรักษาแท็ก @sp เดิมของตัวเองไว้ ห้ามโดนชื่อจากปลายทางมาลบทิ้ง
-                    const currentMatch = task.text.match(mirrorRegex);
-                    const myTag = currentMatch ? currentMatch[0] : "";
-                    task.text = `${incomingCleanText} ${myTag}`.trim();
-                }
-                task.completed = updatedTask.completed;
-                task.dueDate = updatedTask.dueDate;
-                task.tags = [...(updatedTask.tags || [])];
-                spaceChanged = true;
-            }
-            if (task.subtasks) task.subtasks.forEach(syncNode);
-        };
-
-        space.tasks.forEach(syncNode);
-        if (spaceChanged) affectedSpaceIds.add(space.id);
-    });
-
-    // 🎯 Targeted Re-render: Update only the affected portal containers in Master List
-    if (affectedSpaceIds.size > 0 && getCurrentSpaceId() === 0) {
-        affectedSpaceIds.forEach(sid => {
-            if (sid !== sourceSpaceId) {
-                const portal = document.getElementById(`portal-${sid}`);
-                if (portal) {
-                    renderSpaceInline(sid, portal);
-                }
-            }
-        });
-    }
-}
-
-/** 🛡️ Helper: Find mirror instances of a task across all spaces */
-function getMirrorsForTask(task, sourceSpaceId) {
-    const mirrors = [];
-    const masterId = task.isMirror ? task.originalTaskId : (task.createdAt || task.id);
-    const masterSpaceId = task.isMirror ? task.originalSpaceId : sourceSpaceId;
-
-    getSpaces().forEach(s => {
-        const scan = (list) => {
-            if (!list) return;
-            list.forEach(t => {
-                if (t.isMirror && t.originalTaskId === masterId && t.originalSpaceId === masterSpaceId && t !== task) {
-                    mirrors.push({ space: s, task: t, list });
-                }
-                if (t.subtasks) scan(t.subtasks);
-            });
-        };
-        scan(s.tasks);
-    });
-    return mirrors;
-}
-
 /** 🟢 Helper: Initialize Nested Sortable for Task Lists (Shared by Space View and Mirror Portal) */
 function initNestedSortable(container, space, refreshFn, disabled = false) {
     const initList = (el) => {
@@ -1819,22 +1684,6 @@ export function initTodoManager(callbacks) {
             const pIdx = parseInt(btn.getAttribute('data-parent-index'));
             const sIdx = parseInt(btn.getAttribute('data-sub-index'));
             if (space.tasks[pIdx]?.subtasks) {
-                const subtask = space.tasks[pIdx].subtasks[sIdx];
-
-                // 🛡️ Deletion Safety for Subtasks
-                if (!subtask.isMirror) {
-                    const mirrors = getMirrorsForTask(subtask, space.id);
-                    if (mirrors.length > 0) {
-                        const names = [...new Set(mirrors.map(m => m.space.name))].join(', ');
-                        if (confirm(`This subtask is mirrored in [${names}]. Delete from all locations?`)) {
-                            mirrors.forEach(m => {
-                                const mIdx = m.list.indexOf(m.task);
-                                if (mIdx > -1) m.list.splice(mIdx, 1);
-                            });
-                        }
-                    }
-                }
-
                 space.tasks[pIdx].subtasks.splice(sIdx, 1);
                 saveData();
                 onRenderCallback();
@@ -1851,21 +1700,6 @@ export function initTodoManager(callbacks) {
         if (e.target.closest('.delete-task-btn')) { 
             const idx = parseInt(e.target.closest('.delete-task-btn').getAttribute('data-index')); 
             const task = space.tasks[idx];
-
-            // 🛡️ Deletion Safety: Prompt if this is a master task with active mirrors
-            if (!task.isMirror) {
-                const mirrors = getMirrorsForTask(task, space.id);
-                if (mirrors.length > 0) {
-                    const names = [...new Set(mirrors.map(m => m.space.name))].join(', ');
-                    if (confirm(`This task is mirrored in [${names}]. Delete from all locations?`)) {
-                        mirrors.forEach(m => {
-                            const mIdx = m.list.indexOf(m.task);
-                            if (mIdx > -1) m.list.splice(mIdx, 1);
-                        });
-                    }
-                }
-            }
-
             task.isDeleted = true;
             task.deletedAt = Date.now();
             const days = getAppSettings().autoDeleteDays || 30;
@@ -2169,7 +2003,6 @@ export function initTodoManager(callbacks) {
             if (subtask) {
                 subtask.completed = isChecked;
                 // 🌟 เรียก Reward Scanner สำหรับงานย่อย
-                syncMirroredTask(subtask, space.id);
                 if (isChecked && window.processRewardScanner) {
                     window.processRewardScanner(subtask.text, false, { x: e.clientX, y: e.clientY }, 'task', space.id);
                 }
@@ -2234,8 +2067,6 @@ export function initTodoManager(callbacks) {
                 }
                 console.log(`[handleTaskChange] Repeating task ${task.text} (ID: ${task.id}) completed: ${isChecked}.`);
 
-                syncMirroredTask(task, space.id);
-
             } else if (task.calendarEventId) {
                 // 🟢 NEW: สำหรับงานที่ซิงค์ปฏิทิน ให้ถือว่าเป็นการ Complete (ย้ายเข้าส่วน Synced Calendar) แทนการลงถังขยะ
                 task.completed = isChecked;
@@ -2245,7 +2076,6 @@ export function initTodoManager(callbacks) {
                 if (task.subtasks) {
                     task.subtasks.forEach(sub => { sub.completed = isChecked; });
                 }
-                syncMirroredTask(task, space.id);
                 console.log(`[handleTaskChange] Task ${task.text} (ID: ${task.id}) with calendarEventId: ${task.calendarEventId} is now completed: ${isChecked}. isDeleted: ${task.isDeleted}`);
             } else {
                 // For non-repeating tasks, use the existing logic (mark as deleted when checked)
@@ -2269,7 +2099,6 @@ export function initTodoManager(callbacks) {
                     task.expiryAt = null;
                     if (task.subtasks) task.subtasks.forEach(sub => { sub.isDeleted = false; sub.completed = false; });
                 }
-                syncMirroredTask(task, space.id);
             }
 
             if (task.calendarEventId) {
@@ -2354,12 +2183,8 @@ export function initTodoManager(callbacks) {
 
             if (value && task) {
                 if (!task.subtasks) task.subtasks = [];
-                const mirrorMetadata = input.dataset.mirrorMetadata ? JSON.parse(input.dataset.mirrorMetadata) : null;
-                const newSub = { id: Date.now(), text: value, completed: false, createdAt: Date.now(), mirrorTarget: mirrorMetadata };
-                task.subtasks.push(newSub);
-                processTaskMirroring(newSub, space.id, task);
+                task.subtasks.push({ id: Date.now(), text: value, completed: false });
                 input.value = ''; // 🟢 ล้างข้อความในช่องพิมพ์ทันทีเพื่อป้องกันการส่งซ้ำ
-                delete input.dataset.mirrorMetadata;
                 saveData();
                 // We keep addingSubtaskToTaskId as pId to trigger the next input rendering
             } else if (!shouldCreateMain) {
@@ -3167,7 +2992,6 @@ async function addTask() {
         }
 
         space.tasks.push(newTask); 
-        processTaskMirroring(newTask, space.id);
         currentTaskRepeatConfig = { isRepeating: false, frequency: 'daily', interval: 1 }; // Reset UI and state after add
         const repeatBtn = document.getElementById('btn-task-repeat');
         if (repeatBtn) {
@@ -3242,10 +3066,8 @@ async function saveEditedTask() {
     if (!space) return;
 
     let task = space.tasks[editingTaskLocalIndex];
-    let parentTask = null;
     
     if (editingSubtaskLocalId) {
-        parentTask = task;
         task = task.subtasks.find(s => s.id === editingSubtaskLocalId);
     }
 
@@ -3277,8 +3099,6 @@ async function saveEditedTask() {
     task.text = newName;
     task.dueDate = newDate || null;
     task.repeatConfig = { ...editingTaskRepeatConfig };
-    processTaskMirroring(task, space.id, parentTask);
-    syncMirroredTask(task, space.id);
 
     try {
         const token = await getAuthToken(false);
@@ -3971,8 +3791,6 @@ export function renderSpaceInline(targetSpaceId, targetContainer, options = {}) 
                     window.processRewardScanner(task.text, false, { x: e.clientX, y: e.clientY }, 'task', space.id);
                 }
 
-                syncMirroredTask(task, space.id);
-
                 saveData(true); // บันทึกทันทีเพื่อให้ Mirror Portal ดึงข้อมูลใหม่ไปวาด
                 onRefresh(); // 🟢 No more 800ms delay
             }
@@ -4089,12 +3907,8 @@ export function renderSpaceInline(targetSpaceId, targetContainer, options = {}) 
 
             if (value && task) {
                 if (!task.subtasks) task.subtasks = [];
-                const mirrorMetadata = input.dataset.mirrorMetadata ? JSON.parse(input.dataset.mirrorMetadata) : null;
-                const newSub = { id: Date.now(), text: value, completed: false, createdAt: Date.now(), mirrorTarget: mirrorMetadata };
-                task.subtasks.push(newSub);
-                processTaskMirroring(newSub, space.id, task);
+                task.subtasks.push({ id: Date.now(), text: value, completed: false });
                 input.value = ''; 
-                delete input.dataset.mirrorMetadata;
                 saveData(true); // 🟢 บันทึกทันทีเพื่อให้ Mirror Portal ดึงข้อมูลใหม่
             }
 

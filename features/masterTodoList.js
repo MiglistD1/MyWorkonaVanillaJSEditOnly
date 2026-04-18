@@ -1,7 +1,7 @@
 import { getSpaces, saveData, getAppSettings, setCurrentSpaceId, getFilterTags, loadData } from '../core/storage.js';
 import Sortable from '../sortable.esm.js';
 import { svgRefresh } from '../core/icons.js';
-import { openTaskEditModal, openTaskLinkModal, isAnyEditableElementFocused, toggleTaskFocus, playTaskCompletedSound, calculateNextDate, renderSpaceInline, processTaskMirroring } from './todoManager.js'; 
+import { openTaskEditModal, openTaskLinkModal, isAnyEditableElementFocused, toggleTaskFocus, playTaskCompletedSound, calculateNextDate, renderSpaceInline } from './todoManager.js'; 
 import { handleMiniTagClick } from '../components/modals.js';
 import { generateTaskHTML, attachSubtaskEventListeners, attachTaskInlineEditListeners, handleTagAutocomplete, applySyntaxHighlighting, getFaviconUrl, openOrFocusTab } from '../core/ui-helpers.js';
 
@@ -971,11 +971,8 @@ export function initMasterEvents() {
                 });
             }
 
-            const mirrorMetadata = taskInput.dataset.mirrorMetadata ? JSON.parse(taskInput.dataset.mirrorMetadata) : null;
-            let newTask = { text, completed: false, createdAt: Date.now(), isProminent: false, tags: tags, mirrorTarget: mirrorMetadata };
+            let newTask = { text, completed: false, createdAt: Date.now(), isProminent: false, tags: tags };
             targetSpace.tasks.push(newTask);
-            processTaskMirroring(newTask, targetSpace.id);
-            delete taskInput.dataset.mirrorMetadata;
             if (targetSpace.taskSortOrder && targetSpace.taskSortOrder !== 'manual') sortSpaceTasks(targetSpace);
             taskInput.value = ''; taskInput.disabled = false; taskInput.placeholder = "Quick add task...";
             saveData(); onRefresh();
