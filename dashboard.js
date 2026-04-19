@@ -16,6 +16,7 @@ import { initRewardSystem } from './features/rewardSystem.js';
 import { initContentManager, renderMainContent, renderAll } from './core/contentManager.js';
 import { openOrFocusTab } from './core/ui-helpers.js';
 import { initDashboardQuickNote } from './features/dashboardQuickNote.js';
+import { initStateManagerIntegration, stateManager, eventBus, Events } from './core/StateManagerIntegration.js';
 import { 
   getAppSettings, saveData, loadData, getSpaces,
   getCurrentSpaceId, setCurrentSpaceId, getFilterTags, setFilterTags, setSearchQuery, getCurrentSpace, getFilterMode, setFilterMode, getLocalSettings
@@ -102,6 +103,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // 🎨 Fix for tagBar.js: ทำให้ตัวแปร isDarkMode เข้าถึงได้จากทุกสคริปต์
         window.isDarkMode = !!appSettings.isDarkMode;
+
+        // 🔗 Initialize StateManager (must happen before component initialization)
+        initStateManagerIntegration().then(() => {
+          console.log('✅ StateManager ready for components');
+        }).catch(e => {
+          console.error('🔴 StateManager initialization failed:', e);
+          // Continue anyway - components will fall back to storage.js
+        });
 
         setFilterTags([]);
         setSearchQuery("");

@@ -1,6 +1,7 @@
 import Sortable from '../sortable.esm.js';
 import { svgEdit, svgTrashRed, svgRepeat } from '../core/icons.js';
 import { getCurrentSpace, saveData, getShortDate, getAppSettings, setCurrentSpaceId, getSpaces, getFilterTags, loadData, getGlobalLaunchers, getLauncherTags, getCurrentSpaceId, getFilterMode } from '../core/storage.js';
+import { initSpMirrorFeature } from '../core/SpMirrorHelper.js';
 import { mergeItems } from '../core/firebaseSync.js';
 import { generateMiniTagsBtn, generateTaskHTML, attachSubtaskEventListeners, attachTaskInlineEditListeners, handleTagAutocomplete, applySyntaxHighlighting } from '../core/ui-helpers.js';
 
@@ -593,7 +594,10 @@ async function showManualRepeatDatePicker() {
 export function initTodoManager(callbacks) {
     onRenderCallback = callbacks.onRender;
 
-    // 🟢 FIX: ย้ายการประกาศตัวแปรไว้ด้านบนเพื่อป้องกัน ReferenceError (Temporal Dead Zone)
+    // � Initialize @sp Mirror Feature
+    initSpMirrorFeature();
+
+    // �🟢 FIX: ย้ายการประกาศตัวแปรไว้ด้านบนเพื่อป้องกัน ReferenceError (Temporal Dead Zone)
     const btnCollapseAll = document.getElementById('btn-collapse-all-subtasks');
     const btnExpandAll = document.getElementById('btn-expand-all-subtasks');
 
@@ -3922,7 +3926,7 @@ export function renderSpaceInline(targetSpaceId, targetContainer, options = {}) 
                 saveData(true);
                 // 🔘 FIX: ใช้ DOM Lookup เพื่อวาดงานที่งอกมาจากการกด Enter
                 const c = document.getElementById(`portal-${targetSpaceId}`) || targetContainer;
-                renderSpaceInline(targetSpaceId, c, nextOptions);
+                renderSpaceInline(targetSpaceId, c, options);
 
                 setTimeout(() => {
                     const items = targetContainer.querySelectorAll('.task-actual-text');

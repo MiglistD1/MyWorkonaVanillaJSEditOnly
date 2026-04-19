@@ -1,5 +1,6 @@
 import { svgTag, dragHandleSvg, svgEdit, svgTrashRed, svgPencil, svgRestore, svgArchive, svgRepeat, svgManualRepeat } from './icons.js';
 import { getShortDate, getAppSettings, getUnitCharFromThai, getFilterTags } from './storage.js';
+import { parseSpCommand, showSpPickerModal, createMirrorLink } from './SpMirrorHelper.js';
 
 export function generateMiniTagsBtn(itemTags, type, index, parentIndex = null, spaceId = null) {
   const count = itemTags ? itemTags.length : 0;
@@ -543,6 +544,9 @@ export function attachSubtaskEventListeners(container, space, onRenderCallback, 
 export function attachTaskInlineEditListeners(container, getSpaceFn, callbacks = {}) {
     const { fetchGoogleAPI, getGoogleAuthToken, getCurrentGoogleListId, saveData, onUpdate } = callbacks;
 
+    // � Import @sp mirror functions
+    // Now imported statically from SpMirrorHelper
+
     // 🟢 0. Handle Autocomplete during inline typing
     container.addEventListener('input', (e) => {
         if (e.target.classList.contains('task-actual-text')) {
@@ -556,6 +560,41 @@ export function attachTaskInlineEditListeners(container, getSpaceFn, callbacks =
     container.addEventListener('keydown', (e) => {
         if (e.target.classList.contains('task-actual-text')) {
             if (e.key === 'Enter') {
+                // 🔗 Check for @sp command before submitting
+                const text = e.target.textContent.trim();
+                if (parseSpCommand && text.includes('@sp')) {
+                    e.preventDefault();
+                    const li = e.target.closest('li');
+                    const currentSpaceId = li?.closest('[data-space-id]')?.dataset.spaceId || 
+                                         (getSpaceFn(li)?.id);
+                    const currentTask = {
+                        text: text,
+                        completed: false,
+                        tags: [],
+                        dueDate: null,
+                        createdAt: Date.now()
+                    };
+                    
+                    // Show space picker for mirror destination
+                    showSpPickerModal((destSpaceId) => {
+                        if (createMirrorLink && currentSpaceId) {
+                            createMirrorLink(currentTask, currentSpaceId, destSpaceId);
+                            // Parse @sp to get clean text
+                            const spCmd = parseSpCommand(text);
+                            if (spCmd) {
+                                e.target.textContent = spCmd.cleanText;
+                            }
+                        }
+                        // Save normally after modal closed
+                        e.target.dataset.wasEnter = "true";
+                        e.target.blur();
+                    }, () => {
+                        // Cancel: just blur and revert
+                        e.target.blur();
+                    });
+                    return;
+                }
+                
                 e.preventDefault();
                 e.target.dataset.isSubmitting = "true"; // 🟢 บายพาสโหมด DND เพื่อให้หน้าจอยอมวาดช่องงานใหม่
                 e.target.dataset.wasEnter = "true"; // 🟢 มาร์คไว้ว่าจบด้วยการกด Enter
