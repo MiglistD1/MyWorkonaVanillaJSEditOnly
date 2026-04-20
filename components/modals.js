@@ -1,9 +1,13 @@
-import { getSpaces, setSpaces, saveData, getCurrentSpace, getCurrentSpaceId, setCurrentSpaceId, getAppSettings, setEditingItemState, getEditingItemState, getGlobalLaunchers, setGlobalLaunchers, getLauncherTags, setLauncherTags } from '../core/storage.js';
+import { getSpaces, setSpaces, saveData, getCurrentSpace, getCurrentSpaceId, setCurrentSpaceId, getAppSettings, setEditingItemState, getEditingItemState, getGlobalLaunchers, setGlobalLaunchers, getLauncherTags, setLauncherTags, loadData } from '../core/storage.js';
 import { applyAppSettings } from '../core/settings-manager.js';
 import { renderLaunchers } from '../features/customLaunchers.js';
 import { renderDefaultDashboard } from '../features/defaultDashboard.js'; // Import renderDefaultDashboard
 import { getFaviconUrl } from '../core/ui-helpers.js';
-import { svgPencil, svgTrashRed } from '../core/icons.js';
+import { svgPencil, svgTrashRed, svgRefresh } from '../core/icons.js';
+import { stateManager } from '../core/StateManager.js';
+import { eventBus, Events } from '../core/EventBus.js';
+import { spController } from '../core/SpMirrorHelper.js';
+import { BLOCK_COLORS } from '../features/blockManager.js';
 
 // --- 🔴 New Customize Space Modal Logic ---
 export function setupSpaceModals(onRender) {
@@ -1003,4 +1007,137 @@ export async function showConflictModal(cloudDateText) {
             resolve(null);
         };
     });
+}
+
+/**
+ * 🧺 Task Basket Modal Logic
+ */
+export function setupBasketModal() {
+    let modal = document.getElementById('task-basket-modal');
+    if (!modal) {
+        const modalHTML = `
+            <div class="basket-wrapper" id="task-basket-modal" style="display:none;">
+                <div class="basket-panel" id="basket-panel">
+                    <div class="modal-header basket-header" id="basket-header" style="padding:12px 16px; background:var(--bg-spacebar); border-bottom:1px solid var(--border-color); cursor:grab;">
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary-color)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+                            <div>
+                                
+                                <h3 style="margin:0; font-size:13px; font-weight:800;">Task Basket</h3>
+                                <div style="font-size:10px; color:var(--text-muted);">Target: <strong id="basket-space-name" style="color:var(--primary-color);">...</strong></div>
+                            </div>
+                        </div>
+                        <div style="display:flex; gap:5px;">
+                          
+                            <button class="btn-icon" id="btn-reset-basket" title="Reset UI">${svgRefresh}</button>
+                            <button class="btn-icon" id="btn-close-basket-modal" style="font-size:18px;">✕</button>
+                        </div>
+                    </div>
+                    
+                    <div class="basket-content-list" id="basket-content-list"></div>
+
+                    <div class="modal-footer" style="padding:12px 16px; border-top:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center; background:var(--bg-body);">
+                        <button class="btn btn-outline" id="btn-clear-basket" style="color:#ef4444; font-size:11px;">Clear</button>
+                        <button class="btn btn-primary" id="btn-confirm-basket-sync" style="padding:8px 24px; font-weight:800;">Confirm Sync (Batch)</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        modal = document.getElementById('task-basket-modal');
+
+        // 🟢 Initialize controller logic for dragging, sortable, and state
+        spController.initBasketUI();
+    }
+}
+
+// ─── 🧱 Block Creation Modal ───────────────────────────────────────────────────
+
+/**
+ * Show the block creation / edit popup.
+ * @param {Object}   options
+ * @param {string}   [options.prefillName='']  - Pre-filled block name (from @block command).
+ * @param {string}   [options.prefillColor]    - Pre-selected color hex.
+ * @param {Function} options.onConfirm         - Called with (name, colorHex) on confirm.
+ */
+export function showCreateBlockModal({ prefillName = '', prefillColor = '#3b82f6', onConfirm } = {}) {
+    // Remove any existing modal
+    const existing = document.getElementById('block-create-modal');
+    if (existing) existing.remove();
+
+    const swatchesHTML = BLOCK_COLORS.map(c =>
+        `<button type="button" class="block-color-swatch${c.hex === prefillColor ? ' selected' : ''}"
+            data-color="${c.hex}" data-key="${c.key}" title="${c.label}"
+            style="background:${c.hex};"></button>`
+    ).join('');
+
+    const modalHTML = `
+<div id="block-create-modal" class="modal-overlay" style="display:flex; z-index:10000;">
+  <div class="block-create-popup">
+    <div class="block-create-popup-header">
+      <svg class="block-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;margin-right:8px;">
+        <rect x="2" y="7" width="9" height="9" rx="1"/><rect x="13" y="7" width="9" height="9" rx="1"/><rect x="7" y="2" width="9" height="9" rx="1"/>
+      </svg>
+      <span>Create Block</span>
+      <button type="button" id="btn-close-block-modal" class="btn-icon" style="margin-left:auto;">✕</button>
+    </div>
+    <div class="block-create-popup-body">
+      <label class="block-create-label">Block Name</label>
+      <input type="text" id="block-name-input" class="task-input" placeholder="e.g. Sprint Tasks" value="${prefillName.replace(/"/g, '&quot;')}" maxlength="40" autocomplete="off">
+      <label class="block-create-label" style="margin-top:12px;">Color</label>
+      <div class="block-color-palette" id="block-color-palette">
+        ${swatchesHTML}
+      </div>
+      <div id="block-color-preview" class="block-color-preview" style="background:${prefillColor};"></div>
+    </div>
+    <div class="block-create-popup-footer">
+      <button type="button" class="btn btn-outline" id="btn-cancel-block">Cancel</button>
+      <button type="button" class="btn btn-primary" id="btn-confirm-block">Create Block</button>
+    </div>
+  </div>
+</div>`;
+
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+    const modal       = document.getElementById('block-create-modal');
+    const nameInput   = document.getElementById('block-name-input');
+    const palette     = document.getElementById('block-color-palette');
+    const preview     = document.getElementById('block-color-preview');
+    let selectedColor = prefillColor;
+
+    // Focus name input
+    setTimeout(() => nameInput.focus(), 50);
+
+    // Color swatch selection
+    palette.addEventListener('click', (e) => {
+        const swatch = e.target.closest('.block-color-swatch');
+        if (!swatch) return;
+        palette.querySelectorAll('.block-color-swatch').forEach(s => s.classList.remove('selected'));
+        swatch.classList.add('selected');
+        selectedColor = swatch.dataset.color;
+        preview.style.background = selectedColor;
+    });
+
+    const close = () => modal.remove();
+
+    const confirm = () => {
+        const name = nameInput.value.trim();
+        if (!name) { nameInput.focus(); nameInput.style.borderColor = '#ef4444'; return; }
+        close();
+        if (onConfirm) onConfirm(name, selectedColor);
+    };
+
+    document.getElementById('btn-close-block-modal').addEventListener('click', close);
+    document.getElementById('btn-cancel-block').addEventListener('click', close);
+    document.getElementById('btn-confirm-block').addEventListener('click', confirm);
+
+    // Enter to confirm, Esc to cancel
+    nameInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); confirm(); }
+        if (e.key === 'Escape') { e.preventDefault(); close(); }
+    });
+
+    // Click outside to close
+    modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
 }

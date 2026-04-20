@@ -102,8 +102,40 @@
   }
 
   #btn-master-add-task {
-      padding: 0 10px;
+      padding: 0 8px;
       font-size: 12px;
+      min-width: 40px;
+  }
+
+  /* Tighten Command Center header to keep elements visible */
+  .master-todo-widget .card-header {
+      gap: 10px !important;
+      padding: 10px 15px !important;
+  }
+  .master-search-wrapper, .master-header-select {
+      max-width: none !important;
+      flex: 1 1 0 !important;
+  }
+
+  /* Shrink proportions in Progress Section to fit one line */
+  #btn-master-toggle-select-mode {
+      font-size: 9px !important;
+      padding: 1px 4px !important;
+  }
+  .master-template-select {
+      font-size: 9px !important;
+      padding: 0 2px !important;
+  }
+  .master-view-templates .btn-icon, .master-view-templates button {
+      width: 22px !important;
+      height: 22px !important;
+      padding: 0 !important;
+  }
+
+  /* Ensure Toolbar popups don't crash layout */
+  .master-space-toolbar-items.is-active {
+      display: flex !important;
+      position: absolute;
   }
 }
 
@@ -129,6 +161,20 @@
     /* 🟢 MOBILE FIX: Hide task-input-bar by default on mobile, show only when is-active */
     .task-input-bar {
         display: none !important;
+    }
+    /* Override: Ensure Master Quick Add stays visible and shrinks */
+    .master-todo-widget .card-header .task-input-bar.master-input-area {
+        display: flex !important;
+        flex: 1 1 100% !important;
+        order: 10;
+        margin-top: 5px;
+    }
+    .master-todo-widget .card-header {
+        flex-wrap: wrap !important;
+        gap: 8px 10px !important;
+    }
+    .master-todo-widget .btn-minimize-widget {
+        margin-left: auto;
     }
 
     .task-input-bar.is-active {

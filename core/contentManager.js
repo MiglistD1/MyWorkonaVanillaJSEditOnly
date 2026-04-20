@@ -26,6 +26,24 @@ export function renderMainContent() {
   const utilityGroup = document.getElementById('utility-group');
   const topbar = document.querySelector('.topbar');
 
+  // 🟢 UI มือถือ: เพิ่มปุ่ม Refresh (F5) สำหรับกรณีแอปมีปัญหา
+  let browserRefreshBtn = document.getElementById('btn-browser-refresh');
+  if (isMobile && navGroup) {
+      if (!browserRefreshBtn) {
+          browserRefreshBtn = document.createElement('button');
+          browserRefreshBtn.id = 'btn-browser-refresh';
+          browserRefreshBtn.className = 'btn-icon';
+          browserRefreshBtn.title = 'Refresh App (F5)';
+          browserRefreshBtn.innerHTML = `<svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>`;
+          browserRefreshBtn.onclick = () => window.location.reload();
+      }
+      if (browserRefreshBtn.parentElement !== navGroup) {
+          navGroup.appendChild(browserRefreshBtn);
+      }
+  } else if (!isMobile && browserRefreshBtn) {
+      browserRefreshBtn.remove();
+  }
+
   if (isMobile && syncContainer && navGroup && rewardsBtn && syncContainer.nextElementSibling !== rewardsBtn) {
       navGroup.insertBefore(syncContainer, rewardsBtn);
   } else if (!isMobile && syncContainer && utilityGroup && topbar && syncContainer.nextElementSibling !== utilityGroup) {

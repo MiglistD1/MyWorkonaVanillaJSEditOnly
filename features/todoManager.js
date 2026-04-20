@@ -1,9 +1,12 @@
 import Sortable from '../sortable.esm.js';
 import { svgEdit, svgTrashRed, svgRepeat } from '../core/icons.js';
 import { getCurrentSpace, saveData, getShortDate, getAppSettings, setCurrentSpaceId, getSpaces, getFilterTags, loadData, getGlobalLaunchers, getLauncherTags, getCurrentSpaceId, getFilterMode } from '../core/storage.js';
-import { initSpMirrorFeature } from '../core/SpMirrorHelper.js';
+import { initSpMirrorFeature, spController } from '../core/SpMirrorHelper.js';
+import { eventBus, Events } from '../core/EventBus.js';
 import { mergeItems } from '../core/firebaseSync.js';
 import { generateMiniTagsBtn, generateTaskHTML, attachSubtaskEventListeners, attachTaskInlineEditListeners, handleTagAutocomplete, applySyntaxHighlighting } from '../core/ui-helpers.js';
+import { createBlock, generateBlockSectionHTML, initBlockDropZones, attachBlockActionListeners } from './blockManager.js';
+import { showCreateBlockModal } from '../components/modals.js';
 
 import { checkAndResetHabits, renderHabitList, toggleHabitModal } from './habitSheet.js';
 import { createCalendarEvent, updateCalendarEvent, deleteCalendarEvent, getAuthToken, clearAuthToken } from '../core/calendarSync.js';
@@ -156,6 +159,13 @@ function initNestedSortable(container, space, refreshFn, disabled = false) {
             onEnd: (evt) => {
                 document.body.classList.remove('is-sorting-tasks');
                 const { from, to, item } = evt;
+
+                // 🧺 Mirror Logic Fix: If dropping into the basket, skip data mutation in the source.
+                // This keeps the original task in the source space while the basket bundles the mirror data.
+                if (to && to.id === 'basket-content-list') {
+                    return;
+                }
+
                 if (from === to && evt.oldIndex === evt.newIndex) return;
 
                 // 1. ระบุพื้นที่ทำงานต้นทางและปลายทาง (รองรับ Master List)
@@ -181,7 +191,41 @@ function initNestedSortable(container, space, refreshFn, disabled = false) {
                     movedItem = srcSpace.tasks.splice(itemIdx, 1)[0];
                 }
 
+                // 🧱 Block container drag: reorder block header in space.tasks.
+                if (item.classList.contains('block-container')) {
+                    if (!movedItem) return;
+                    // movedItem is the block header task — re-insert at new position
+                    let nextElB = item.nextElementSibling;
+                    while (nextElB && !nextElB.hasAttribute('data-index')) nextElB = nextElB.nextElementSibling;
+                    let blockFinalIdx = nextElB ? parseInt(nextElB.getAttribute('data-index')) : srcSpace.tasks.length;
+                    if (from === to && blockFinalIdx > itemIdx) blockFinalIdx--;
+                    srcSpace.tasks.splice(blockFinalIdx, 0, movedItem);
+                    saveData(true);
+                    refreshFn();
+                    return;
+                }
+
                 if (!movedItem) return;
+
+                // 🧱 If task was dragged OUT of a block-drop-zone, clear its block membership.
+                if (from.classList.contains('block-drop-zone')) {
+                    delete movedItem.blockId;
+                    delete movedItem.blockName;
+                    delete movedItem.blockColor;
+                }
+
+                // 🧱 Block Drop Zone: assign blockId and re-insert at end, then re-render.
+                if (to && to.classList.contains('block-drop-zone')) {
+                    movedItem.blockId = to.dataset.blockId || null;
+                    movedItem.blockName = to.dataset.blockName || '';
+                    movedItem.blockColor = to.dataset.blockColor || '';
+                    // Clear subtask parentage if dragged from a subtask list
+                    if (fromIsSub) delete movedItem.parentCreatedAt;
+                    destSpace.tasks.push(movedItem);
+                    saveData(true);
+                    refreshFn();
+                    return;
+                }
 
                 // 3. คำนวณตำแหน่งและแทรกเข้าสู่ปลายทาง
                 const toIsSub = to.classList.contains('subtask-list');
@@ -196,7 +240,9 @@ function initNestedSortable(container, space, refreshFn, disabled = false) {
                 const targetArray = toIsSub ? targetParent?.subtasks : destSpace.tasks;
                 if (!targetArray) return;
 
-                const nextEl = item.nextElementSibling;
+                // 🧱 Skip block-container elements (no data-index) when finding drop position
+                let nextEl = item.nextElementSibling;
+                while (nextEl && !nextEl.hasAttribute('data-index')) nextEl = nextEl.nextElementSibling;
                 let finalIdx = nextEl ? parseInt(nextEl.getAttribute('data-index')) : targetArray.length;
 
                 if (from === to && finalIdx > itemIdx) finalIdx--;
@@ -209,7 +255,8 @@ function initNestedSortable(container, space, refreshFn, disabled = false) {
     };
 
     // หารายการทั้งหมดที่ต้องทำเป็นพื้นที่ลากวาง
-    const lists = container.querySelectorAll('.task-list, .subtask-list');
+    // 🧱 Exclude .block-drop-zone — those are managed by initBlockDropZones (no double-init)
+    const lists = container.querySelectorAll('.task-list:not(.block-drop-zone), .subtask-list');
     lists.forEach(initList);
     if (container.classList.contains('task-list')) initList(container);
 }
@@ -591,15 +638,323 @@ async function showManualRepeatDatePicker() {
     });
 }
 
+function goToMirrorTask(spaceId, taskCreatedAt) {
+    setCurrentSpaceId(spaceId);
+    if (typeof window.renderAll === 'function') window.renderAll();
+
+    // Clear any previous highlight interval
+    if (window._spHighlightInterval) {
+        clearInterval(window._spHighlightInterval);
+        window._spHighlightInterval = null;
+    }
+
+    let scrolled = false;
+    let ticks = 0;
+    window._spHighlightInterval = setInterval(() => {
+        ticks++;
+        const el = document.querySelector(`[data-task-id="${taskCreatedAt}"]`);
+        if (el) {
+            if (!scrolled) {
+                scrolled = true;
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            if (!el.classList.contains('task-flash-highlight')) {
+                el.classList.add('task-flash-highlight');
+            }
+        }
+        if (ticks >= 20) {
+            clearInterval(window._spHighlightInterval);
+            window._spHighlightInterval = null;
+            const finalEl = document.querySelector(`[data-task-id="${taskCreatedAt}"]`);
+            if (finalEl) finalEl.classList.remove('task-flash-highlight');
+        }
+    }, 100);
+}
+
+if (!document._spNavLinkBound) {
+    document._spNavLinkBound = true;
+
+    // Left-click: navigate to mirror task
+    document.addEventListener('click', (e) => {
+        const link = e.target.closest('.sp-nav-link');
+        if (!link) return;
+        // Dismiss context menu if open
+        const existing = document.getElementById('sp-context-menu');
+        if (existing) existing.remove();
+        e.preventDefault();
+        e.stopPropagation();
+        const spaceId = parseInt(link.dataset.spNavSpace);
+        const taskCreatedAt = parseFloat(link.dataset.spNavTask);
+        if (!isNaN(spaceId) && !isNaN(taskCreatedAt)) goToMirrorTask(spaceId, taskCreatedAt);
+    });
+
+    // Right-click: show "เลิก Sync" context menu
+    document.addEventListener('contextmenu', (e) => {
+        const link = e.target.closest('.sp-nav-link');
+        if (!link) return;
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Resolve (avatarSpaceId, avatarCreatedAt) from badge type
+        let avatarSpaceId, avatarCreatedAt;
+        if (link.classList.contains('sp-to-link')) {
+            // Badge on original — sp-nav coords ARE the avatar
+            avatarSpaceId = parseInt(link.dataset.spNavSpace);
+            avatarCreatedAt = parseFloat(link.dataset.spNavTask);
+        } else if (link.classList.contains('sp-from-link')) {
+            // Badge on avatar — avatar coords are on the li
+            const li = link.closest('li');
+            avatarSpaceId = parseInt(li?.dataset?.spaceId);
+            avatarCreatedAt = parseFloat(li?.dataset?.taskId);
+        }
+        if (isNaN(avatarSpaceId) || isNaN(avatarCreatedAt)) return;
+
+        // Remove any existing menu
+        const existing = document.getElementById('sp-context-menu');
+        if (existing) existing.remove();
+
+        // Build and position the popup
+        const menu = document.createElement('div');
+        menu.id = 'sp-context-menu';
+        menu.className = 'sp-context-menu';
+        menu.style.top = `${e.clientY}px`;
+        menu.style.left = `${e.clientX}px`;
+        menu.innerHTML = `<button class="sp-context-menu-btn sp-context-menu-btn--danger">เลิก Sync (ลบ Avatar)</button>`;
+        document.body.appendChild(menu);
+
+        // Action
+        menu.querySelector('.sp-context-menu-btn--danger').addEventListener('click', () => {
+            menu.remove();
+            spController.unlinkAndDeleteAvatar(avatarSpaceId, avatarCreatedAt);
+        });
+
+        // Dismiss on outside click
+        const dismiss = (ev) => {
+            if (!menu.contains(ev.target)) {
+                menu.remove();
+                document.removeEventListener('mousedown', dismiss, true);
+            }
+        };
+        setTimeout(() => document.addEventListener('mousedown', dismiss, true), 0);
+    });
+}
+
+function triggerMirrorSync(spaceId, taskCreatedAt) {
+    const spaces = getSpaces();
+    const space = spaces.find(s => s.id === spaceId);
+    const task = space?.tasks?.find(t => t.createdAt === taskCreatedAt);
+    if (!task) return;
+    if (task.isMirrorAvatar) {
+        spController.syncAvatarToOriginal(spaceId, taskCreatedAt);
+    } else if (task.isMirrorSource) {
+        spController.syncOriginalToAvatars(spaceId, taskCreatedAt);
+    }
+}
+
 export function initTodoManager(callbacks) {
     onRenderCallback = callbacks.onRender;
 
-    // � Initialize @sp Mirror Feature
-    initSpMirrorFeature();
+    // 🔗 Initialize @sp Mirror Feature
+    initSpMirrorFeature(callbacks.onRender);
 
     // �🟢 FIX: ย้ายการประกาศตัวแปรไว้ด้านบนเพื่อป้องกัน ReferenceError (Temporal Dead Zone)
     const btnCollapseAll = document.getElementById('btn-collapse-all-subtasks');
     const btnExpandAll = document.getElementById('btn-expand-all-subtasks');
+
+    // 🔗 @sp Picker Button
+    const btnSpPicker = document.getElementById('btn-sp-picker');
+    if (btnSpPicker) {
+        btnSpPicker.addEventListener('click', () => {
+            eventBus.emit(Events.OPEN_SP_PICKER, { targetSpaceId: getCurrentSpaceId() });
+        });
+    }
+
+    // 🔗 Global @-Command Parser (capture phase — fires before all other keydown handlers)
+    if (!document._spCommandParserBound) {
+        document._spCommandParserBound = true;
+        document.addEventListener('keydown', (e) => {
+            if (e.key !== 'Enter') return;
+            const el = e.target;
+            const isTaskInput =
+                el.id === 'new-task-input' ||
+                el.classList.contains('subtask-add-input') ||
+                el.classList.contains('task-actual-text');
+            if (!isTaskInput) return;
+
+            const text = (el.isContentEditable ? el.textContent : el.value).trim();
+
+            // 🧱 @block command in inline edit / contenteditable
+            if (text.toLowerCase().startsWith('@block')) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+
+                const restoreInlineText = (targetEl) => {
+                    if (!targetEl.isContentEditable) { targetEl.value = ''; return; }
+                    const li = targetEl.closest('li');
+                    const sid = parseInt(li?.dataset?.spaceId);
+                    const idx = parseInt(li?.dataset?.index);
+                    const type = li?.dataset?.type;
+                    const sp = getSpaces().find(s => s.id === sid);
+                    if (sp) {
+                        const orig = type === 'subtask'
+                            ? sp.tasks[parseInt(li.closest('.subtask-list')?.dataset?.parentIndex)]?.subtasks?.[idx]?.text
+                            : sp.tasks[idx]?.text;
+                        if (orig !== undefined) targetEl.textContent = orig;
+                    }
+                };
+                restoreInlineText(el);
+
+                const liSpaceId = parseInt(el.closest('li')?.dataset?.spaceId) || getCurrentSpaceId();
+                const targetSpace = getSpaces().find(s => s.id === liSpaceId) || getCurrentSpace();
+                const prefillName = text.slice(6).replace(/^[:\s]+/, '').trim();
+                showCreateBlockModal({
+                    prefillName,
+                    onConfirm: (name, color) => {
+                        if (targetSpace) {
+                            createBlock(targetSpace, name, color);
+                            onRenderCallback();
+                            // 🧱 Also refresh master todo list portal if block was created from there
+                            const portalEl = document.getElementById(`portal-${liSpaceId}`);
+                            if (portalEl) renderSpaceInline(liSpaceId, portalEl);
+                        }
+                    }
+                });
+                return;
+            }
+
+            if (!text.startsWith('@sp')) return;
+
+            e.preventDefault();
+            e.stopImmediatePropagation();
+
+            if (el.isContentEditable) {
+                // Restore original text so blur doesn't save "@sp" into the task
+                const li = el.closest('li');
+                const spaceId = parseInt(li?.dataset?.spaceId);
+                const idx = parseInt(li?.dataset?.index);
+                const type = li?.dataset?.type;
+                const space = getSpaces().find(s => s.id === spaceId);
+                if (space) {
+                    const original = type === 'subtask'
+                        ? space.tasks[parseInt(li.closest('.subtask-list')?.dataset?.parentIndex)]?.subtasks?.[idx]?.text
+                        : space.tasks[idx]?.text;
+                    if (original !== undefined) el.textContent = original;
+                }
+            } else {
+                el.value = '';
+            }
+
+            // For inline-edited tasks, use the task's own spaceId (li.data-space-id)
+            // to avoid using getCurrentSpaceId() which returns 0 in Master Todo List view
+            let pickerTargetSpaceId = getCurrentSpaceId();
+            if (el.isContentEditable) {
+                const liSpaceId = parseInt(el.closest('li')?.dataset?.spaceId);
+                if (!isNaN(liSpaceId) && liSpaceId > 0) pickerTargetSpaceId = liSpaceId;
+            }
+            eventBus.emit(Events.OPEN_SP_PICKER, { targetSpaceId: pickerTargetSpaceId });
+        }, { capture: true });
+    }
+
+    // ─── @ Autocomplete Dropdown ────────────────────────────────────────────────
+    if (!document._atDropdownBound) {
+        document._atDropdownBound = true;
+
+        const AT_COMMANDS = [
+            { cmd: '@block:', label: '@block:', desc: 'Create a Block', icon: '🧱' },
+            { cmd: '@sp',     label: '@sp',     desc: 'Link task to another Space', icon: '🔗' },
+        ];
+
+        function getOrCreateAtDropdown() {
+            let el = document.getElementById('at-command-dropdown');
+            if (el) return el;
+            el = document.createElement('div');
+            el.id = 'at-command-dropdown';
+            el.style.cssText = 'position:fixed;z-index:9998;display:none;background:var(--bg-card,#fff);border:1px solid var(--border-color,#e5e7eb);border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.15);padding:4px;min-width:220px;font-family:var(--app-font,-apple-system,sans-serif);';
+            AT_COMMANDS.forEach(c => {
+                const row = document.createElement('div');
+                row.className = 'at-cmd-item';
+                row.dataset.cmd = c.cmd;
+                row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:7px;cursor:pointer;transition:background 0.1s;';
+                row.innerHTML = `<span style="font-size:16px;line-height:1;">${c.icon}</span><div style="line-height:1.3;"><div style="font-size:13px;font-weight:700;color:var(--text-main);">${c.label}</div><div style="font-size:11px;color:var(--text-muted);">${c.desc}</div></div>`;
+                row.addEventListener('mouseover', () => { row.style.background = 'var(--bg-hover,rgba(0,0,0,0.05))'; });
+                row.addEventListener('mouseout',  () => { row.style.background = ''; });
+                row.addEventListener('mousedown', (e) => {
+                    e.preventDefault(); // prevent blur on input
+                    const anchor = el._anchor;
+                    if (!anchor) return;
+                    if (anchor.isContentEditable) {
+                        anchor.textContent = c.cmd;
+                        // move caret to end
+                        const range = document.createRange();
+                        range.selectNodeContents(anchor);
+                        range.collapse(false);
+                        const sel = window.getSelection();
+                        sel.removeAllRanges();
+                        sel.addRange(range);
+                    } else {
+                        anchor.value = c.cmd;
+                    }
+                    anchor.focus();
+                    hideAtDropdown();
+                });
+                el.appendChild(row);
+            });
+            document.body.appendChild(el);
+            return el;
+        }
+
+        function showAtDropdown(anchor, query) {
+            const dd = getOrCreateAtDropdown();
+            const lower = query.toLowerCase();
+            let visible = 0;
+            dd.querySelectorAll('.at-cmd-item').forEach(row => {
+                const match = row.dataset.cmd.toLowerCase().startsWith(lower);
+                row.style.display = match ? 'flex' : 'none';
+                if (match) visible++;
+            });
+            if (visible === 0) { hideAtDropdown(); return; }
+            dd._anchor = anchor;
+            const rect = anchor.getBoundingClientRect();
+            const top = rect.top - 8 - (visible * 54); // position above the input
+            dd.style.left = Math.max(8, rect.left) + 'px';
+            dd.style.top = Math.max(8, top) + 'px';
+            dd.style.display = 'block';
+        }
+
+        function hideAtDropdown() {
+            const dd = document.getElementById('at-command-dropdown');
+            if (dd) { dd.style.display = 'none'; dd._anchor = null; }
+        }
+
+        const isAtCommandField = (el) =>
+            el.id === 'new-task-input' ||
+            el.id === 'master-task-input' ||
+            el.classList.contains('subtask-add-input') ||
+            el.classList.contains('task-actual-text');
+
+        document.addEventListener('input', (e) => {
+            const el = e.target;
+            if (!isAtCommandField(el)) return;
+            const text = (el.isContentEditable ? el.textContent : el.value).trim();
+            if (text.startsWith('@')) {
+                showAtDropdown(el, text);
+            } else {
+                hideAtDropdown();
+            }
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && document.getElementById('at-command-dropdown')?.style.display !== 'none') {
+                hideAtDropdown();
+            }
+        });
+
+        document.addEventListener('focusout', (e) => {
+            if (isAtCommandField(e.target)) {
+                setTimeout(hideAtDropdown, 120);
+            }
+        });
+    }
 
     // 🟢 ระบบ Mobile Tools Menu (3 จุด)
     const mobileToolsBtn = document.getElementById('btn-mobile-todo-tools');
@@ -949,7 +1304,44 @@ export function initTodoManager(callbacks) {
 
     // Event Listeners
     document.getElementById('btn-add-task').addEventListener('click', addTask);
-    document.getElementById('new-task-input').addEventListener('keypress', (e) => { if (e.key === 'Enter') addTask(); });
+    document.getElementById('new-task-input').addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        const text = e.target.value.trim();
+        if (text.toLowerCase().startsWith('@block')) {
+            // 🧱 @block command: extract name (e.g. "@block:Sprint Tasks" or just "@block")
+            const prefillName = text.slice(6).replace(/^[:\s]+/, '').trim();
+            e.target.value = '';
+            const space = getCurrentSpace();
+            showCreateBlockModal({
+                prefillName,
+                onConfirm: (name, color) => {
+                    createBlock(space, name, color);
+                    onRenderCallback();
+                }
+            });
+        } else if (text.startsWith('@sp')) {
+            e.target.value = '';
+            eventBus.emit(Events.OPEN_SP_PICKER, { targetSpaceId: getCurrentSpaceId() });
+        } else {
+            addTask();
+        }
+    });
+
+    // 🧱 Create Block button
+    const btnCreateBlock = document.getElementById('btn-create-block');
+    if (btnCreateBlock) {
+        btnCreateBlock.addEventListener('click', () => {
+            const space = getCurrentSpace();
+            showCreateBlockModal({
+                onConfirm: (name, color) => {
+                    createBlock(space, name, color);
+                    onRenderCallback();
+                }
+            });
+        });
+    }
 
     // 🟢 Template System Initialization
     initTodoTemplateSystem();
@@ -1704,6 +2096,9 @@ export function initTodoManager(callbacks) {
         if (e.target.closest('.delete-task-btn')) { 
             const idx = parseInt(e.target.closest('.delete-task-btn').getAttribute('data-index')); 
             const task = space.tasks[idx];
+            // 🔗 Mirror sync: unlink avatar OR vanish all avatars of source
+            if (task.isMirrorAvatar) spController.unlinkAvatar(space.id, task.createdAt);
+            else if (task.isMirrorSource) spController.syncOriginalToAvatars(space.id, task.createdAt, true);
             task.isDeleted = true;
             task.deletedAt = Date.now();
             const days = getAppSettings().autoDeleteDays || 30;
@@ -2044,6 +2439,18 @@ export function initTodoManager(callbacks) {
             const task = space?.tasks[index];
             if (!task) return;
 
+            // 🔗 Avatar Vanish Logic
+            if (task.isMirrorAvatar && isChecked) {
+                spController.completeAvatarAndVanish(space.id, task.createdAt);
+                saveData(true);
+                setTimeout(() => onRenderCallback(), 800);
+                return;
+            }
+            // 🔗 Original completed: vanish all Avatars
+            if (task.isMirrorSource && isChecked) {
+                spController.syncOriginalToAvatars(space.id, task.createdAt, true);
+            }
+
             if (task.repeatConfig && task.repeatConfig.isRepeating) {
                 // For repeating tasks, mark as completed, not deleted
                 task.completed = isChecked;
@@ -2266,6 +2673,7 @@ export function initTodoManager(callbacks) {
             // ผูกระบบแก้ไขชื่อแบบ Inline ให้กับทุก List
             attachTaskInlineEditListeners(el, () => getCurrentSpace(), {
             saveData,
+            onAfterSave: (space, taskObj) => triggerMirrorSync(space.id, taskObj.createdAt),
             onAddMainTaskAfter: (space, index) => {
                 const newId = Date.now();
                 const newTask = { text: "", completed: false, tags: [], dueDate: null, createdAt: newId, googleTaskId: null, isProminent: false, subtasks: [] };
@@ -2317,7 +2725,7 @@ export function initTodoManager(callbacks) {
                     space.tasks.splice(index, 1);
                     saveData(); onRenderCallback();
                 },
-                onUpdate: () => onRenderCallback()
+                onUpdate: () => onRenderCallback(),
             });
 
             // ผูกระบบจัดการ Subtask ให้กับทุก List
@@ -3136,6 +3544,12 @@ async function saveEditedTask() {
     if (space.taskSortOrder && space.taskSortOrder !== 'manual') sortSpaceTasks(space);
     document.getElementById('task-edit-modal').style.display = 'none';
     btnSave.innerText = "Save"; btnSave.disabled = false;
+    // 🔗 Mirror sync: push changes from original to avatars (or avatar to original)
+    if (!editingSubtaskLocalId) {
+        const editedSpace = editingTaskSpaceId ? getSpaces().find(s => s.id === editingTaskSpaceId) : getCurrentSpace();
+        const editedTask = editedSpace?.tasks?.[editingTaskLocalIndex];
+        if (editedTask) triggerMirrorSync(editedSpace.id, editedTask.createdAt);
+    }
     saveData(); 
     if (_fromCommandCenter) {
         setCurrentSpaceId(0); // Reset to Command Center
@@ -3200,6 +3614,12 @@ async function saveTaskLink() {
 
     if (task) {
         task.linkData = { url, isSideview };
+        // 🔗 Mirror sync on link change
+        if (!editingLinkSubIdx) {
+            const linkSpace = (editingLinkSpaceId && editingLinkSpaceId !== 'sandbox') ? getSpaces().find(s => s.id === editingLinkSpaceId) : getCurrentSpace();
+            const linkTask = linkSpace?.tasks?.[editingLinkTaskIdx];
+            if (linkTask) triggerMirrorSync(linkSpace.id, linkTask.createdAt);
+        }
         saveData();
         document.getElementById('task-link-modal').style.display = 'none';
         if (editingLinkSpaceId === 0 || window._isModalOpenedFromCommandCenter) {
@@ -3309,9 +3729,46 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
 
     if (space.taskSortOrder && space.taskSortOrder !== 'manual') sortSpaceTasks(space);
 
+    // 🧱 Block System: pre-compute which active (non-deleted, non-completed) tasks belong to each block,
+    // applying the same tag/search filters as the main render loop.
+    const blockTaskMap = {};
+    space.tasks.forEach((task, idx) => {
+        if (!task || task.isBlockHeader || !task.blockId || task.isDeleted || task.completed) return;
+        if (filterTags.length > 0) {
+            const itemTags = task.tags || [];
+            const itemTagsUpper = itemTags.map(t => t.toUpperCase());
+            const checkTagBm = (tag) => tag === 'UNTAGGED' ? itemTags.length === 0 : itemTagsUpper.includes(tag.toUpperCase());
+            const matchesBm = (filterMode === 'AND') ? filterTags.every(checkTagBm) : filterTags.some(checkTagBm);
+            if (!matchesBm) return;
+        }
+        if (currentSearchQuery && !task.text.toLowerCase().includes(currentSearchQuery)) return;
+        if (!blockTaskMap[task.blockId]) blockTaskMap[task.blockId] = [];
+        blockTaskMap[task.blockId].push({ task, index: idx });
+    });
+
     space.tasks.forEach((task, index) => {
         if (!task) return;
-        
+
+        // 🧱 Block header: render the entire block section at this position, then skip normal rendering
+        if (task.isBlockHeader) {
+            if (!task.isDeleted) {
+                const blockItems = blockTaskMap[task.blockId] || [];
+                if (blockItems.length > 0 || !isFiltered) {
+                    let assignedHTML = '';
+                    blockItems.forEach(({ task: t, index: tIdx }) => {
+                        assignedHTML += generateTaskHTML(t, tIdx, {
+                            showSpaceBadge: false, spaceId: space.id, isProminentHidden, isFiltered,
+                            showActions: space.showTaskActions, isTrash: false,
+                            addingSubtaskToId: addingSubtaskToTaskId
+                        });
+                    });
+                    todoHTML += generateBlockSectionHTML(task, assignedHTML, blockItems.length, index);
+                    todoCount += blockItems.length;
+                }
+            }
+            return;
+        }
+
         let hasMatchTag = true;
         if (filterTags.length > 0) {
             const itemTags = task.tags || [];
@@ -3346,6 +3803,9 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
 
         const isRepeatingWaiting = isRepeatingComplete;
 
+        // 🧱 Skip active tasks assigned to a block (already rendered inside their block section above)
+        if (task.blockId && !task.isDeleted && !task.completed && !isRepeatingWaiting) return;
+
         const liContent = generateTaskHTML(task, index, {
             // ... (existing options)
             showSpaceBadge: false, spaceId: space.id, isProminentHidden, isFiltered, showActions: space.showTaskActions,
@@ -3363,6 +3823,10 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
     });
 
     taskListUI.innerHTML = todoHTML;
+    // 🧱 Block System: wire drop zones and action buttons after innerHTML is set
+    initBlockDropZones(taskListUI, space.id, onRenderCallback);
+    attachBlockActionListeners(taskListUI, space, onRenderCallback);
+
     if (archiveListUI) archiveListUI.innerHTML = archiveHTML;
     if (repeatingWaitingListUI) repeatingWaitingListUI.innerHTML = repeatingHTML;
     if (calendarSyncListUI) calendarSyncListUI.innerHTML = calendarSyncHTML;
@@ -3390,6 +3854,7 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
         const isDisabled = space.isArchived || (space.taskSortOrder !== 'manual' && !!space.taskSortOrder);
         initNestedSortable(taskListUI, space, onRenderCallback, isDisabled);
     }
+
 }
 
 /**
@@ -3444,7 +3909,7 @@ export function renderSpaceInline(targetSpaceId, targetContainer, options = {}) 
     today.setHours(0, 0, 0, 0);
 
     let displayTasks = (space.tasks || []).filter(t => {
-        if (!t || t.completed || t.isDeleted) return false;
+        if (!t || t.completed || t.isDeleted || t.isBlockHeader) return false;
 
         // 🟢 กรองงานทำซ้ำในอนาคตออก (เพื่อให้ตรงกับ Logic ในหน้า Space)
         const taskDue = t.dueDate ? new Date(t.dueDate).setHours(0,0,0,0) : null;
@@ -3480,19 +3945,42 @@ export function renderSpaceInline(targetSpaceId, targetContainer, options = {}) 
         }
     }
 
-    const tasksHTML = displayTasks.map(task => {
-        const originalIndex = space.tasks.indexOf(task);
-        return generateTaskHTML(task, originalIndex, {
-            showSpaceBadge: false,
-            isMasterView: true,
-            spaceId: space.id,
-            isProminentHidden,
-            showActions: showActions,
-            addingSubtaskToId: options.addingSubtaskToId, // 🟢 Fix: Pass the addingSubtaskToId from options
-            isFiltered: false,
-            isMobile,
-        });
-    }).join('');
+    // 🧱 Build blockTaskMap: map blockId → filtered assigned tasks (in original order)
+    const blockTaskMap = {};
+    displayTasks.forEach(t => {
+        if (!t.blockId) return;
+        if (!blockTaskMap[t.blockId]) blockTaskMap[t.blockId] = [];
+        blockTaskMap[t.blockId].push({ task: t, index: space.tasks.indexOf(t) });
+    });
+
+    // 🧱 Ordered iteration: render block sections at header positions, skip block-assigned tasks in main list
+    const filteredIds = new Set(displayTasks.map(t => t.createdAt));
+    const taskHtmlOpts = {
+        showSpaceBadge: false,
+        isMasterView: true,
+        spaceId: space.id,
+        isProminentHidden,
+        showActions: showActions,
+        addingSubtaskToId: options.addingSubtaskToId,
+        isFiltered: false,
+        isMobile,
+    };
+    let tasksHTML = '';
+    (space.tasks || []).forEach((task, idx) => {
+        if (!task) return;
+        if (task.isBlockHeader && !task.isDeleted) {
+            const blockItems = blockTaskMap[task.blockId] || [];
+            let assignedHTML = '';
+            blockItems.forEach(({ task: t, index: tIdx }) => {
+                assignedHTML += generateTaskHTML(t, tIdx, taskHtmlOpts);
+            });
+            tasksHTML += generateBlockSectionHTML(task, assignedHTML, blockItems.length, idx);
+            return;
+        }
+        if (task.blockId && !task.isDeleted && !task.completed) return;
+        if (!filteredIds.has(task.createdAt)) return;
+        tasksHTML += generateTaskHTML(task, idx, taskHtmlOpts);
+    });
 
     const nativeMirrorControls = `
         <div class="mirror-native-controls" style="display:none;" data-space-id="${space.id}">
@@ -3529,6 +4017,13 @@ export function renderSpaceInline(targetSpaceId, targetContainer, options = {}) 
             renderSpaceInline(targetSpaceId, currentInDom, currentOptions);
         }, 10); // หน่วง 10ms เพื่อให้ Event Queue เคลียร์ค่าค้างเก่า
     };
+
+    // 🧱 Block System: wire drop zones and action listeners inside the portal
+    const portalTaskList = targetContainer.querySelector('.master-group-list');
+    if (portalTaskList) {
+        initBlockDropZones(portalTaskList, space.id, onRefresh);
+        attachBlockActionListeners(portalTaskList, space, onRefresh);
+    }
 
     const mirrorToggleActionsBtn = targetContainer.querySelector('#btn-toggle-task-actions');
     const mirrorToggleProminentBtn = targetContainer.querySelector('#btn-toggle-prominent-tasks');
@@ -3770,6 +4265,18 @@ export function renderSpaceInline(targetSpaceId, targetContainer, options = {}) 
                 const isChecked = e.target.checked;
                 
                 // 🟢 Sync logic with handleTaskChange (Matching Native Space View)
+                // 🔗 Mirror Avatar: complete original + vanish avatar
+                if (task.isMirrorAvatar && isChecked) {
+                    spController.completeAvatarAndVanish(space.id, task.createdAt);
+                    saveData(true);
+                    // Re-render all portals: both avatar space and original space need updating
+                    setTimeout(() => { if (window.renderDefaultDashboard) window.renderDefaultDashboard(); else onRefresh(); }, 50);
+                    return;
+                }
+                // 🔗 Mirror Source: vanish all avatars when original is completed
+                if (task.isMirrorSource && isChecked) {
+                    spController.syncOriginalToAvatars(space.id, task.createdAt, true);
+                }
                 if (task.repeatConfig?.isRepeating || task.calendarEventId) {
                     task.completed = isChecked;
                     task.completedAt = isChecked ? Date.now() : null;

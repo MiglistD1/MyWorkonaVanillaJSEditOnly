@@ -27,6 +27,8 @@ export class StateManager {
       currentSearchQuery: "",
       editingItemState: { type: null, index: null, parentIndex: null },
       localSettings: { firebaseAutoSync: false, autoSyncSessionExpiry: 0 },
+      basketItems: [], // 🧺 Store tasks ready for batch mirroring
+      basketSettings: { x: 100, y: 100, w: 320, h: 450 }, // 🧺 Floating UI settings
       mirrorSyncVersion: 0, // 🟢 For circular prevention (@sp mirror tasks)
       ...initialState
     };

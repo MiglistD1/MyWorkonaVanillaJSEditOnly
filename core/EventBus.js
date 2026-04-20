@@ -198,6 +198,13 @@ export const Events = {
   // @sp Mirror Events
   MIRROR_TASK_SYNC: 'mirror:task:sync',             // {parentTaskId, childTaskId, syncVersion}
   MIRROR_CIRCULAR_DETECTED: 'mirror:circular',      // {taskId, version}
+  OPEN_BASKET_MODAL: 'basket:open',                 // {spaceId}
+  OPEN_SP_PICKER: 'command:open_sp_picker',         // {targetSpaceId}
+
+  // 🧱 Block System Events
+  BLOCK_CREATED: 'block:created',                   // {spaceId, blockId, blockName, blockColor}
+  BLOCK_UPDATED: 'block:updated',                   // {spaceId, blockId, changes}
+  BLOCK_DELETED: 'block:deleted',                   // {spaceId, blockId}
 };
 
 /**

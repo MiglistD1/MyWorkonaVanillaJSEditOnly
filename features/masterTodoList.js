@@ -2,12 +2,15 @@ import { getSpaces, saveData, getAppSettings, setCurrentSpaceId, getFilterTags, 
 import Sortable from '../sortable.esm.js';
 import { svgRefresh } from '../core/icons.js';
 import { openTaskEditModal, openTaskLinkModal, isAnyEditableElementFocused, toggleTaskFocus, playTaskCompletedSound, calculateNextDate, renderSpaceInline } from './todoManager.js'; 
-import { handleMiniTagClick } from '../components/modals.js';
+import { handleMiniTagClick, showCreateBlockModal } from '../components/modals.js';
 import { generateTaskHTML, attachSubtaskEventListeners, attachTaskInlineEditListeners, handleTagAutocomplete, applySyntaxHighlighting, getFaviconUrl, openOrFocusTab } from '../core/ui-helpers.js';
+import { createBlock } from './blockManager.js';
 
 import { renderSidebar } from '../components/sidebar.js';
 import { updateKeepTagButtonState } from './googleKeep.js';
 import { createCalendarEvent, deleteCalendarEvent } from '../core/calendarSync.js';
+import { setupBasketModal } from '../components/modals.js';
+import { eventBus, Events } from '../core/EventBus.js';
 
 /** 🟢 Helper: จัดลำดับงานตามเงื่อนไขที่เลือก (เฉพาะ Main Tasks) */
 function sortSpaceTasks(space) {
@@ -88,18 +91,28 @@ export function renderMasterHeaderControls() {
     const selectedId = masterTodoListState.selectedQuickAddSpaceId || (allSpaces.length > 0 ? allSpaces[0].id : null);
 
     return `
-        <div style="display:flex; align-items:center; gap:6px; flex-shrink: 0;">
-            <button id="btn-master-toggle-task-actions" class="btn-icon" title="Toggle Task Actions Visibility" style="padding: 2px; opacity: 1;">
-                <span class="toggle-actions-btn circle-icon ${masterTodoListState.showMasterTaskActions ? 'expanded' : ''}" style="margin: 0; pointer-events: none;"></span>
-            </button>
-            <button id="btn-master-toggle-progress" class="btn-icon" title="${masterTodoListState.isProgressVisible ? 'Hide Space Tags' : 'Show Space Tags'}" style="padding:2px; opacity: 0.6;">
+        <div class="master-header-filters-row" style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
+            <button id="btn-master-toggle-progress" class="btn-icon" title="${masterTodoListState.isProgressVisible ? 'Hide Space Tags' : 'Show Space Tags'}" style="padding:2px; opacity: 0.6; flex-shrink: 0;">
                 <svg class="svg-icon-sm" style="transform: ${masterTodoListState.isProgressVisible ? 'rotate(0deg)' : 'rotate(180deg)'}; transition: transform 0.2s;"><use href="#icon-chevron-up"></use></svg>
             </button>
-        </div>
 
-        <div class="master-search-wrapper">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-            <input type="text" id="master-search-input" class="master-search-input" placeholder="Search tasks…" value="${masterTodoListState.searchQuery || ''}">
+            <div class="master-search-wrapper">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                <input type="text" id="master-search-input" class="master-search-input" placeholder="Search…" value="${masterTodoListState.searchQuery || ''}">
+            </div>
+
+            <button id="btn-master-filter-flagged" class="btn-icon ${masterTodoListState.showOnlyFlagged ? 'active' : ''}" 
+                title="${masterTodoListState.showOnlyFlagged ? 'Show All Tasks' : 'Show Only Flagged Tasks'}" style="padding: 2px; flex-shrink: 0; width: 34px; height: 34px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-body);">
+                <svg class="svg-icon-sm"><use href="#icon-flag"></use></svg>
+            </button>
+
+            <select id="master-date-filter" class="master-header-select" title="Filter by date">
+                <option value="all"     ${masterTodoListState.dateFilter === 'all'     ? 'selected' : ''}>📋 All</option>
+                <option value="no-date" ${masterTodoListState.dateFilter === 'no-date' ? 'selected' : ''}>📌 None</option>
+                <option value="past"    ${masterTodoListState.dateFilter === 'past'    ? 'selected' : ''}>🔴 Past</option>
+                <option value="today"   ${masterTodoListState.dateFilter === 'today'   ? 'selected' : ''}>🟡 Today</option>
+                <option value="future"  ${masterTodoListState.dateFilter === 'future'  ? 'selected' : ''}>🟢 Next</option>
+            </select>
         </div>
 
         <div class="task-input-bar master-input-area" style="flex: 1; margin: 0; height: 34px; box-shadow: none;">
@@ -107,6 +120,7 @@ export function renderMasterHeaderControls() {
                 ${allSpaces.map(s => `<option value="${s.id}" ${parseInt(s.id) === parseInt(selectedId) ? 'selected' : ''}>${s.name}</option>`).join('')}
             </select>
             <input type="text" id="master-task-input" class="task-input" placeholder="Quick add task..." style="font-size: 13px;">
+            <button type="button" id="btn-master-sp-picker" class="btn-icon" title="Link task from another space" style="color:var(--primary-color);flex-shrink:0;"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></button>
             <button class="btn btn-primary" id="btn-master-add-task">Add</button>
         </div>
     `;
@@ -209,21 +223,9 @@ function renderProgressSection(allSpaces, totalTasks) {
 
     return `
         <div class="master-progress-container">
-            <div class="master-progress-info">
-                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                    <span style="font-weight:700;">Task Completion</span>                                
-                    <button id="btn-master-filter-flagged" class="${masterTodoListState.showOnlyFlagged ? 'active' : ''}" 
-                        title="${masterTodoListState.showOnlyFlagged ? 'Show All Tasks' : 'Show Only Flagged Tasks'}">
-                        <svg class="svg-icon-sm"><use href="#icon-flag"></use></svg>
-                    </button>
-                    <select id="master-date-filter" title="Filter by date" style="font-family:var(--app-font); font-size:10px; font-weight:700; padding:2px 6px; height:24px; border:1px solid var(--border-color); border-radius:6px; background:var(--bg-body); color:${masterTodoListState.dateFilter !== 'all' ? 'var(--primary-color)' : 'var(--text-muted)'}; cursor:pointer; outline:none;">
-                        <option value="all"     ${masterTodoListState.dateFilter === 'all'     ? 'selected' : ''}>📋 All</option>
-                        <option value="no-date" ${masterTodoListState.dateFilter === 'no-date' ? 'selected' : ''}>📌 No Date</option>
-                        <option value="past"    ${masterTodoListState.dateFilter === 'past'    ? 'selected' : ''}>🔴 Past</option>
-                        <option value="today"   ${masterTodoListState.dateFilter === 'today'   ? 'selected' : ''}>🟡 Today</option>
-                        <option value="future"  ${masterTodoListState.dateFilter === 'future'  ? 'selected' : ''}>🟢 Upcoming</option>
-                    </select>
-                    <div style="display: flex; align-items: center; gap: 4px; background: var(--bg-body); padding: 2px 6px; border-radius: 8px; border: 1px solid var(--border-color);">
+            <div class="master-progress-info" style="display:flex; align-items:center; gap:6px; flex-wrap:nowrap; justify-content: space-between;">
+                <div style="display:flex; align-items:center; gap:4px; flex: 1; min-width: 0;">
+                    <div style="display: flex; align-items: center; gap: 2px; background: var(--bg-body); padding: 2px 4px; border-radius: 8px; border: 1px solid var(--border-color); flex-shrink: 0;">
                         <button id="btn-master-mode-lock" class="btn-icon" title="${isLocked ? 'Unlock Settings' : 'Lock Settings'}" style="color: ${isLocked ? '#ef4444' : '#10b981'}; opacity: ${isLocked ? '1' : '0.4'}; padding: 2px;">
                             <svg class="svg-icon-sm"><use href="#icon-${isLocked ? 'lock-minimal' : 'unlock-minimal'}"></use></svg>
                         </button>
@@ -233,8 +235,8 @@ function renderProgressSection(allSpaces, totalTasks) {
                             ${isSingle ? 'Single' : 'Multi'}
                         </button>
                     </div>
-                    <div class="master-view-templates">
-                        <select id="master-view-template-select" class="master-template-select" title="Apply a saved view">
+                    <div class="master-view-templates" style="display: flex; align-items: center; gap: 2px; flex: 1; min-width: 0;">
+                        <select id="master-view-template-select" class="master-template-select" title="Apply a saved view" style="flex: 1; min-width: 40px;">
                             <option value="" ${!masterTodoListState.lastAppliedTemplateName ? 'selected' : ''}>— View —</option>
                             ${templateNames.map(n => `<option value="${n}" ${masterTodoListState.lastAppliedTemplateName === n ? 'selected' : ''}>${n}</option>`).join('')}
                         </select>
@@ -242,7 +244,10 @@ function renderProgressSection(allSpaces, totalTasks) {
                         <button id="btn-reset-order" class="btn-reset-order" title="Reset space order to default">↺</button>
                     </div>
                 </div>
-                <span id="progress-text" style="font-weight: 700; color: var(--primary-color);">${totalTasks} ${masterTodoListState.showOnlyFlagged ? 'Flagged' : ''} Tasks Remaining</span>
+                <span id="progress-text" style="font-weight: 800; color: var(--primary-color); flex-shrink:0; font-size:11px; white-space:nowrap; margin-left:4px;">
+                    ${totalTasks}<span class="tasks-rem-label-long"> Tasks Remaining</span>
+                    <span class="tasks-rem-label-short">T</span>
+                </span>
             </div>
             <div style="height: 1px; background: var(--border-color); margin-top: 4px; opacity: 0.5;"></div>
         </div>
@@ -336,20 +341,30 @@ function renderTaskGroups(allSpaces) {
                         <span class="group-title">${space.name} (${displayTasks.length})</span>
                     </div>
                     <div class="master-space-toolbar">
-                        <button class="btn btn-outline btn-master-goto-space" data-space-id="${space.id}" style="padding: 2px 8px; font-size: 10px; height: 20px; border-radius: 4px; font-weight: 600;">open space</button>
-                        <button class="btn-icon btn-master-space-tool btn-space-peek ${peekState.spaceId === space.id ? 'is-peeking' : ''}" data-space-id="${space.id}" title="Peek this space"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg></button>
-                        <button class="btn-icon btn-master-space-tool ${areTaskActionsVisible ? 'is-active' : ''}" data-space-id="${space.id}" data-action="actions" title="Toggle Task Actions">
-                            <span class="toggle-actions-btn circle-icon ${areTaskActionsVisible ? 'expanded' : ''}" style="margin:0; pointer-events:none; border-color: currentColor;"></span>
+                        <button class="btn-icon btn-mobile-space-toolbar-trigger" data-space-id="${space.id}" title="Space Tools">
+                            <svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
                         </button>
-                        <button class="btn-icon btn-master-space-tool ${isProminentVisible ? 'is-active' : ''}" data-space-id="${space.id}" data-action="flags" title="Toggle Next Up">
-                            <svg class="svg-icon-sm"><use href="#icon-flag"></use></svg>
-                        </button>
-                        <button class="btn-icon btn-master-space-tool" data-space-id="${space.id}" data-action="expand" title="Expand All Subtasks">
-                            <svg class="svg-icon-sm"><use href="#icon-chevron-down"></use></svg>
-                        </button>
-                        <button class="btn-icon btn-master-space-tool" data-space-id="${space.id}" data-action="collapse" title="Collapse All Subtasks">
-                            <svg class="svg-icon-sm"><use href="#icon-chevron-up"></use></svg>
-                        </button>
+                        <div class="master-space-toolbar-items">
+                            <button class="btn btn-outline btn-master-goto-space" data-space-id="${space.id}" style="padding: 2px 8px; font-size: 10px; height: 20px; border-radius: 4px; font-weight: 600;">open space</button>
+                            <button class="btn-icon btn-master-space-tool btn-space-peek ${peekState.spaceId === space.id ? 'is-peeking' : ''}" data-space-id="${space.id}" title="Peek this space"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg></button>
+                            <button class="btn-icon btn-master-space-tool ${areTaskActionsVisible ? 'is-active' : ''}" data-space-id="${space.id}" data-action="actions" title="Toggle Task Actions">
+                                <span class="toggle-actions-btn circle-icon ${areTaskActionsVisible ? 'expanded' : ''}" style="margin:0; pointer-events:none; border-color: currentColor;"></span>
+                            </button>
+                            <button class="btn-icon btn-master-space-tool ${isProminentVisible ? 'is-active' : ''}" data-space-id="${space.id}" data-action="flags" title="Toggle Next Up">
+                                <svg class="svg-icon-sm"><use href="#icon-flag"></use></svg>
+                            </button>
+                            <button class="btn-icon btn-master-space-tool" data-space-id="${space.id}" data-action="expand" title="Expand All Subtasks">
+                                <svg class="svg-icon-sm"><use href="#icon-chevron-down"></use></svg>
+                            </button>
+                            <button class="btn-icon btn-master-space-tool" data-space-id="${space.id}" data-action="collapse" title="Collapse All Subtasks">
+                                <svg class="svg-icon-sm"><use href="#icon-chevron-up"></use></svg>
+                            </button>
+                            ${!isMobile ? `
+                                <button class="btn-icon btn-master-space-tool btn-basket-trigger" data-space-id="${space.id}" data-action="basket" title="Task Basket">
+                                    <svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+                                </button>
+                            ` : ''}
+                        </div>
                     </div>
                 </div>
                 <div class="space-portal-container master-portal-wrapper" id="portal-${space.id}"></div>
@@ -907,6 +922,9 @@ export function initMasterEvents() {
     if (groupContainer && groupContainer.dataset.eventsInitialized === "true") return;
     if (groupContainer) groupContainer.dataset.eventsInitialized = "true";
 
+    // 🟢 Initialize Basket Modal Logic
+    setupBasketModal();
+
     // 🟢 2. Render Debounce (Fix Double Flashing)
     const onRefresh = () => { 
         // หากมีการเรียก Render ถี่เกินไป (เช่น ภายใน 50ms) จะรวบเหลือเพียงครั้งเดียว
@@ -939,6 +957,48 @@ export function initMasterEvents() {
         spaceSelect.onchange = () => {
             masterTodoListState.selectedQuickAddSpaceId = parseInt(spaceSelect.value);
         };
+    }
+
+    const masterSpBtn = document.getElementById('btn-master-sp-picker');
+    if (masterSpBtn) {
+        masterSpBtn.addEventListener('click', () => {
+            const sid = spaceSelect ? parseInt(spaceSelect.value) : null;
+            if (sid) eventBus.emit(Events.OPEN_SP_PICKER, { targetSpaceId: sid });
+        });
+    }
+
+    // 🔗 @block / @sp shortcut on Enter in master task input
+    if (taskInput) {
+        taskInput.addEventListener('keydown', (e) => {
+            if (e.key !== 'Enter') return;
+            const text = e.target.value.trim();
+
+            // 🧱 @block command
+            if (text.toLowerCase().startsWith('@block')) {
+                e.preventDefault();
+                const sid = spaceSelect ? parseInt(spaceSelect.value) : null;
+                const targetSpace = getSpaces().find(s => s.id === sid);
+                const prefillName = text.slice(6).replace(/^[:\s]+/, '').trim();
+                taskInput.value = '';
+                showCreateBlockModal({
+                    prefillName,
+                    onConfirm: (name, color) => {
+                        if (targetSpace) {
+                            createBlock(targetSpace, name, color);
+                            onRefresh();
+                        }
+                    }
+                });
+                return;
+            }
+
+            if (text.startsWith('@sp')) {
+                e.preventDefault();
+                e.target.value = '';
+                const sid = spaceSelect ? parseInt(spaceSelect.value) : null;
+                if (sid) eventBus.emit(Events.OPEN_SP_PICKER, { targetSpaceId: sid });
+            }
+        });
     }
 
     if (addBtn) addBtn.onclick = async () => {
@@ -1147,6 +1207,23 @@ export function initMasterEvents() {
         groupContainer.addEventListener('click', async (e) => {
             const target = e.target;
 
+            // 🔘 Mobile Toolbar Trigger
+            const trigger = target.closest('.btn-mobile-space-toolbar-trigger');
+            if (trigger) {
+                e.preventDefault();
+                e.stopPropagation();
+                const items = trigger.nextElementSibling;
+                const wasActive = items.classList.contains('is-active');
+                
+                // Close all other open toolbars
+                document.querySelectorAll('.master-space-toolbar-items.is-active').forEach(el => el.classList.remove('is-active'));
+                
+                if (!wasActive) {
+                    items.classList.add('is-active');
+                }
+                return;
+            }
+
             // 🔘 0. Peek Button (Restored logic)
             const peekBtn = target.closest('.btn-space-peek');
             if (peekBtn) {
@@ -1174,7 +1251,12 @@ export function initMasterEvents() {
                 e.preventDefault();
                 e.stopPropagation();
 
-                const sid = parseInt(toolbarBtn.dataset.spaceId, 10);
+                const sidAttr = toolbarBtn.dataset.spaceId;
+                if (!sidAttr || sidAttr === "undefined") return console.warn('[MasterList] Missing spaceId on tool button');
+                
+                const sid = parseInt(sidAttr, 10);
+                if (isNaN(sid)) return;
+
                 const action = toolbarBtn.dataset.action;
                 const portalContainer = document.getElementById(`portal-${sid}`);
                 const space = getSpaces().find(s => s.id === sid);
@@ -1187,9 +1269,15 @@ export function initMasterEvents() {
                 else if (action === 'flags') nativeBtnId = '#btn-toggle-prominent-tasks';
                 else if (action === 'expand') nativeBtnId = '#btn-expand-all-subtasks';
                 else if (action === 'collapse') nativeBtnId = '#btn-collapse-all-subtasks';
+                else if (action === 'basket') {
+                    eventBus.emit(Events.OPEN_BASKET_MODAL, { spaceId: sid });
+                }
 
-                const nativeBtn = portalContainer.querySelector(nativeBtnId);
-                if (nativeBtn) nativeBtn.click();
+                // 🟢 Fix: Safety check to prevent querySelector('') SyntaxError
+                if (nativeBtnId && portalContainer) {
+                    const nativeBtn = portalContainer.querySelector(nativeBtnId);
+                    if (nativeBtn) nativeBtn.click();
+                }
 
                 // 🟢 อัปเดต UI ของปุ่มบน Master Header ทันทีเพื่อให้รู้สึก Responsive
                 if (action === 'actions') {
@@ -1259,3 +1347,10 @@ export function initMasterEvents() {
             }
         });
 }
+
+// Global listener to close mobile toolbar popups
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.master-space-toolbar')) {
+        document.querySelectorAll('.master-space-toolbar-items.is-active').forEach(el => el.classList.remove('is-active'));
+    }
+});

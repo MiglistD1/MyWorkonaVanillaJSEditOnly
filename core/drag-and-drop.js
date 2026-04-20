@@ -31,6 +31,13 @@ export function initDragAndDrop(callbacks) {
             dragSrcEl = e.target; 
             dragSrcType = e.target.getAttribute('data-type'); 
             e.dataTransfer.effectAllowed = 'move'; 
+            
+            // 🧺 Task Basket Metadata: Ensure ID and Source Space are captured during drag
+            const taskId = e.target.getAttribute('data-task-id');
+            const spaceId = e.target.getAttribute('data-space-id');
+            if (taskId) e.dataTransfer.setData('application/task-id', taskId);
+            if (spaceId) e.dataTransfer.setData('application/source-space', spaceId);
+
             setTimeout(() => e.target.style.opacity = '0.4', 0); 
         } 
     });

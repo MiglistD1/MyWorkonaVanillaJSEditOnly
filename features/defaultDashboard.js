@@ -98,14 +98,13 @@ export async function renderDefaultDashboard() {
                 if (id === 'todo') {
                     return `
                         <div class="card widget-card master-todo-widget" data-id="todo">
-                            <div class="card-header" style="display: flex; align-items: center; gap: 15px; padding: 10px 20px;">
+                            <div class="card-header" style="display: flex; align-items: center; flex-wrap: wrap; gap: 15px; padding: 10px 20px;">
                                 <div id="master-header-controls-container" style="display: contents;">
                                     ${renderMasterHeaderControls()}
                                 </div>
                                 <button class="btn-icon btn-minimize-widget" data-id="todo" title="Minimize">
                                     <svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                                 </button>
-                                ${renderGoogleIntegrations()}
                             </div>
                             <div id="master-todo-list-container" class="card-body" style="padding-top: 5px;"></div>
                         </div>

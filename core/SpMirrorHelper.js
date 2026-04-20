@@ -6,9 +6,8 @@
  * Import from this file instead of SpMirrorFeature.js directly
  */
 
-export { 
-  initSpMirrorFeature, 
-  parseSpCommand, 
-  createMirrorLink, 
-  showSpPickerModal
+export {
+  SpController,
+  spController,
+  initSpMirrorFeature
 } from '../features/SpMirrorFeature.js';

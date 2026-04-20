@@ -1,7 +1,15 @@
 import { svgTag, dragHandleSvg, svgEdit, svgTrashRed, svgPencil, svgRestore, svgArchive, svgRepeat, svgManualRepeat } from './icons.js';
 import { getShortDate, getAppSettings, getUnitCharFromThai, getFilterTags } from './storage.js';
-import { parseSpCommand, showSpPickerModal, createMirrorLink } from './SpMirrorHelper.js';
 
+/**
+ * Generates the HTML for a mini tags button.
+ * @param {Array} itemTags The tags for the item.
+ * @param {string} type The type of the item.
+ * @param {number} index The index of the item.
+ * @param {number} [parentIndex=null] The index of the parent item.
+ * @param {string} [spaceId=null] The ID of the space.
+ * @returns {string} The HTML for the mini tags button.
+ */
 export function generateMiniTagsBtn(itemTags, type, index, parentIndex = null, spaceId = null) {
   const count = itemTags ? itemTags.length : 0;
   const isMobile = window.innerWidth <= 768;
@@ -381,11 +389,16 @@ export function generateTaskHTML(task, index, {
     const hasTags = task.tags && task.tags.length > 0;
     const tagBtnHTML = isSubtask ? generateMiniTagsBtn(task.tags, 'subtask', index, parentIndex, spaceId) : generateMiniTagsBtn(task.tags, 'task', index, null, spaceId);
 
-    // 🟢 NEW: Add specific remove button for template sandbox tasks
+    // NEW: Add specific remove button for template sandbox tasks
     let templateRemoveBtnHTML = '';
     if (spaceId === 'sandbox' && !isSubtask) {
         templateRemoveBtnHTML = `<button class="btn-icon btn-remove-temp-task" data-index="${index}" style="color:#ef4444; margin-left: 5px;">✕</button>`;
     }
+    // NEW: Remove-from-block button (always visible when task is inside a block)
+    if (task.blockId && !isSubtask) {
+        actionButtons += `<button class="btn-icon block-btn-remove-task" data-task-id="${task.createdAt}" title="Remove from block" style="color:${task.blockColor||'var(--primary-color)'};opacity:0.75;flex-shrink:0;"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>`;
+    }
+
     // Actions that are always visible: Tags only if they exist, link button if it has a link
     if (hasTags) {
         actionButtons += tagBtnHTML;
@@ -436,7 +449,7 @@ export function generateTaskHTML(task, index, {
 
     const itemType = isSubtask ? 'subtask' : 'task';
     return ` 
-    <li class="${isSubtask ? 'subtask-item' : 'task-item'} ${draggableClass} ${prominentClass} ${focusActiveClass} ${templateClass}" data-index="${index}" data-type="${itemType}" data-space-id="${spaceId || ''}" style="list-style: none; width: 100%; margin-bottom: 0px; border-bottom: 1px solid transparent; opacity: ${isActuallyDeleted ? '0.7' : '1'}; position: relative;">
+    <li class="${isSubtask ? 'subtask-item' : 'task-item'} ${draggableClass} ${prominentClass} ${focusActiveClass} ${templateClass}${task.isMirrorAvatar ? ' sp-mirror-avatar' : ''}" data-index="${index}" data-type="${itemType}" data-space-id="${spaceId || ''}" data-task-id="${task.createdAt || task.id || ''}" style="list-style: none; width: 100%; margin-bottom: 0px; border-bottom: 1px solid transparent; opacity: ${isActuallyDeleted ? '0.7' : '1'}; position: relative;">
         <div class="item-main-row" style="display: flex; align-items: center; gap: 1px; padding: 2px 0; width: 100%; min-height: 28px;">
             ${handleHTML}
             <div class="focus-trigger-container" style="display: flex; align-items: center; gap: 0px; ${(!isSubtask && isProminentHidden && !task.isProminent) ? 'display: none;' : ''}">
@@ -464,6 +477,8 @@ export function generateTaskHTML(task, index, {
                     ${dateDisplay ? `<span class="task-date" style="${dateBadgeStyle} margin-right: 4px;">${dateDisplay}</span>` : ''}
                     ${isActuallyDeleted ? `<span class="task-date" style="${dateBadgeStyle} margin-right: 4px;">${getTrashCountdownText(task, getAppSettings().autoDeleteDays)}</span>` : ''}
                     <span class="task-actual-text" contenteditable="true" style="display: inline; vertical-align: middle; outline: none; ${textStyle}">${task.text}</span>
+                    ${task.isMirrorAvatar ? `<span class="sp-nav-link sp-from-link" data-sp-nav-space="${task.originalSpaceId}" data-sp-nav-task="${task.originalCreatedAt}">(มาจาก ${task.originalSpaceName || '?'})</span>` : ''}
+                    ${(task.isMirrorSource && task.avatarRefs?.some(r => !r.subtaskId)) ? task.avatarRefs.filter(r => !r.subtaskId).map(r => `<span class="sp-nav-link sp-to-link" data-sp-nav-space="${r.spaceId}" data-sp-nav-task="${r.createdAt}">(ส่งไป ${r.spaceName || r.spaceId})</span>`).join('') : ''}
                     ${repeatIcon}
                     ${showSpaceBadge ? `<span class="space-tag" style="margin-left: 8px; vertical-align: middle; display: inline-flex;">${spaceName}</span>` : ''}
                 </div>
@@ -544,7 +559,6 @@ export function attachSubtaskEventListeners(container, space, onRenderCallback, 
 export function attachTaskInlineEditListeners(container, getSpaceFn, callbacks = {}) {
     const { fetchGoogleAPI, getGoogleAuthToken, getCurrentGoogleListId, saveData, onUpdate } = callbacks;
 
-    // � Import @sp mirror functions
     // Now imported statically from SpMirrorHelper
 
     // 🟢 0. Handle Autocomplete during inline typing
@@ -560,41 +574,6 @@ export function attachTaskInlineEditListeners(container, getSpaceFn, callbacks =
     container.addEventListener('keydown', (e) => {
         if (e.target.classList.contains('task-actual-text')) {
             if (e.key === 'Enter') {
-                // 🔗 Check for @sp command before submitting
-                const text = e.target.textContent.trim();
-                if (parseSpCommand && text.includes('@sp')) {
-                    e.preventDefault();
-                    const li = e.target.closest('li');
-                    const currentSpaceId = li?.closest('[data-space-id]')?.dataset.spaceId || 
-                                         (getSpaceFn(li)?.id);
-                    const currentTask = {
-                        text: text,
-                        completed: false,
-                        tags: [],
-                        dueDate: null,
-                        createdAt: Date.now()
-                    };
-                    
-                    // Show space picker for mirror destination
-                    showSpPickerModal((destSpaceId) => {
-                        if (createMirrorLink && currentSpaceId) {
-                            createMirrorLink(currentTask, currentSpaceId, destSpaceId);
-                            // Parse @sp to get clean text
-                            const spCmd = parseSpCommand(text);
-                            if (spCmd) {
-                                e.target.textContent = spCmd.cleanText;
-                            }
-                        }
-                        // Save normally after modal closed
-                        e.target.dataset.wasEnter = "true";
-                        e.target.blur();
-                    }, () => {
-                        // Cancel: just blur and revert
-                        e.target.blur();
-                    });
-                    return;
-                }
-                
                 e.preventDefault();
                 e.target.dataset.isSubmitting = "true"; // 🟢 บายพาสโหมด DND เพื่อให้หน้าจอยอมวาดช่องงานใหม่
                 e.target.dataset.wasEnter = "true"; // 🟢 มาร์คไว้ว่าจบด้วยการกด Enter
@@ -716,8 +695,9 @@ export function attachTaskInlineEditListeners(container, getSpaceFn, callbacks =
                 }
                 
                 if (saveData) saveData();
+                if (typeof callbacks.onAfterSave === 'function') callbacks.onAfterSave(space, taskObj);
 
-                // 🟢 หากจบด้วย Enter ให้เรียก Callback เฉพาะทาง
+                // หากจบด้วย Enter ให้เรียก Callback เฉพาะทาง
                 if (wasEnter && type === 'task' && typeof callbacks.onAddMainTaskAfter === 'function') {
                     callbacks.onAddMainTaskAfter(space, idx);
                 } else if (wasEnter && type === 'subtask' && typeof callbacks.onAddSubtaskAfter === 'function') {
