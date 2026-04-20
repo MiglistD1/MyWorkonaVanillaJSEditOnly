@@ -166,6 +166,21 @@ function initNestedSortable(container, space, refreshFn, disabled = false) {
                     return;
                 }
 
+                // 🔒 Mirror avatar subtask lock: prevent dragging subtasks out of a mirror avatar
+                if (from.classList.contains('subtask-list')) {
+                    const parentTaskEl = from.closest('.task-item, .subtask-item');
+                    const parentTaskId = parseFloat(parentTaskEl?.dataset.taskId);
+                    const parentSpace = (() => {
+                        const sid = from.closest('[data-space-id]')?.dataset.spaceId;
+                        return getSpaces().find(s => String(s.id) === String(sid)) || space;
+                    })();
+                    const parentTask = parentSpace?.tasks?.find(t => t.createdAt === parentTaskId);
+                    if (parentTask?.isMirrorAvatar) {
+                        refreshFn();
+                        return;
+                    }
+                }
+
                 if (from === to && evt.oldIndex === evt.newIndex) return;
 
                 // 1. ระบุพื้นที่ทำงานต้นทางและปลายทาง (รองรับ Master List)
@@ -764,8 +779,9 @@ export function initTodoManager(callbacks) {
     // 🔗 @sp Picker Button
     const btnSpPicker = document.getElementById('btn-sp-picker');
     if (btnSpPicker) {
-        btnSpPicker.addEventListener('click', () => {
-            eventBus.emit(Events.OPEN_SP_PICKER, { targetSpaceId: getCurrentSpaceId() });
+        btnSpPicker.addEventListener('click', (e) => {
+            const anchorRect = e.currentTarget?.getBoundingClientRect?.() || null;
+            eventBus.emit(Events.OPEN_SP_PICKER, { targetSpaceId: getCurrentSpaceId(), anchorRect });
         });
     }
 
@@ -851,7 +867,8 @@ export function initTodoManager(callbacks) {
                 const liSpaceId = parseInt(el.closest('li')?.dataset?.spaceId);
                 if (!isNaN(liSpaceId) && liSpaceId > 0) pickerTargetSpaceId = liSpaceId;
             }
-            eventBus.emit(Events.OPEN_SP_PICKER, { targetSpaceId: pickerTargetSpaceId });
+            const anchorRect = el?.getBoundingClientRect?.() || null;
+            eventBus.emit(Events.OPEN_SP_PICKER, { targetSpaceId: pickerTargetSpaceId, anchorRect });
         }, { capture: true });
     }
 
@@ -1323,7 +1340,8 @@ export function initTodoManager(callbacks) {
             });
         } else if (text.startsWith('@sp')) {
             e.target.value = '';
-            eventBus.emit(Events.OPEN_SP_PICKER, { targetSpaceId: getCurrentSpaceId() });
+            const anchorRect = e.target?.getBoundingClientRect?.() || null;
+            eventBus.emit(Events.OPEN_SP_PICKER, { targetSpaceId: getCurrentSpaceId(), anchorRect });
         } else {
             addTask();
         }
@@ -1464,6 +1482,13 @@ export function initTodoManager(callbacks) {
         if (repeatEnabled.checked) {
             if (!modalDate) {
                 alert("⚠️ โปรดตั้งค่า 'กำหนดส่ง' (Due Date) ก่อนเปิดใช้งานการทำซ้ำ (Repeat)\nระบบต้องการวันที่เริ่มต้นเพื่อคำนวณรอบถัดไปครับ");
+                return;
+            }
+            // 🐛 Bug Fix: ห้ามตั้งวันที่ล่วงหน้าสำหรับ Repeat task
+            // เพราะงานจะถูกซ่อนโดย isUpcomingRepeating filter และหายไปจาก UI
+            const todayStr = new Date().toISOString().split('T')[0];
+            if (modalDate > todayStr) {
+                alert("⚠️ Repeat task ต้องตั้งวันที่เป็นวันนี้หรือก่อนหน้าเท่านั้น\nงานวันอนาคตจะถูกซ่อนโดยอัตโนมัติและไม่โผล่ใน task list");
                 return;
             }
         }
@@ -2018,13 +2043,18 @@ export function initTodoManager(callbacks) {
             return;
         }
 
-        // 🔘 Delete Subtask Button
+        // 🔘 Delete Subtask Button (Phase 5: Soft Delete)
         if (e.target.closest('.delete-subtask-btn')) {
             const btn = e.target.closest('.delete-subtask-btn');
             const pIdx = parseInt(btn.getAttribute('data-parent-index'));
             const sIdx = parseInt(btn.getAttribute('data-sub-index'));
-            if (space.tasks[pIdx]?.subtasks) {
-                space.tasks[pIdx].subtasks.splice(sIdx, 1);
+            if (space.tasks[pIdx]?.subtasks?.[sIdx]) {
+                const subtask = space.tasks[pIdx].subtasks[sIdx];
+                subtask.isDeleted = true;
+                subtask.deletedAt = Date.now();
+                subtask.syncVersion = (subtask.syncVersion || 0) + 1;
+                const subtaskId = subtask.id || subtask.createdAt;
+                window.dispatchEvent(new CustomEvent('task-deleted', { detail: { taskId: subtaskId } }));
                 saveData();
                 onRenderCallback();
             }
@@ -2074,13 +2104,18 @@ export function initTodoManager(callbacks) {
             return;
         }
 
-        // 🔘 Delete Subtask Button
+        // 🔘 Delete Subtask Button (Phase 5: Soft Delete - DUPLICATE HANDLER)
         if (e.target.closest('.delete-subtask-btn')) {
             const btn = e.target.closest('.delete-subtask-btn');
             const pIdx = parseInt(btn.getAttribute('data-parent-index'));
             const sIdx = parseInt(btn.getAttribute('data-sub-index'));
-            if (space.tasks[pIdx]?.subtasks) {
-                space.tasks[pIdx].subtasks.splice(sIdx, 1);
+            if (space.tasks[pIdx]?.subtasks?.[sIdx]) {
+                const subtask = space.tasks[pIdx].subtasks[sIdx];
+                subtask.isDeleted = true;
+                subtask.deletedAt = Date.now();
+                subtask.syncVersion = (subtask.syncVersion || 0) + 1;
+                const subtaskId = subtask.id || subtask.createdAt;
+                window.dispatchEvent(new CustomEvent('task-deleted', { detail: { taskId: subtaskId } }));
                 saveData();
                 onRenderCallback();
             }
@@ -2104,6 +2139,8 @@ export function initTodoManager(callbacks) {
             const days = getAppSettings().autoDeleteDays || 30;
             task.expiryAt = task.deletedAt + (days * 24 * 60 * 60 * 1000);
             task.completed = false; // เอากลับมาเป็นงานที่ยังไม่เสร็จเผื่อกู้คืน
+            const taskId = task.id || task.createdAt;
+            window.dispatchEvent(new CustomEvent('task-deleted', { detail: { taskId } }));
             saveData(); onRenderCallback();          
         }
         // Restore Task
@@ -2136,11 +2173,16 @@ export function initTodoManager(callbacks) {
                         if (token) deleteCalendarEvent(task.calendarEventId, token);
                     });
                 }
-                space.tasks.splice(idx, 1);
+                // Phase 5: Soft Delete instead of splice
+                task.isDeleted = true;
+                task.deletedAt = Date.now();
+                task.syncVersion = (task.syncVersion || 0) + 1;
+                const permTaskId = task.id || task.createdAt;
+                window.dispatchEvent(new CustomEvent('task-deleted', { detail: { taskId: permTaskId } }));
                 saveData(); onRenderCallback();
             }
         }
-        // 🟢 NEW: Permanent Delete Subtask
+        // 🟢 NEW: Permanent Delete Subtask (Phase 5: Soft Delete)
         if (e.target.closest('.delete-subtask-perm-btn')) {
             const btn = e.target.closest('.delete-subtask-perm-btn');
             const pIdx = parseInt(btn.getAttribute('data-parent-index'));
@@ -2152,7 +2194,12 @@ export function initTodoManager(callbacks) {
                         if (token) deleteCalendarEvent(subtask.calendarEventId, token);
                     });
                 }
-                space.tasks[pIdx].subtasks.splice(sIdx, 1);
+                // Phase 5: Soft Delete instead of splice
+                subtask.isDeleted = true;
+                subtask.deletedAt = Date.now();
+                subtask.syncVersion = (subtask.syncVersion || 0) + 1;
+                const permSubId = subtask.id || subtask.createdAt;
+                window.dispatchEvent(new CustomEvent('task-deleted', { detail: { taskId: permSubId } }));
                 saveData();
                 onRenderCallback();
             }
@@ -2708,10 +2755,22 @@ export function initTodoManager(callbacks) {
                     }
                 },
                 onDeleteEmptyTask: (space, index, type, li) => {
-                    if (type === 'task') space.tasks.splice(index, 1);
-                    else {
+                    // Phase 5: Soft Delete instead of splice to prevent Ghost Data
+                    if (type === 'task') {
+                        const task = space.tasks[index];
+                        if (task) {
+                            task.isDeleted = true;
+                            task.deletedAt = Date.now();
+                            task.syncVersion = (task.syncVersion || 0) + 1;
+                        }
+                    } else {
                         const pIdx = parseInt(li.closest('.subtask-list').dataset.parentIndex);
-                        space.tasks[pIdx].subtasks.splice(index, 1);
+                        const subtask = space.tasks[pIdx]?.subtasks?.[index];
+                        if (subtask) {
+                            subtask.isDeleted = true;
+                            subtask.deletedAt = Date.now();
+                            subtask.syncVersion = (subtask.syncVersion || 0) + 1;
+                        }
                     }
                     saveData(); onRenderCallback();
                 },
@@ -2722,7 +2781,13 @@ export function initTodoManager(callbacks) {
                     if (!parentTask.subtasks) parentTask.subtasks = [];
                     const textToUse = cleanedText || taskObj.text;
                     parentTask.subtasks.push({ id: Date.now(), text: textToUse, completed: false });
-                    space.tasks.splice(index, 1);
+                    // Phase 5: Soft Delete instead of splice
+                    const taskToConvert = space.tasks[index];
+                    if (taskToConvert) {
+                        taskToConvert.isDeleted = true;
+                        taskToConvert.deletedAt = Date.now();
+                        taskToConvert.syncVersion = (taskToConvert.syncVersion || 0) + 1;
+                    }
                     saveData(); onRenderCallback();
                 },
                 onUpdate: () => onRenderCallback(),

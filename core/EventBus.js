@@ -200,6 +200,8 @@ export const Events = {
   MIRROR_CIRCULAR_DETECTED: 'mirror:circular',      // {taskId, version}
   OPEN_BASKET_MODAL: 'basket:open',                 // {spaceId}
   OPEN_SP_PICKER: 'command:open_sp_picker',         // {targetSpaceId}
+  SUBTASK_AVATAR_TICKED: 'subtask:avatar:ticked',   // {avatarSpaceId, avatarCreatedAt, subtaskOrigId, completed}
+  SUBTASK_SOURCE_TICKED: 'subtask:source:ticked',   // {originalSpaceId, originalCreatedAt, subtaskOrigId, completed}
 
   // 🧱 Block System Events
   BLOCK_CREATED: 'block:created',                   // {spaceId, blockId, blockName, blockColor}

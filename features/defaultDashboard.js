@@ -98,7 +98,7 @@ export async function renderDefaultDashboard() {
                 if (id === 'todo') {
                     return `
                         <div class="card widget-card master-todo-widget" data-id="todo">
-                            <div class="card-header" style="display: flex; align-items: center; flex-wrap: wrap; gap: 15px; padding: 10px 20px;">
+                            <div class="card-header master-todo-card-header" style="display: flex; align-items: center; gap: 12px; padding: 10px 20px;">
                                 <div id="master-header-controls-container" style="display: contents;">
                                     ${renderMasterHeaderControls()}
                                 </div>

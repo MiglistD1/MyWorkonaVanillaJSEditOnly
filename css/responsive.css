@@ -141,11 +141,17 @@
 
 @media (max-width: 768px) {
     #firebase-sync-popup {
-        min-width: 180px !important;
+        min-width: 0 !important;
+        width: 280px !important;
+        max-width: calc(100vw - 16px) !important;
+        max-height: calc(100vh - 90px) !important;
+        overflow-y: auto !important;
         padding: 10px !important;
+        box-sizing: border-box !important;
     }
     #firebase-sync-popup .sync-controls-container {
         gap: 8px !important;
+        width: 100% !important;
     }
     #firebase-sync-popup .btn {
         padding: 4px 8px !important;
@@ -156,6 +162,21 @@
     }
     #firebase-sync-popup .sync-controls-container > div:first-child {
         justify-content: space-around !important;
+    }
+
+    #sp-picker-modal {
+        align-items: flex-end !important;
+        justify-content: center !important;
+        padding: 0 8px 10px !important;
+        box-sizing: border-box !important;
+    }
+
+    #sp-picker-card {
+        width: min(420px, calc(100vw - 16px)) !important;
+        max-width: calc(100vw - 16px) !important;
+        max-height: min(72vh, calc(100vh - 80px)) !important;
+        border-radius: 12px !important;
+        box-sizing: border-box !important;
     }
 
     /* 🟢 MOBILE FIX: Hide task-input-bar by default on mobile, show only when is-active */

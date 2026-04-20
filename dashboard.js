@@ -1,5 +1,5 @@
 import { initFocusTimer } from './features/focusTimer.js';
-import { initFirebaseSync, forcePushNote, forcePullNote, updateSyncStatusUI, handleAutoSyncActivation } from "./core/firebaseSync.js";
+import { initFirebaseSync, forcePushNote, forcePullNote, updateSyncStatusUI, handleAutoSyncActivation, switchSpaceContext, cleanupFirebaseSync, subscribeToMetadata, subscribeToSpace } from "./core/firebaseSync.js";
 
 import { initScheduleMode } from './features/scheduleMode.js';
 import { initSidebar, renderSidebar } from './components/sidebar.js';
@@ -17,6 +17,7 @@ import { initContentManager, renderMainContent, renderAll } from './core/content
 import { openOrFocusTab } from './core/ui-helpers.js';
 import { initDashboardQuickNote } from './features/dashboardQuickNote.js';
 import { initStateManagerIntegration, stateManager, eventBus, Events } from './core/StateManagerIntegration.js';
+import { createMaintenanceButton, initMaintenanceTracking } from './core/maintenance-button.js';
 import { 
   getAppSettings, saveData, loadData, getSpaces,
   getCurrentSpaceId, setCurrentSpaceId, getFilterTags, setFilterTags, setSearchQuery, getCurrentSpace, getFilterMode, setFilterMode, getLocalSettings
@@ -25,8 +26,87 @@ import {
 let sessionReminderActive = true; // 🟢 ตัวแปรสำหรับคุมการแจ้งเตือนในเซสชั่นปัจจุบัน
 let isActivatingAutoSync = false; // 🔒 ป้องกันการปิด Popup ขณะกำลังตั้งค่า
 
+/**
+ * Phase 5: Helper to filter out soft-deleted items from rendering
+ * Prevents deleted items from appearing in UI while maintaining them for sync
+ */
+function filterVisibleItems(items = []) {
+    return items.filter(item => !item?.isDeleted);
+}
+
+/**
+ * Phase 6: Test Helper for Selective Push Verification
+ * Run from console: window.testPhase6Selective()
+ */
+function testPhase6Selective() {
+    console.group("🧪 PHASE 6: SELECTIVE PUSH TEST");
+    
+    const space = getCurrentSpace();
+    const spaceId = getCurrentSpaceId();
+    
+    console.log("=== TEST A: Change Detection ===");
+    console.log("Instructions:");
+    console.log("1. Edit or add a task");
+    console.log("2. Save (Ctrl+S)");
+    console.log("3. Watch F12 console for: '📤 Space N: Selective push (X changes)'");
+    console.log("4. Save again without editing");
+    console.log("5. Watch for: '✅ Space N: No changes, skipping write'");
+    
+    console.log("\n=== TEST B: Soft-Delete Verification ===");
+    console.log("Current space tasks:", space?.tasks?.length || 0);
+    const softDeleted = space?.tasks?.filter(t => t.isDeleted) || [];
+    console.log("Soft-deleted tasks:", softDeleted.length);
+    softDeleted.forEach(t => {
+        console.log(`  - [${t.id}] "${t.text?.substring(0, 50)}" (isDeleted:true, syncVersion:${t.syncVersion})`);
+    });
+    
+    console.log("\n=== TEST C: LocalStorage Check ===");
+    const localData = JSON.parse(localStorage.getItem('mySpacesData') || '[]');
+    const localSpace = localData.find(s => s.id === spaceId);
+    if (localSpace?.tasks) {
+        const deletedInStorage = localSpace.tasks.filter(t => t.isDeleted);
+        console.log(`Local tasks in storage: ${localSpace.tasks.length}`);
+        console.log(`Soft-deleted in storage: ${deletedInStorage.length}`);
+        if (deletedInStorage.length > 0) {
+            console.log("✅ Soft-deleted items preserved in localStorage");
+            deletedInStorage.forEach(t => {
+                console.log(`   - ${t.text?.substring(0, 50)} (syncVersion: ${t.syncVersion})`);
+            });
+        }
+    }
+    
+    console.log("\n=== TEST D: Snapshot Comparison ===");
+    const snapshotKey = `snapshot-space-${spaceId}`;
+    const snapshot = JSON.parse(localStorage.getItem(snapshotKey) || '{}');
+    if (snapshot.tasks) {
+        console.log(`Snapshot tasks: ${snapshot.tasks.length}`);
+        console.log(`Current tasks: ${space?.tasks?.length || 0}`);
+        const diff = Math.abs((space?.tasks?.length || 0) - snapshot.tasks.length);
+        console.log(`Difference: ${diff} items`);
+        if (diff === 0) {
+            console.log("✅ No changes since last sync (next save should skip write)");
+        } else {
+            console.log(`⚠️ ${diff} items changed (next save will push selective update)`);
+        }
+    } else {
+        console.log("ℹ️ No snapshot yet (first sync will send full space)");
+    }
+    
+    console.log("\n=== NEXT STEPS ===");
+    console.log("1. Add a new task and save");
+    console.log("2. Check console for selective push message");
+    console.log("3. Save again → should see 'No changes, skipping write'");
+    console.log("4. Verify in Network tab → smaller payloads");
+    
+    console.groupEnd();
+}
+
+// Make available globally
+window.testPhase6Selective = testPhase6Selective;
 
 function handleSpaceChange(newId, isNewSpace) {
+    const oldId = getCurrentSpaceId();
+    
     setCurrentSpaceId(newId);
     if (isNewSpace) {
         setFilterTags([]);
@@ -39,6 +119,11 @@ function handleSpaceChange(newId, isNewSpace) {
     saveData(true); // 🟢 บันทึกทันทีเพื่อให้เครื่องอื่นเปลี่ยน Space ตามได้เร็วขึ้น
     renderAll();
     updateArchivedStateUI();
+
+    // 🟢 NEW: Switch Firebase listener scope (old space unsubscribe, new space subscribe)
+    if (getLocalSettings().firebaseAutoSync) {
+        switchSpaceContext(oldId, newId);
+    }
 
     // 🟢 Mobile UI: Auto-close Sidebar after selecting a space
     const isMobile = window.innerWidth <= 768;
@@ -162,19 +247,65 @@ document.addEventListener('DOMContentLoaded', () => {
         initFirebaseSync();
         initRewardSystem();
 
+        // 🔒 Edit Safe Zone Button
+        const maintenanceBtnContainer = document.getElementById('maintenance-btn-container');
+        if (maintenanceBtnContainer) {
+            maintenanceBtnContainer.appendChild(createMaintenanceButton());
+        }
+        initMaintenanceTracking();
+
         // 🛰️ Firebase Sync Manual Actions
         const syncTrigger = document.getElementById('btn-firebase-sync-trigger');
         const syncPopup = document.getElementById('firebase-sync-popup');
         const autoSyncChk = document.getElementById('chk-firebase-auto-sync');
         const sessionAreaId = 'sf-auto-sync-persistence-area';
 
+        const positionSyncPopup = () => {
+            if (!syncPopup || !syncTrigger) return;
+            const isMobile = window.innerWidth <= 768;
+
+            if (isMobile) {
+                const triggerRect = syncTrigger.getBoundingClientRect();
+                const margin = 8;
+                const top = Math.min(window.innerHeight - 70, triggerRect.bottom + 8);
+                const desiredWidth = Math.min(280, window.innerWidth - margin * 2);
+                let left = triggerRect.right - desiredWidth;
+                if (left < margin) left = margin;
+                if (left + desiredWidth > window.innerWidth - margin) {
+                    left = window.innerWidth - desiredWidth - margin;
+                }
+                syncPopup.style.position = 'fixed';
+                syncPopup.style.width = `${desiredWidth}px`;
+                syncPopup.style.left = `${left}px`;
+                syncPopup.style.right = 'auto';
+                syncPopup.style.top = `${top}px`;
+                syncPopup.style.maxHeight = `calc(100vh - ${top + margin}px)`;
+                syncPopup.style.overflowY = 'auto';
+            } else {
+                syncPopup.style.position = 'absolute';
+                syncPopup.style.width = '';
+                syncPopup.style.left = 'auto';
+                syncPopup.style.right = '0';
+                syncPopup.style.top = '115%';
+                syncPopup.style.maxHeight = '';
+                syncPopup.style.overflowY = '';
+            }
+        };
+
         if (syncTrigger && syncPopup) {
             syncTrigger.onclick = (e) => {
                 e.stopPropagation();
                 const isHidden = syncPopup.style.display === 'none';
                 syncPopup.style.display = isHidden ? 'flex' : 'none';
-                if (isHidden) updateExpiryUI(); // 🟢 อัปเดตเวลาที่เหลือเมื่อเปิดหน้าต่าง
+                if (isHidden) {
+                    positionSyncPopup();
+                    updateExpiryUI(); // 🟢 อัปเดตเวลาที่เหลือเมื่อเปิดหน้าต่าง
+                }
             };
+
+            window.addEventListener('resize', () => {
+                if (syncPopup.style.display !== 'none') positionSyncPopup();
+            });
             
             document.addEventListener('click', (e) => {
                 if (isActivatingAutoSync) return; // 🛑 ห้ามปิดหน้าต่างถ้ากำลังอยู่ในขั้นตอน Reconciliation
@@ -274,17 +405,24 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     if (success) {
                         lSettings.firebaseAutoSync = true;
-                        // � Auto Export: เซฟลง laptop ทันทีทุกครั้งที่เปิด Auto Sync สำเร็จ
+                        
+                        // 🟢 FIX #5: Activate scoped listeners
+                        await subscribeToMetadata();
+                        await subscribeToSpace(getCurrentSpaceId());
+                        
+                        // 💾 Auto Export: เซฟลง laptop ทันทีทุกครั้งที่เปิด Auto Sync สำเร็จ
                         if (appSettings.autoExportEnabled) {
                             document.getElementById('btn-manual-export')?.click();
                         }
-                        // �� เอา syncPopup.style.display = 'none' ออกตามคำขอ เพื่อให้ผู้ใช้เห็นว่าสวิตช์ ON แล้วจริงๆ
                     } else {
                         autoSyncChk.checked = false;
                         lSettings.firebaseAutoSync = false;
                     }
                 } else {
                     lSettings.firebaseAutoSync = false;
+                    
+                    // 🟢 FIX #5: Unsubscribe from all listeners when disabled
+                    await cleanupFirebaseSync();
                 }
                 saveData(true);
                 updateSyncStatusUI(); 
@@ -505,9 +643,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 html += `</div>`;
 
-                // 🟢 3. ส่วนของ Custom Tags (ดึงจาก Space และ Items)
+                // 🟢 3. ส่วนของ Custom Tags (ดึงจาก Space และ Items) - Phase 5: Filter deleted items
                 const allTagsSet = new Set(space.tags || []);
-                space.tasks.forEach(task => {
+                filterVisibleItems(space.tasks).forEach(task => {
                     if (task.tags) task.tags.forEach(t => allTagsSet.add(t));
                     if (task.subtasks) task.subtasks.forEach(sub => { if (sub.tags) sub.tags.forEach(t => allTagsSet.add(t)); });
                 });
@@ -641,4 +779,15 @@ document.addEventListener('DOMContentLoaded', () => {
             setInterval(triggerReminder, 300000); // ⏱️ ตั้งรอบถามทุกๆ 5 นาที
         }
     });
+});
+
+// ========== 🧹 CLEANUP ON APP CLOSE ==========
+
+/**
+ * 🟢 Cleanup all Firebase listeners when tab closes
+ * Prevents listener leaks and ensures final data save
+ */
+window.addEventListener('beforeunload', async () => {
+    console.log('👋 App closing, cleaning up...');
+    await cleanupFirebaseSync();
 });

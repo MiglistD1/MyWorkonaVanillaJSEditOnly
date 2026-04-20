@@ -12,6 +12,20 @@ import { createCalendarEvent, deleteCalendarEvent } from '../core/calendarSync.j
 import { setupBasketModal } from '../components/modals.js';
 import { eventBus, Events } from '../core/EventBus.js';
 
+/**
+ * 🟢 FIX #3: Guard to prevent rendering deleted linked tasks
+ * Checks if a linked task exists and is not soft-deleted across all spaces
+ */
+function isLinkedTaskValid(linkedTaskId) {
+    if (!linkedTaskId) return true;  // No link = always valid
+    const spaces = getSpaces();
+    for (let space of spaces) {
+        const linkedTask = (space.tasks || []).find(t => t.id === linkedTaskId);
+        if (linkedTask && !linkedTask.isDeleted) return true;  // Found valid (non-deleted)
+    }
+    return false;  // Not found or is deleted
+}
+
 /** 🟢 Helper: จัดลำดับงานตามเงื่อนไขที่เลือก (เฉพาะ Main Tasks) */
 function sortSpaceTasks(space) {
     if (!space || !space.tasks || !space.taskSortOrder || space.taskSortOrder === 'manual') return;
@@ -55,6 +69,7 @@ export const masterTodoListState = {
     addingSubtaskToSpaceId: null,
     selectedQuickAddSpaceId: null,
     searchQuery: '',
+    visibleTaskCount: 0,
     collapsedFolders: new Set(),
     activeFolderTab: null,
     lastAppliedTemplateName: null // 🟢 เพิ่มเพื่อจำชื่อ View ล่าสุด
@@ -74,8 +89,8 @@ function applyDateFilter(tasks) {
         if (filter === 'no-date') return false;
         const d = new Date(t.dueDate);
         d.setHours(0, 0, 0, 0);
-        if (filter === 'past')   return d < today;
-        if (filter === 'today')  return d.getTime() === today.getTime();
+        if (filter === 'past') return d < today;
+        if (filter === 'today') return d.getTime() === today.getTime();
         if (filter === 'future') return d > today;
         return false;
     });
@@ -84,44 +99,63 @@ function applyDateFilter(tasks) {
 /**
  * Renders the controls (Buttons & Input Bar) typically placed in the header.
  */
-export function renderMasterHeaderControls() {
-    const allSpaces = getSpaces().filter(s => !s.isArchived && !s.isDeleted);
-    
-    // หา ID ที่ควรจะถูกเลือกใน Dropdown (จาก State หรือค่าแรกสุดในรายการ)
-    const selectedId = masterTodoListState.selectedQuickAddSpaceId || (allSpaces.length > 0 ? allSpaces[0].id : null);
+export function renderMasterHeaderControls(totalTasks = masterTodoListState.visibleTaskCount || 0) {
+    const settings = getAppSettings();
+    const isSingle = settings.masterIsSingleSelectMode ?? masterTodoListState.isSingleSelectMode;
+    const isLocked = !!settings.masterIsModeLocked;
+    const templates = settings.viewTemplates || {};
+    const templateNames = Object.keys(templates).filter(k => templates[k] && typeof templates[k] === 'object' && !Array.isArray(templates[k]));
 
     return `
-        <div class="master-header-filters-row" style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
-            <button id="btn-master-toggle-progress" class="btn-icon" title="${masterTodoListState.isProgressVisible ? 'Hide Space Tags' : 'Show Space Tags'}" style="padding:2px; opacity: 0.6; flex-shrink: 0;">
-                <svg class="svg-icon-sm" style="transform: ${masterTodoListState.isProgressVisible ? 'rotate(0deg)' : 'rotate(180deg)'}; transition: transform 0.2s;"><use href="#icon-chevron-up"></use></svg>
-            </button>
+        <div class="master-header-filters-row">
+            <div class="master-header-primary">
+                <button id="btn-master-toggle-progress" class="btn-icon master-header-square-btn" title="${masterTodoListState.isProgressVisible ? 'Hide Space Tags' : 'Show Space Tags'}" style="opacity: 0.72;">
+                    <svg class="svg-icon-sm" style="transform: ${masterTodoListState.isProgressVisible ? 'rotate(0deg)' : 'rotate(180deg)'}; transition: transform 0.2s;"><use href="#icon-chevron-up"></use></svg>
+                </button>
 
-            <div class="master-search-wrapper">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                <input type="text" id="master-search-input" class="master-search-input" placeholder="Search…" value="${masterTodoListState.searchQuery || ''}">
+                <button id="btn-master-filter-flagged" class="btn-icon master-header-square-btn ${masterTodoListState.showOnlyFlagged ? 'active' : ''}" title="${masterTodoListState.showOnlyFlagged ? 'Show All Tasks' : 'Show Only Flagged Tasks'}">
+                    <svg class="svg-icon-sm"><use href="#icon-flag"></use></svg>
+                </button>
+
+                <div class="master-search-wrapper">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                    <input type="text" id="master-search-input" class="master-search-input" placeholder="Search..." value="${masterTodoListState.searchQuery || ''}">
+                </div>
+
+                <select id="master-date-filter" class="master-header-select" title="Filter by date">
+                    <option value="all" ${masterTodoListState.dateFilter === 'all' ? 'selected' : ''}>All</option>
+                    <option value="no-date" ${masterTodoListState.dateFilter === 'no-date' ? 'selected' : ''}>None</option>
+                    <option value="past" ${masterTodoListState.dateFilter === 'past' ? 'selected' : ''}>Past</option>
+                    <option value="today" ${masterTodoListState.dateFilter === 'today' ? 'selected' : ''}>Today</option>
+                    <option value="future" ${masterTodoListState.dateFilter === 'future' ? 'selected' : ''}>Next</option>
+                </select>
             </div>
 
-            <button id="btn-master-filter-flagged" class="btn-icon ${masterTodoListState.showOnlyFlagged ? 'active' : ''}" 
-                title="${masterTodoListState.showOnlyFlagged ? 'Show All Tasks' : 'Show Only Flagged Tasks'}" style="padding: 2px; flex-shrink: 0; width: 34px; height: 34px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-body);">
-                <svg class="svg-icon-sm"><use href="#icon-flag"></use></svg>
-            </button>
+            <div class="master-header-secondary">
+                <div class="master-header-mode-group">
+                    <button id="btn-master-mode-lock" class="btn-icon master-header-square-btn" title="${isLocked ? 'Unlock Settings' : 'Lock Settings'}" style="color: ${isLocked ? '#ef4444' : '#10b981'}; opacity: ${isLocked ? '1' : '0.5'};">
+                        <svg class="svg-icon-sm"><use href="#icon-${isLocked ? 'lock-minimal' : 'unlock-minimal'}"></use></svg>
+                    </button>
+                    <button id="btn-master-toggle-select-mode" class="master-header-chip" style="cursor: ${isLocked ? 'not-allowed' : 'pointer'}; background: ${isSingle ? '#f3e8ff' : '#dcfce7'}; color: ${isSingle ? '#6b21a8' : '#166534'}; border-color: ${isSingle ? '#d8b4fe' : '#86efac'}; opacity: ${isLocked ? '0.7' : '1'};">
+                        ${isSingle ? 'Single' : 'Multi'}
+                    </button>
+                </div>
 
-            <select id="master-date-filter" class="master-header-select" title="Filter by date">
-                <option value="all"     ${masterTodoListState.dateFilter === 'all'     ? 'selected' : ''}>📋 All</option>
-                <option value="no-date" ${masterTodoListState.dateFilter === 'no-date' ? 'selected' : ''}>📌 None</option>
-                <option value="past"    ${masterTodoListState.dateFilter === 'past'    ? 'selected' : ''}>🔴 Past</option>
-                <option value="today"   ${masterTodoListState.dateFilter === 'today'   ? 'selected' : ''}>🟡 Today</option>
-                <option value="future"  ${masterTodoListState.dateFilter === 'future'  ? 'selected' : ''}>🟢 Next</option>
-            </select>
-        </div>
+                <div class="master-header-view-group">
+                    <select id="master-view-template-select" class="master-template-select master-header-view-select" title="Apply a saved view">
+                        <option value="" ${!masterTodoListState.lastAppliedTemplateName ? 'selected' : ''}>View</option>
+                        ${templateNames.map(n => `<option value="${n}" ${masterTodoListState.lastAppliedTemplateName === n ? 'selected' : ''}>${n}</option>`).join('')}
+                    </select>
+                    <button id="btn-manage-templates" class="btn-manage-templates master-header-square-btn" title="Manage view templates"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+                    <button id="btn-reset-order" class="btn-reset-order master-header-square-btn" title="Reset space order to default">↺</button>
+                </div>
 
-        <div class="task-input-bar master-input-area" style="flex: 1; margin: 0; height: 34px; box-shadow: none;">
-            <select id="master-space-selector" class="master-space-select" style="border-radius: 0;">
-                ${allSpaces.map(s => `<option value="${s.id}" ${parseInt(s.id) === parseInt(selectedId) ? 'selected' : ''}>${s.name}</option>`).join('')}
-            </select>
-            <input type="text" id="master-task-input" class="task-input" placeholder="Quick add task..." style="font-size: 13px;">
-            <button type="button" id="btn-master-sp-picker" class="btn-icon" title="Link task from another space" style="color:var(--primary-color);flex-shrink:0;"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></button>
-            <button class="btn btn-primary" id="btn-master-add-task">Add</button>
+                <span id="progress-text" class="master-counter-badge">
+                    <strong>${totalTasks}</strong>
+                    <span class="tasks-rem-label-long">tasks remaining</span>
+                    <span class="tasks-rem-label-short">T</span>
+                </span>
+            </div>
         </div>
     `;
 }
@@ -132,22 +166,21 @@ export function renderMasterHeaderControls() {
 export function renderMasterTodoList(container) {
     if (!container) return;
 
-    // 🛑 1. "Do Not Disturb" Mode: ป้องกัน UI รีเฟรชขณะกำลังพิมพ์ (ยกเว้นตอนกดยืนยัน Enter/Tab)
     const active = document.activeElement;
-    const isSubmitting = active?.dataset?.isSubmitting === "true";
+    const isSubmitting = active?.dataset?.isSubmitting === 'true';
 
     if (active && !isSubmitting) {
-        if (active.classList.contains('task-actual-text') || 
-            active.classList.contains('task-input') || 
+        if (active.classList.contains('task-actual-text') ||
+            active.classList.contains('task-input') ||
             active.classList.contains('subtask-add-input') ||
             active.classList.contains('subtask-inline-input') ||
             ((active.tagName === 'INPUT' && active.type !== 'checkbox') || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT')) {
-            return; // หยุดวาดถ้าผู้ใช้กำลังพิมพ์ (เว้นแต่จะเพิ่งกด Enter)
+            return;
         }
     }
+
     const allSpaces = getSpaces().filter(s => !s.isArchived && !s.isDeleted);
     let totalTasks = 0;
-    let completedTasks = 0;
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -157,8 +190,7 @@ export function renderMasterTodoList(container) {
             const activeTasks = space.tasks.filter(t => {
                 if (!t || t.completed || t.isDeleted) return false;
 
-                // 🟢 กรองงานทำซ้ำในอนาคตออกเพื่อให้ตัวนับ (Counter) แม่นยำ
-                const taskDue = t.dueDate ? new Date(t.dueDate).setHours(0,0,0,0) : null;
+                const taskDue = t.dueDate ? new Date(t.dueDate).setHours(0, 0, 0, 0) : null;
                 const isRepeating = t.repeatConfig && t.repeatConfig.isRepeating;
                 const isUpcoming = !t.isProminent && isRepeating && taskDue && taskDue > today.getTime() && t.wasRegenerated !== false;
                 return !isUpcoming;
@@ -167,9 +199,14 @@ export function renderMasterTodoList(container) {
             let tasksToCount = masterTodoListState.showOnlyFlagged ? activeTasks.filter(t => t.isProminent) : activeTasks;
             tasksToCount = applyDateFilter(tasksToCount);
             totalTasks += tasksToCount.length;
-            completedTasks += space.tasks.filter(t => t && t.completed).length;
         }
     });
+
+    masterTodoListState.visibleTaskCount = totalTasks;
+    const headerControlsContainer = document.getElementById('master-header-controls-container');
+    if (headerControlsContainer) {
+        headerControlsContainer.innerHTML = renderMasterHeaderControls(totalTasks);
+    }
 
     container.innerHTML = `
         ${renderProgressSection(allSpaces, totalTasks)}
@@ -179,7 +216,6 @@ export function renderMasterTodoList(container) {
         ${totalTasks === 0 ? '<p style="text-align:center; color:var(--text-muted); margin-top:40px; font-size:13px;">Your Command Center is empty. Start by adding a task!</p>' : ''}
     `;
 
-    // 🟢 NEW: Apply syntax highlighting to all task texts in the master list after rendering
     container.querySelectorAll('.task-actual-text').forEach(el => {
         applySyntaxHighlighting(el);
     });
@@ -187,14 +223,16 @@ export function renderMasterTodoList(container) {
     initMasterEvents();
     renderAutoMirroredSpaces();
 
-    // 🟢 Restore search input focus after re-render (for real-time filtering)
     if (masterTodoListState._restoreSearchFocus) {
         masterTodoListState._restoreSearchFocus = false;
         const searchEl = document.getElementById('master-search-input');
-        if (searchEl) { searchEl.focus(); const l = searchEl.value.length; searchEl.setSelectionRange(l, l); }
+        if (searchEl) {
+            searchEl.focus();
+            const length = searchEl.value.length;
+            searchEl.setSelectionRange(length, length);
+        }
     }
 
-    // 🟢 Re-inject inline peek panel after DOM rebuild by renderDefaultDashboard
     if (peekState.spaceId !== null && !peekState.isFloat) {
         renderSpacePeekPanel(peekState.spaceId);
     }
@@ -222,36 +260,6 @@ function renderProgressSection(allSpaces, totalTasks) {
     
 
     return `
-        <div class="master-progress-container">
-            <div class="master-progress-info" style="display:flex; align-items:center; gap:6px; flex-wrap:nowrap; justify-content: space-between;">
-                <div style="display:flex; align-items:center; gap:4px; flex: 1; min-width: 0;">
-                    <div style="display: flex; align-items: center; gap: 2px; background: var(--bg-body); padding: 2px 4px; border-radius: 8px; border: 1px solid var(--border-color); flex-shrink: 0;">
-                        <button id="btn-master-mode-lock" class="btn-icon" title="${isLocked ? 'Unlock Settings' : 'Lock Settings'}" style="color: ${isLocked ? '#ef4444' : '#10b981'}; opacity: ${isLocked ? '1' : '0.4'}; padding: 2px;">
-                            <svg class="svg-icon-sm"><use href="#icon-${isLocked ? 'lock-minimal' : 'unlock-minimal'}"></use></svg>
-                        </button>
-                        <button id="btn-master-toggle-select-mode" 
-                            style="padding: 2px 8px; font-size: 10px; border-radius: 4px; font-weight: 700; cursor: ${isLocked ? 'not-allowed' : 'pointer'}; transition: all 0.2s; 
-                            background: ${isSingle ? '#f3e8ff' : '#dcfce7'}; color: ${isSingle ? '#6b21a8' : '#166534'}; border: 1px solid ${isSingle ? '#6b21a8' : '#166534'}; opacity: ${isLocked ? '0.7' : '1'};">
-                            ${isSingle ? 'Single' : 'Multi'}
-                        </button>
-                    </div>
-                    <div class="master-view-templates" style="display: flex; align-items: center; gap: 2px; flex: 1; min-width: 0;">
-                        <select id="master-view-template-select" class="master-template-select" title="Apply a saved view" style="flex: 1; min-width: 40px;">
-                            <option value="" ${!masterTodoListState.lastAppliedTemplateName ? 'selected' : ''}>— View —</option>
-                            ${templateNames.map(n => `<option value="${n}" ${masterTodoListState.lastAppliedTemplateName === n ? 'selected' : ''}>${n}</option>`).join('')}
-                        </select>
-                        <button id="btn-manage-templates" class="btn-manage-templates" title="Manage view templates"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
-                        <button id="btn-reset-order" class="btn-reset-order" title="Reset space order to default">↺</button>
-                    </div>
-                </div>
-                <span id="progress-text" style="font-weight: 800; color: var(--primary-color); flex-shrink:0; font-size:11px; white-space:nowrap; margin-left:4px;">
-                    ${totalTasks}<span class="tasks-rem-label-long"> Tasks Remaining</span>
-                    <span class="tasks-rem-label-short">T</span>
-                </span>
-            </div>
-            <div style="height: 1px; background: var(--border-color); margin-top: 4px; opacity: 0.5;"></div>
-        </div>
-
         <div class="master-space-switcher" style="${masterTodoListState.isProgressVisible ? '' : 'display: none;'}">
             <div class="master-space-switcher-inner">
                 <button class="space-switcher-pill all-pill ${masterTodoListState.activeSpaceFilters.size === 0 ? 'active' : ''}" id="btn-master-filter-all">All</button>
@@ -339,6 +347,16 @@ function renderTaskGroups(allSpaces) {
                     ${sixDotHandle}
                     <div class="master-space-header-content">
                         <span class="group-title">${space.name} (${displayTasks.length})</span>
+                        <div class="master-space-quickfab" data-space-id="${space.id}">
+                            <button class="btn-icon btn-space-quickfab" data-space-id="${space.id}" title="Quick add in this space">
+                                <svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                            </button>
+                            <div class="master-space-quickfab-panel" data-space-id="${space.id}">
+                                <input type="text" class="task-input space-quick-input" data-space-id="${space.id}" placeholder="Quick add task..." style="font-size: 11px; height: 28px;">
+                                <button type="button" class="btn-icon btn-space-quick-link" data-space-id="${space.id}" title="Link task from another space" style="color:var(--primary-color);"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg></button>
+                                <button type="button" class="btn btn-primary btn-space-quick-add" data-space-id="${space.id}" style="height: 28px; padding: 0 8px; font-size: 10px;">Add</button>
+                            </div>
+                        </div>
                     </div>
                     <div class="master-space-toolbar">
                         <button class="btn-icon btn-mobile-space-toolbar-trigger" data-space-id="${space.id}" title="Space Tools">
@@ -912,9 +930,6 @@ function openTemplateManagePopup(anchorEl, onRefresh) {
 }
 
 export function initMasterEvents() {
-    const addBtn = document.getElementById('btn-master-add-task');
-    const taskInput = document.getElementById('master-task-input');
-    const spaceSelect = document.getElementById('master-space-selector');
     const groupContainer = document.getElementById('master-groups-container');
 
     // 🟢 1. Prevent Duplicate Event Listeners (Fix Double Pop-up)
@@ -934,112 +949,47 @@ export function initMasterEvents() {
         }, 50);
     };
 
-        // 🟢 Autocomplete Logic (Moved from top of file to here)
-        if (taskInput && spaceSelect) {
-            taskInput.addEventListener('input', (e) => {
-                const sid = parseInt(spaceSelect.value);
-                const spaces = getSpaces();
-                const targetSpace = spaces.find(s => s.id === sid);
-                handleTagAutocomplete(e, () => targetSpace?.tags || []);
-            });
-            taskInput.addEventListener('focus', () => {
-                if (taskInput.value.trim() === "") {
-                    const currentFilters = (getFilterTags() || []).filter(t => !['ALL', 'UNTAGGED', 'AI', 'HALF SCREEN'].includes(t.toUpperCase()));
-                    if (currentFilters.length > 0) {
-                        taskInput.value = '#1 ';
-                    }
-                }
-            });
-        }
-
-    // 🟢 เก็บค่าเมื่อผู้ใช้เลือกเปลี่ยนใน Dropdown เอง
-    if (spaceSelect) {
-        spaceSelect.onchange = () => {
-            masterTodoListState.selectedQuickAddSpaceId = parseInt(spaceSelect.value);
-        };
-    }
-
-    const masterSpBtn = document.getElementById('btn-master-sp-picker');
-    if (masterSpBtn) {
-        masterSpBtn.addEventListener('click', () => {
-            const sid = spaceSelect ? parseInt(spaceSelect.value) : null;
-            if (sid) eventBus.emit(Events.OPEN_SP_PICKER, { targetSpaceId: sid });
-        });
-    }
-
-    // 🔗 @block / @sp shortcut on Enter in master task input
-    if (taskInput) {
-        taskInput.addEventListener('keydown', (e) => {
-            if (e.key !== 'Enter') return;
-            const text = e.target.value.trim();
-
-            // 🧱 @block command
-            if (text.toLowerCase().startsWith('@block')) {
-                e.preventDefault();
-                const sid = spaceSelect ? parseInt(spaceSelect.value) : null;
-                const targetSpace = getSpaces().find(s => s.id === sid);
-                const prefillName = text.slice(6).replace(/^[:\s]+/, '').trim();
-                taskInput.value = '';
-                showCreateBlockModal({
-                    prefillName,
-                    onConfirm: (name, color) => {
-                        if (targetSpace) {
-                            createBlock(targetSpace, name, color);
-                            onRefresh();
-                        }
-                    }
-                });
-                return;
-            }
-
-            if (text.startsWith('@sp')) {
-                e.preventDefault();
-                e.target.value = '';
-                const sid = spaceSelect ? parseInt(spaceSelect.value) : null;
-                if (sid) eventBus.emit(Events.OPEN_SP_PICKER, { targetSpaceId: sid });
-            }
-        });
-    }
-
-    if (addBtn) addBtn.onclick = async () => {
-        let text = taskInput.value.trim();
-        const spaceId = parseInt(spaceSelect.value);
-        if (!text) return;
-        taskInput.disabled = true;
+    const addQuickTaskForSpace = (spaceId, inputEl) => {
         const targetSpace = getSpaces().find(s => s.id === spaceId);
-        if (targetSpace) {
-            if (!targetSpace.tasks) targetSpace.tasks = [];
+        if (!targetSpace || !inputEl) return;
 
-            // 🟢 Shortcut #1 replacement
-            const currentFilters = (getFilterTags() || []).filter(t => !['ALL', 'UNTAGGED', 'AI', 'HALF SCREEN'].includes(t.toUpperCase()));
-            if (text.includes('#1') && currentFilters.length > 0) {
-                const filterTagsString = currentFilters.map(t => '#' + t).join(' ');
-                text = text.replace(/#1/g, filterTagsString);
-            }
+        let text = (inputEl.value || '').trim();
+        if (!text) return;
 
-            // 🟢 Extract tags from text
-            let tags = [];
-            const tagMatches = text.match(/#([^\s#]+)/g);
-            if (tagMatches) {
-                tags = tagMatches.map(t => t.substring(1));
-                text = text.replace(/#([^\s#]+)/g, '').trim();
-                if (!text && tags.length > 0) text = tags[0];
+        inputEl.disabled = true;
+        if (!targetSpace.tasks) targetSpace.tasks = [];
 
-                if (!targetSpace.tags) targetSpace.tags = [];
-                tags.forEach(t => {
-                    if (!targetSpace.tags.some(st => st.toUpperCase() === t.toUpperCase())) targetSpace.tags.push(t);
-                });
-            }
-
-            let newTask = { text, completed: false, createdAt: Date.now(), isProminent: false, tags: tags };
-            targetSpace.tasks.push(newTask);
-            if (targetSpace.taskSortOrder && targetSpace.taskSortOrder !== 'manual') sortSpaceTasks(targetSpace);
-            taskInput.value = ''; taskInput.disabled = false; taskInput.placeholder = "Quick add task...";
-            saveData(); onRefresh();
+        // 🟢 Shortcut #1 replacement
+        const currentFilters = (getFilterTags() || []).filter(t => !['ALL', 'UNTAGGED', 'AI', 'HALF SCREEN'].includes(t.toUpperCase()));
+        if (text.includes('#1') && currentFilters.length > 0) {
+            const filterTagsString = currentFilters.map(t => '#' + t).join(' ');
+            text = text.replace(/#1/g, filterTagsString);
         }
-    };
 
-    if (taskInput) taskInput.onkeypress = (e) => { if (e.key === 'Enter') addBtn?.click(); };
+        // 🟢 Extract tags from text
+        let tags = [];
+        const tagMatches = text.match(/#([^\s#]+)/g);
+        if (tagMatches) {
+            tags = tagMatches.map(t => t.substring(1));
+            text = text.replace(/#([^\s#]+)/g, '').trim();
+            if (!text && tags.length > 0) text = tags[0];
+
+            if (!targetSpace.tags) targetSpace.tags = [];
+            tags.forEach(t => {
+                if (!targetSpace.tags.some(st => st.toUpperCase() === t.toUpperCase())) targetSpace.tags.push(t);
+            });
+        }
+
+        const newTask = { text, completed: false, createdAt: Date.now(), isProminent: false, tags: tags };
+        targetSpace.tasks.push(newTask);
+        if (targetSpace.taskSortOrder && targetSpace.taskSortOrder !== 'manual') sortSpaceTasks(targetSpace);
+
+        inputEl.value = '';
+        inputEl.disabled = false;
+        inputEl.placeholder = 'Quick add task...';
+        saveData();
+        onRefresh();
+    };
 
     const toggleProgressBtn = document.getElementById('btn-master-toggle-progress');
     if (toggleProgressBtn) toggleProgressBtn.onclick = () => { masterTodoListState.isProgressVisible = !masterTodoListState.isProgressVisible; onRefresh(); };
@@ -1201,11 +1151,102 @@ export function initMasterEvents() {
                 saveData();
             }
         });
-    }
+
+        groupContainer.addEventListener('input', (e) => {
+            const input = e.target.closest('.space-quick-input');
+            if (!input) return;
+            const sid = parseInt(input.dataset.spaceId, 10);
+            const targetSpace = getSpaces().find(s => s.id === sid);
+            handleTagAutocomplete(e, () => targetSpace?.tags || []);
+        });
+
+        groupContainer.addEventListener('focusin', (e) => {
+            const input = e.target.closest('.space-quick-input');
+            if (!input) return;
+            if ((input.value || '').trim() !== '') return;
+            const currentFilters = (getFilterTags() || []).filter(t => !['ALL', 'UNTAGGED', 'AI', 'HALF SCREEN'].includes(t.toUpperCase()));
+            if (currentFilters.length > 0) input.value = '#1 ';
+        });
+
+        groupContainer.addEventListener('keydown', (e) => {
+            const input = e.target.closest('.space-quick-input');
+            if (!input) return;
+            if (e.key !== 'Enter') return;
+
+            const sid = parseInt(input.dataset.spaceId, 10);
+            const text = (input.value || '').trim();
+            if (!sid || !text) return;
+
+            if (text.toLowerCase().startsWith('@block')) {
+                e.preventDefault();
+                const targetSpace = getSpaces().find(s => s.id === sid);
+                const prefillName = text.slice(6).replace(/^[:\s]+/, '').trim();
+                input.value = '';
+                showCreateBlockModal({
+                    prefillName,
+                    onConfirm: (name, color) => {
+                        if (targetSpace) {
+                            createBlock(targetSpace, name, color);
+                            onRefresh();
+                        }
+                    }
+                });
+                return;
+            }
+
+            if (text.startsWith('@sp')) {
+                e.preventDefault();
+                input.value = '';
+                const anchorRect = input.getBoundingClientRect?.() || null;
+                eventBus.emit(Events.OPEN_SP_PICKER, { targetSpaceId: sid, anchorRect });
+                return;
+            }
+
+            e.preventDefault();
+            addQuickTaskForSpace(sid, input);
+        });
 
         // 🟢 Unified Event Delegation for all Master List actions
         groupContainer.addEventListener('click', async (e) => {
             const target = e.target;
+
+            const quickFabBtn = target.closest('.btn-space-quickfab');
+            if (quickFabBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                const wrapper = quickFabBtn.closest('.master-space-quickfab');
+                if (!wrapper) return;
+                const willExpand = !wrapper.classList.contains('is-expanded');
+                groupContainer.querySelectorAll('.master-space-quickfab.is-expanded').forEach(el => el.classList.remove('is-expanded'));
+                if (willExpand) {
+                    wrapper.classList.add('is-expanded');
+                    wrapper.querySelector('.space-quick-input')?.focus();
+                }
+                return;
+            }
+
+            const quickLinkBtn = target.closest('.btn-space-quick-link');
+            if (quickLinkBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                const sid = parseInt(quickLinkBtn.dataset.spaceId, 10);
+                if (!sid) return;
+                const anchorRect = quickLinkBtn.getBoundingClientRect?.() || null;
+                eventBus.emit(Events.OPEN_SP_PICKER, { targetSpaceId: sid, anchorRect });
+                return;
+            }
+
+            const quickAddBtn = target.closest('.btn-space-quick-add');
+            if (quickAddBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                const sid = parseInt(quickAddBtn.dataset.spaceId, 10);
+                if (!sid) return;
+                const wrapper = quickAddBtn.closest('.master-space-quickfab');
+                const inputEl = wrapper?.querySelector('.space-quick-input');
+                addQuickTaskForSpace(sid, inputEl);
+                return;
+            }
 
             // 🔘 Mobile Toolbar Trigger
             const trigger = target.closest('.btn-mobile-space-toolbar-trigger');
@@ -1348,8 +1389,13 @@ export function initMasterEvents() {
         });
 }
 
+    }
+
 // Global listener to close mobile toolbar popups
 document.addEventListener('click', (e) => {
+    if (!e.target.closest('.master-space-quickfab')) {
+        document.querySelectorAll('.master-space-quickfab.is-expanded').forEach(el => el.classList.remove('is-expanded'));
+    }
     if (!e.target.closest('.master-space-toolbar')) {
         document.querySelectorAll('.master-space-toolbar-items.is-active').forEach(el => el.classList.remove('is-active'));
     }

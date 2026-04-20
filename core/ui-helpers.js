@@ -1,5 +1,6 @@
 import { svgTag, dragHandleSvg, svgEdit, svgTrashRed, svgPencil, svgRestore, svgArchive, svgRepeat, svgManualRepeat } from './icons.js';
 import { getShortDate, getAppSettings, getUnitCharFromThai, getFilterTags } from './storage.js';
+import { eventBus, Events } from './EventBus.js';
 
 /**
  * Generates the HTML for a mini tags button.
@@ -154,6 +155,7 @@ export function generateTaskHTML(task, index, {
     addingSubtaskToId = null,
     nextDueDate = null, // New: Next date for repeating tasks
     subtaskNumber = null, // 🟢 New: ลำดับตัวเลขสำหรับงานย่อย
+    parentId = null, // parent task's createdAt (set for subtasks so drag-drop can read it)
 } = {}) {
     if (!task) return '';
 
@@ -323,7 +325,8 @@ export function generateTaskHTML(task, index, {
                     depth: depth + 1, parentIndex: index, isFiltered, showActions, 
                     isMasterView, spaceId, showSpaceBadge, spaceName,
                     isProminentHidden,
-                    subtaskNumber: currentNum // 🟢 ส่งตัวเลขลำดับไปวาดผล
+                    subtaskNumber: currentNum, // 🟢 ส่งตัวเลขลำดับไปวาดผล
+                    parentId: task.createdAt || task.id || null, // for drag-drop data-parent-id
                 });
             }).join('');
         }
@@ -449,7 +452,7 @@ export function generateTaskHTML(task, index, {
 
     const itemType = isSubtask ? 'subtask' : 'task';
     return ` 
-    <li class="${isSubtask ? 'subtask-item' : 'task-item'} ${draggableClass} ${prominentClass} ${focusActiveClass} ${templateClass}${task.isMirrorAvatar ? ' sp-mirror-avatar' : ''}" data-index="${index}" data-type="${itemType}" data-space-id="${spaceId || ''}" data-task-id="${task.createdAt || task.id || ''}" style="list-style: none; width: 100%; margin-bottom: 0px; border-bottom: 1px solid transparent; opacity: ${isActuallyDeleted ? '0.7' : '1'}; position: relative;">
+    <li class="${isSubtask ? 'subtask-item' : 'task-item'} ${draggableClass} ${prominentClass} ${focusActiveClass} ${templateClass}${task.isMirrorAvatar ? ' sp-mirror-avatar' : ''}" data-index="${index}" data-type="${itemType}" data-space-id="${spaceId || ''}" data-task-id="${task.createdAt || task.id || ''}"${isSubtask && parentId ? ` data-parent-id="${parentId}"` : ''} style="list-style: none; width: 100%; margin-bottom: 0px; border-bottom: 1px solid transparent; opacity: ${isActuallyDeleted ? '0.7' : '1'}; position: relative;">
         <div class="item-main-row" style="display: flex; align-items: center; gap: 1px; padding: 2px 0; width: 100%; min-height: 28px;">
             ${handleHTML}
             <div class="focus-trigger-container" style="display: flex; align-items: center; gap: 0px; ${(!isSubtask && isProminentHidden && !task.isProminent) ? 'display: none;' : ''}">
@@ -518,6 +521,26 @@ export function attachSubtaskEventListeners(container, space, onRenderCallback, 
             if (space.tasks[pIdx]?.subtasks?.[sIdx]) {
                 const subtask = space.tasks[pIdx].subtasks[sIdx];
                 subtask.completed = isChecked;
+
+                // Sync subtask tick: avatar→original or original→avatars
+                const parentTask = space.tasks[pIdx];
+                if (parentTask?.isMirrorAvatar && !parentTask.originalSubtaskId && subtask._originalSubId) {
+                  // Issue 1: Avatar subtask ticked → sync back to original
+                  eventBus.emit(Events.SUBTASK_AVATAR_TICKED, {
+                    avatarSpaceId: space.id,
+                    avatarCreatedAt: parentTask.createdAt,
+                    subtaskOrigId: subtask._originalSubId,
+                    completed: isChecked,
+                  });
+                } else if (parentTask?.isMirrorSource && (subtask.id || subtask.createdAt)) {
+                  // Direction 2: Original subtask ticked → sync to all avatar snapshots
+                  eventBus.emit(Events.SUBTASK_SOURCE_TICKED, {
+                    originalSpaceId: space.id,
+                    originalCreatedAt: parentTask.createdAt,
+                    subtaskOrigId: subtask.id || subtask.createdAt,
+                    completed: isChecked,
+                  });
+                }
 
                 // 🌟 Trigger Quest Loot Scanner สำหรับ Sub-task
                 if (subtask.completed && window.processRewardScanner) {
@@ -666,7 +689,8 @@ export function attachTaskInlineEditListeners(container, getSpaceFn, callbacks =
                 }
 
                 // 🟢 >s shortcut: convert main task to subtask of the task above
-                if (type === 'task' && /^(.*?)>s$/i.test(newText) && typeof callbacks.onConvertToSubtask === 'function') {
+                // wasEnter required: กัน blur เพราะ click-away หรือ re-render ทำให้ trigger โดยไม่ตั้งใจ
+                if (wasEnter && type === 'task' && /^(.*?)>s$/i.test(newText) && typeof callbacks.onConvertToSubtask === 'function') {
                     const cleanedText = newText.replace(/>s$/i, '').trim();
                     callbacks.onConvertToSubtask(space, idx, taskObj, cleanedText);
                     return;
