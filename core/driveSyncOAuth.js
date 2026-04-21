@@ -10,7 +10,7 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-export const GDRIVE_CLIENT_ID = ''; // ← Paste your OAuth 2.0 Client ID here
+export const GDRIVE_CLIENT_ID = '586837492075-e2cf86u76n2c9dil0equ98trbraqnngh.apps.googleusercontent.com';
 
 const GDRIVE_SCOPE      = 'https://www.googleapis.com/auth/drive.file';
 const GDRIVE_API        = 'https://www.googleapis.com/drive/v3';
@@ -30,16 +30,21 @@ let _folderName = null;
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 export function initGDriveOAuth() {
+    console.log('[GDrive] 🔵 Initializing GDrive OAuth...');
     const saved  = localStorage.getItem(LS_TOKEN);
     const expiry = parseInt(localStorage.getItem(LS_TOKEN_EXPIRY) || '0', 10);
-    if (saved && expiry > Date.now()) _token = saved;
+    const isValid = saved && expiry > Date.now();
+    console.log('[GDrive] Saved token:', saved ? '✅ found' : '❌ not found', '| Expiry valid:', isValid ? '✅ yes' : '❌ no');
+    if (isValid) _token = saved;
     _folderId   = localStorage.getItem(LS_FOLDER_ID)   || null;
     _folderName = localStorage.getItem(LS_FOLDER_NAME) || null;
+    console.log('[GDrive] Folder:', _folderName || '(none selected)', '|', _folderId || '');
 }
 
 export function isGDriveConnected() {
     const expiry = parseInt(localStorage.getItem(LS_TOKEN_EXPIRY) || '0', 10);
-    return !!_token && expiry > Date.now();
+    const connected = !!_token && expiry > Date.now();
+    return connected;
 }
 
 export function getGDriveFolderName() { return _folderName; }
@@ -69,22 +74,72 @@ function _loadGIS() {
 }
 
 export async function connectGDrive() {
-    if (!GDRIVE_CLIENT_ID) throw new Error('GDRIVE_CLIENT_ID not configured in core/driveSyncOAuth.js');
-    await _loadGIS();
+    console.log('[GDrive] 🔵 connectGDrive called');
+    if (!GDRIVE_CLIENT_ID) {
+        console.error('[GDrive] ❌ CLIENT_ID is empty!');
+        throw new Error('GDRIVE_CLIENT_ID not configured in core/driveSyncOAuth.js');
+    }
+    console.log('[GDrive] ✅ CLIENT_ID found:', GDRIVE_CLIENT_ID.substring(0, 30) + '...');
+    
+    try {
+        console.log('[GDrive] 🔵 Loading GIS script...');
+        await _loadGIS();
+        console.log('[GDrive] ✅ GIS script loaded');
+    } catch (err) {
+        console.error('[GDrive] ❌ Failed to load GIS:', err);
+        throw new Error('Failed to load Google Identity Services');
+    }
+
     return new Promise((resolve, reject) => {
-        const client = window.google.accounts.oauth2.initTokenClient({
-            client_id: GDRIVE_CLIENT_ID,
-            scope:     GDRIVE_SCOPE,
-            callback:  (resp) => {
-                if (resp.error) { reject(new Error(resp.error_description || resp.error)); return; }
-                _token = resp.access_token;
-                const expiry = Date.now() + (resp.expires_in * 1000) - 60_000;
-                localStorage.setItem(LS_TOKEN,        _token);
-                localStorage.setItem(LS_TOKEN_EXPIRY, String(expiry));
-                resolve(_token);
-            },
-        });
-        client.requestAccessToken({ prompt: '' });
+        console.log('[GDrive] 🔵 Checking window.google...');
+        if (!window.google?.accounts?.oauth2) {
+            console.error('[GDrive] ❌ window.google.accounts.oauth2 not available');
+            reject(new Error('Google Identity Services not properly loaded'));
+            return;
+        }
+        console.log('[GDrive] ✅ window.google.accounts.oauth2 available');
+
+        try {
+            console.log('[GDrive] 🔵 Initializing token client...');
+            const client = window.google.accounts.oauth2.initTokenClient({
+                client_id: GDRIVE_CLIENT_ID,
+                scope:     GDRIVE_SCOPE,
+                callback:  (resp) => {
+                    console.log('[GDrive] 🔵 OAuth callback triggered');
+                    console.log('[GDrive] Response keys:', Object.keys(resp));
+                    if (resp.error) {
+                        console.error('[GDrive] ❌ OAuth error:', resp.error, '|', resp.error_description);
+                        reject(new Error(resp.error_description || resp.error));
+                        return;
+                    }
+                    if (!resp.access_token) {
+                        console.error('[GDrive] ❌ No access_token in response');
+                        reject(new Error('No access token received'));
+                        return;
+                    }
+                    _token = resp.access_token;
+                    const expiry = Date.now() + (resp.expires_in * 1000) - 60_000;
+                    localStorage.setItem(LS_TOKEN,        _token);
+                    localStorage.setItem(LS_TOKEN_EXPIRY, String(expiry));
+                    console.log('[GDrive] ✅ Token saved! Expires:', new Date(expiry).toLocaleString());
+                    resolve(_token);
+                },
+            });
+            console.log('[GDrive] ✅ Token client initialized');
+            console.log('[GDrive] 🔵 Requesting access token (opening popup)...');
+            client.requestAccessToken({ prompt: '' });
+            
+            // Detect if user cancelled or popup was blocked
+            const timeoutId = setTimeout(() => {
+                if (!_token) {
+                    console.warn('[GDrive] ⚠️ Timeout: Popup may have been cancelled or blocked');
+                    reject(new Error('OAuth popup cancelled or blocked. Check browser popup blocker.'));
+                }
+            }, 60_000);
+        } catch (err) {
+            console.error('[GDrive] ❌ Exception in connectGDrive:', err);
+            reject(err);
+        }
     });
 }
 

@@ -349,10 +349,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // ─ Google Drive Mobile helpers
             const _updateGDriveMobileUI = () => {
+                console.log('[Dashboard] 🔵 _updateGDriveMobileUI called');
                 const connected  = isGDriveConnected();
                 const folderId   = getGDriveFolderId();
                 const folderName = getGDriveFolderName();
                 const lastSync   = getGDriveLastSyncAt();
+                console.log('[Dashboard] GDrive state:', { connected, folderId, folderName, lastSync: new Date(lastSync).toLocaleString() });
                 const connectBtn  = document.getElementById('btn-gdrive-connect');
                 const statusRow   = document.getElementById('drive-gdrive-status-row');
                 const folderLabel = document.getElementById('drive-gdrive-folder-name-label');
@@ -363,10 +365,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (notCfgEl) notCfgEl.style.display = !GDRIVE_CLIENT_ID ? 'block' : 'none';
                 if (connectBtn) {
                     if (connected) {
+                        console.log('[Dashboard] ✅ Connected - showing green button');
                         connectBtn.innerHTML = '✓ Connected to Google Drive';
                         connectBtn.style.color = '#10b981';
                         connectBtn.style.borderColor = '#6ee7b7';
                     } else {
+                        console.log('[Dashboard] ❌ Not connected - showing Connect button');
                         connectBtn.innerHTML = '<svg style="width:14px;height:14px;flex-shrink:0;margin-right:6px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>Connect Google Drive';
                         connectBtn.style.color = '#94a3b8';
                         connectBtn.style.borderColor = 'var(--border-color)';
@@ -611,21 +615,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // ─ Google Drive Mobile handlers
             document.getElementById('btn-gdrive-connect')?.addEventListener('click', async (e) => {
+                console.log('[Dashboard] 🔵 Connect button clicked');
                 e.stopPropagation();
                 if (!GDRIVE_CLIENT_ID) {
+                    console.warn('[Dashboard] ⚠️ GDRIVE_CLIENT_ID is empty');
                     if (typeof window.showToast === 'function') window.showToast('⚠️ Set GDRIVE_CLIENT_ID in core/driveSyncOAuth.js first');
                     return;
                 }
+                console.log('[Dashboard] ✅ CLIENT_ID exists:', GDRIVE_CLIENT_ID.substring(0, 30) + '...');
                 try {
                     const connectBtn = document.getElementById('btn-gdrive-connect');
                     if (connectBtn) { connectBtn.innerHTML = 'Connecting...'; connectBtn.disabled = true; }
+                    console.log('[Dashboard] 🔵 Calling connectGDrive()...');
                     await connectGDrive();
+                    console.log('[Dashboard] ✅ connectGDrive() succeeded');
                     _updateGDriveMobileUI();
                     if (typeof window.showToast === 'function') window.showToast('✅ Connected to Google Drive');
                 } catch (err) {
-                    console.error('[GDrive] Connect error:', err);
+                    console.error('[Dashboard] ❌ Connect error:', err);
                     if (typeof window.showToast === 'function') window.showToast('❌ Google Drive connection failed: ' + err.message);
                     _updateGDriveMobileUI();
+                } finally {
+                    const connectBtn = document.getElementById('btn-gdrive-connect');
+                    if (connectBtn && connectBtn.innerHTML === 'Connecting...') {
+                        connectBtn.disabled = false;
+                    }
                 }
             });
 
