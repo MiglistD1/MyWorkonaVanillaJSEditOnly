@@ -303,6 +303,37 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             };
 
+            const _applyDeviceCapabilityUI = () => {
+                const supported = 'showDirectoryPicker' in window;
+                const ua        = navigator.userAgent;
+                const isMobile  = /Android|iPhone|iPod/i.test(ua);
+                const isTablet  = /iPad|Android(?!.*Mobile)/i.test(ua);
+
+                const badgeIcon      = document.getElementById('drive-device-badge-icon');
+                const badgeText      = document.getElementById('drive-device-badge-text');
+                const badge          = document.getElementById('drive-device-badge');
+                const desktopSection = document.getElementById('drive-vault-desktop-section');
+                const notSupported   = document.getElementById('drive-not-supported-msg');
+
+                let icon, label, bg;
+                if (isMobile)       { icon = '\uD83D\uDCF1'; label = 'Mobile \u2014 Vault Sync unavailable';    bg = 'rgba(239,68,68,0.08)'; }
+                else if (isTablet)  { icon = '\uD83D\uDCF1'; label = 'Tablet \u2014 Vault Sync unavailable';    bg = 'rgba(245,158,11,0.08)'; }
+                else if (supported) { icon = '\uD83D\uDCBB'; label = 'Desktop \u2014 Vault Sync ready';         bg = 'rgba(16,185,129,0.08)'; }
+                else                { icon = '\u26A0\uFE0F'; label = 'Browser not supported';                    bg = 'rgba(239,68,68,0.08)'; }
+
+                if (badgeIcon) badgeIcon.textContent = icon;
+                if (badgeText) badgeText.textContent = label;
+                if (badge)     badge.style.background = bg;
+
+                if (supported) {
+                    if (desktopSection) desktopSection.style.display = 'contents';
+                    if (notSupported)   notSupported.style.display   = 'none';
+                } else {
+                    if (desktopSection) desktopSection.style.display = 'none';
+                    if (notSupported)   notSupported.style.display   = 'flex';
+                }
+            };
+
             const _updateSyncEnabledRow = () => {
                 const enabled = localStorage.getItem('drive-sync-enabled') !== 'false';
                 const row  = document.getElementById('drive-sync-enabled-row');
@@ -338,6 +369,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const lastSyncEl = document.getElementById('drive-last-sync-time');
                 if (lastSyncEl) lastSyncEl.textContent = lsa ? `Last Synced: ${new Date(lsa).toLocaleTimeString()}` : 'Last Synced: Never';
                 _updateSyncEnabledRow();
+                _applyDeviceCapabilityUI();
                 updateDriveStayActiveLabel();
                 const histContent  = document.getElementById('drive-sync-history-content');
                 const clearHistBtn = document.getElementById('btn-drive-clear-history');

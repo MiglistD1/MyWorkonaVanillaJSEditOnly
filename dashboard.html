@@ -177,6 +177,13 @@
             </div>
             <label class="switch"><input type="checkbox" id="chk-drive-sync-enabled" checked><span class="slider"></span></label>
           </div>
+          <!-- Device capability badge -->
+          <div id="drive-device-badge" style="display:flex;align-items:center;gap:5px;width:100%;padding:3px 8px;border-radius:5px;font-size:9px;font-weight:700;color:var(--text-muted);background:var(--bg-body);border:1px dashed var(--border-color);box-sizing:border-box;text-transform:uppercase;letter-spacing:0.3px;">
+            <span id="drive-device-badge-icon">⌛</span>
+            <span id="drive-device-badge-text">Detecting device...</span>
+          </div>
+          <!-- ── Desktop-only section (requires File System Access API) ── -->
+          <div id="drive-vault-desktop-section" style="display:contents;">
           <!-- Folder name + status icons -->
           <div style="display: flex; align-items: center; width: 100%;">
             <div id="drive-sync-status-indicator" style="display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; flex-shrink: 0;">
@@ -254,6 +261,13 @@
               <button class="btn btn-primary" id="btn-drive-stay-active-set" style="height:30px; padding:0 12px; font-size:10px; border-radius:6px; font-weight:800; justify-content:center; flex-shrink:0;">Set</button>
               <button class="btn btn-outline" id="btn-drive-stay-active-off" style="height:30px; padding:0 10px; font-size:10px; color:#ef4444; border-color:#fecaca; border-radius:6px; font-weight:800; justify-content:center; flex-shrink:0;">Off</button>
             </div>
+          </div>
+          </div><!-- /drive-vault-desktop-section -->
+          <!-- Not supported on this device/browser -->
+          <div id="drive-not-supported-msg" style="display:none; width:100%; flex-direction:column; gap:8px; padding:12px 10px; background:rgba(148,163,184,0.06); border:1px dashed var(--border-color); border-radius:8px; box-sizing:border-box; text-align:center;">
+            <span style="font-size:20px; line-height:1;">&#128241;</span>
+            <div style="font-size:11px; font-weight:700; color:var(--text-main); margin-top:2px;">Vault Sync requires desktop</div>
+            <div style="font-size:10px; color:var(--text-muted); line-height:1.6;">File System Access API is not supported on this browser/device.<br>Open on <strong>Chrome</strong> or <strong>Edge</strong> on a laptop/desktop<br>to use local vault sync.</div>
           </div>
         </div>
       </div>
