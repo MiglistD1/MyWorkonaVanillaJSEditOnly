@@ -52,8 +52,11 @@ export function filterGhosts(cloudTasks, tombstones) {
         const id = task.id || task.createdAt;
         const deletedAt = allTombstones[id];
         if (!deletedAt) return true; // ไม่มีในบัญชีดำ → ผ่าน
-        const taskUpdatedAt = task.updatedAt || task.lastModifiedAt || 0;
-        if (taskUpdatedAt > deletedAt) return true; // ถูก recreate → ผ่าน
+        // Tombstone wins unconditionally.
+        // NOTE: The old "taskUpdatedAt > deletedAt" bypass was removed because the push hook
+        // stamps ALL tasks with lastModifiedAt=now on every push, which caused concurrent
+        // pushes from other devices to bypass the tombstone and resurrect deleted tasks.
+        // Tasks genuinely recreated after deletion always get a new createdAt key anyway.
         console.log(`👻 Ghost Task Blocked: ${id}`);
         return false; // ผี → เตะทิ้ง
     });
