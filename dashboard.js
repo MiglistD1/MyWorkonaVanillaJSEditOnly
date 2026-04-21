@@ -1081,6 +1081,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (sessionMs > 0) {
                             lSettings.autoSyncSessionExpiry = Date.now() + sessionMs;
                             updateExpiryUI();
+                        } else {
+                            // 🛡️ User skipped — clear any old expiry so next refresh = sync OFF
+                            lSettings.autoSyncSessionExpiry = 0;
+                            updateExpiryUI();
                         }
 
                         // 🟢 FIX #5: Activate scoped listeners
@@ -1115,6 +1119,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (typeof window.showToast === 'function') window.showToast(`${status}การเตือนความจำสำหรับรอบนี้แล้วครับ`);
             };
         }
+
+        // 🔔 Firebase Sync Reminder: toast every 5 min if sync is OFF and reminders are enabled
+        let _lastFbReminderAt = 0;
+        setInterval(() => {
+            if (!sessionReminderActive) return;
+            if (lSettings.firebaseAutoSync) return; // sync is ON, no reminder needed
+            const now = Date.now();
+            if (now - _lastFbReminderAt < 5 * 60 * 1000) return;
+            _lastFbReminderAt = now;
+            if (typeof window.showToast === 'function') {
+                window.showToast('🔔 Auto Sync ยังปิดอยู่ — เปิดใช้งานเพื่อ sync ข้อมูลกับ Cloud');
+            }
+        }, 60 * 1000); // check every 1 minute
 
         updateReminderUI(); // Initial Check
 
@@ -1345,17 +1362,88 @@ document.addEventListener('DOMContentLoaded', () => {
             await window.performSilentExport(data);
         });
 
+        // ── Active-time accumulator for hour-based auto export ─────────────
+        // Persists across page reloads via localStorage
+        let _aeActiveMs = parseInt(localStorage.getItem('myws-ae-active-ms') || '0', 10);
+        let _aeActiveStart = null;
+
+        const _aeGetCurrentMs = () => _aeActiveMs + (_aeActiveStart !== null ? Date.now() - _aeActiveStart : 0);
+        const _aeResetMs = () => {
+            _aeActiveMs = 0;
+            _aeActiveStart = document.visibilityState === 'visible' ? Date.now() : null;
+            localStorage.setItem('myws-ae-active-ms', '0');
+        };
+        const _aeSaveMs = () => {
+            if (_aeActiveStart !== null) {
+                _aeActiveMs += Date.now() - _aeActiveStart;
+                _aeActiveStart = null;
+                localStorage.setItem('myws-ae-active-ms', String(_aeActiveMs));
+            }
+        };
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                _aeActiveStart = Date.now();
+            } else {
+                _aeSaveMs();
+            }
+        });
+        if (document.visibilityState === 'visible') _aeActiveStart = Date.now();
+
         // ── Auto export timer ──────────────────────────────────────────────
         let _autoExportTimer = null;
         function _restartAutoExportTimer() {
             if (_autoExportTimer) { clearInterval(_autoExportTimer); _autoExportTimer = null; }
             const mins = appSettings.autoExportIntervalMin || 0;
             if (mins <= 0) return;
-            _autoExportTimer = setInterval(async () => {
-                const data = await _getExportData();
-                await window.performSilentExport(data);
-            }, mins * 60 * 1000);
-            console.log(`[Export] Auto-export every ${mins} min`);
+
+            const thresholdMs = mins * 60 * 1000;
+            const isDayBased    = mins >= 1440; // 1 day (1440 min) or 7 days (10080 min)
+            const isActiveBased = mins >= 120 && mins < 1440; // 2 hr (120) or 4 hr (240)
+
+            if (isDayBased) {
+                // Day-based: export once when app is opened after N days have passed
+                const lastTs = parseInt(localStorage.getItem('myws-ae-last-day-ts') || '0', 10);
+                if (Date.now() - lastTs >= thresholdMs) {
+                    // Due now — export on this session open
+                    (async () => {
+                        const data = await _getExportData();
+                        await window.performSilentExport(data);
+                        localStorage.setItem('myws-ae-last-day-ts', String(Date.now()));
+                    })();
+                }
+                // Also check hourly while app is running (in case user keeps it open all day)
+                _autoExportTimer = setInterval(async () => {
+                    const last = parseInt(localStorage.getItem('myws-ae-last-day-ts') || '0', 10);
+                    if (Date.now() - last >= thresholdMs) {
+                        const data = await _getExportData();
+                        await window.performSilentExport(data);
+                        localStorage.setItem('myws-ae-last-day-ts', String(Date.now()));
+                    }
+                }, 60 * 60 * 1000); // re-check every hour
+                console.log(`[Export] Day-based auto-export every ${Math.round(mins / 1440)} day(s)`);
+
+            } else if (isActiveBased) {
+                // Active-time-based: accumulates only actual usage time (not idle/closed)
+                _autoExportTimer = setInterval(() => {
+                    if (_aeGetCurrentMs() >= thresholdMs) {
+                        (async () => {
+                            const data = await _getExportData();
+                            await window.performSilentExport(data);
+                            _aeResetMs(); // reset counter after export
+                        })();
+                    }
+                }, 60 * 1000); // check every 1 minute
+                console.log(`[Export] Active-time auto-export every ${mins / 60} hr(s) of usage (accumulated: ${Math.round(_aeGetCurrentMs() / 60000)} min)`);
+
+            } else {
+                // Regular interval: 5, 15, 30, 60 min
+                _autoExportTimer = setInterval(async () => {
+                    const data = await _getExportData();
+                    await window.performSilentExport(data);
+                }, thresholdMs);
+                console.log(`[Export] Auto-export every ${mins} min`);
+            }
         }
         _restartAutoExportTimer(); // kick off on load
 

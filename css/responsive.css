@@ -645,6 +645,107 @@
         z-index: -1;
         animation: fadeIn 0.2s ease-out;
     }
+
+    /* 🟢 MOBILE SIDEBAR: Make 3 dots menu always visible */
+    .space-actions {
+        display: flex !important;
+        gap: 5px !important;
+    }
+
+    .space-item:hover .space-actions {
+        display: flex !important;
+    }
+
+    /* 🟢 MOBILE SIDEBAR: Hide folder action buttons, show as popup menu */
+    .folder-actions {
+        display: none !important;
+    }
+
+    .folder-header:hover .folder-actions {
+        display: none !important;
+    }
+
+    /* 🟢 MOBILE SIDEBAR: Folder action trigger button */
+    .folder-actions-trigger {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        padding: 4px !important;
+        border-radius: 4px !important;
+        background: transparent !important;
+        border: none !important;
+        cursor: pointer !important;
+        transition: background 0.2s ease !important;
+        font-size: 18px !important;
+        color: var(--text-muted) !important;
+        margin-left: auto !important;
+    }
+
+    .folder-actions-trigger:hover {
+        background: var(--hover-bg) !important;
+        color: var(--text-main) !important;
+    }
+
+    /* 🟢 MOBILE SIDEBAR: Folder actions popup menu */
+    .folder-actions-popup {
+        position: fixed !important;
+        background: var(--bg-card) !important;
+        border: 1px solid var(--border-color) !important;
+        border-radius: 8px !important;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.2) !important;
+        z-index: 9999 !important;
+        display: none !important;
+        flex-direction: column !important;
+        min-width: 180px !important;
+        overflow: hidden !important;
+        animation: popup-slide-up 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }
+
+    .folder-actions-popup.is-active {
+        display: flex !important;
+    }
+
+    .folder-actions-popup button {
+        display: flex !important;
+        align-items: center !important;
+        gap: 10px !important;
+        width: 100% !important;
+        padding: 12px 14px !important;
+        border: none !important;
+        background: transparent !important;
+        color: var(--text-main) !important;
+        font-size: 14px !important;
+        cursor: pointer !important;
+        text-align: left !important;
+        transition: all 0.15s ease !important;
+        border-bottom: 1px solid var(--border-color) !important;
+        box-sizing: border-box !important;
+    }
+
+    .folder-actions-popup button:last-child {
+        border-bottom: none !important;
+    }
+
+    .folder-actions-popup button:hover,
+    .folder-actions-popup button:active {
+        background: var(--hover-bg) !important;
+        color: var(--primary-color) !important;
+    }
+
+    .folder-actions-popup button:active {
+        transform: scale(0.98) !important;
+    }
+
+    @keyframes popup-slide-up {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
 }
 
 @media (min-width: 769px) and (max-width: 1100px) {
@@ -672,5 +773,15 @@
     .smart-flow-widget {
         flex: 1;
         min-width: 0;
+    }
+
+    /* 🟢 DESKTOP: Hide mobile trigger button on desktop */
+    .folder-actions-trigger {
+        display: none !important;
+    }
+
+    /* 🟢 DESKTOP: Show folder actions normally on desktop */
+    .folder-actions {
+        display: flex !important;
     }
 }

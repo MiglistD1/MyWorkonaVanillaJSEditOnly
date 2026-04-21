@@ -474,6 +474,7 @@ export function renderSidebar() {
                 <button class="btn-icon lock-folder-btn ${isLocked ? 'active-lock' : ''}" title="Lock/Unlock Expansion" style="padding:4px;"><svg class="svg-icon-sm" style="margin:0;"><use href="#icon-lock-minimal"></use></svg></button>
                 <button class="btn-icon edit-folder-props-btn" title="Edit Folder Settings" style="padding:4px;"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin:0;"><circle cx="12" cy="12" r="9"></circle></svg></button>
             </div>
+            <button class="folder-actions-trigger" title="More options">⋮</button>
         `;
 
         // Toggle Collapse when clicking main part
@@ -519,6 +520,15 @@ export function renderSidebar() {
             editBtn.onclick = (e) => {
                 e.stopPropagation();
                 showFolderEditModal(folderName);
+            };
+        }
+
+        // 🟢 MOBILE: Folder Actions Popup Trigger
+        const triggerBtn = header.querySelector('.folder-actions-trigger');
+        if (triggerBtn) {
+            triggerBtn.onclick = (e) => {
+                e.stopPropagation();
+                showFolderActionsPopup(e, folderName, isLocked, header);
             };
         }
 
@@ -775,6 +785,94 @@ export function refreshSidebarIcon() {
             updateSpaceItemUI(spaceItem, space);
         }
     });
+}
+
+/**
+ * 🟢 MOBILE: Show folder actions popup menu on mobile screens
+ */
+function showFolderActionsPopup(e, folderName, isLocked, headerElement) {
+    // Close any existing popup
+    const existing = document.getElementById('folder-actions-popup');
+    if (existing) existing.remove();
+
+    const popup = document.createElement('div');
+    popup.id = 'folder-actions-popup';
+    popup.className = 'folder-actions-popup is-active';
+
+    const settings = getAppSettings();
+
+    popup.innerHTML = `
+        <button class="folder-popup-add-space" title="Add Space to this Folder" style="gap: 10px;">
+            <span style="font-size: 18px;">+</span> Add Space
+        </button>
+        <button class="folder-popup-lock" title="Lock/Unlock Expansion" style="gap: 10px;">
+            <svg class="svg-icon-sm" style="margin:0;"><use href="#icon-lock-minimal"></use></svg>
+            ${isLocked ? 'Unlock Folder' : 'Lock Folder'}
+        </button>
+        <button class="folder-popup-edit" title="Edit Folder Settings" style="gap: 10px;">
+            <svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin:0;"><circle cx="12" cy="12" r="9"></circle></svg>
+            Edit Folder
+        </button>
+    `;
+
+    document.body.appendChild(popup);
+
+    // Position the popup near the folder header
+    const triggerBtn = headerElement.querySelector('.folder-actions-trigger');
+    const rect = triggerBtn.getBoundingClientRect();
+    
+    popup.style.top = `${rect.bottom + 5 + window.scrollY}px`;
+    popup.style.left = `${Math.max(10, rect.left + window.scrollX - 150)}px`;
+
+    // Add Space to Folder
+    const addBtn = popup.querySelector('.folder-popup-add-space');
+    if (addBtn) {
+        addBtn.onclick = () => {
+            popup.remove();
+            window.openCustomizeSpaceModal(null, folderName);
+        };
+    }
+
+    // Lock/Unlock Folder
+    const lockBtn = popup.querySelector('.folder-popup-lock');
+    if (lockBtn) {
+        lockBtn.onclick = () => {
+            popup.remove();
+            if (!settings.lockedFolders) settings.lockedFolders = [];
+            const idx = settings.lockedFolders.indexOf(folderName);
+            if (idx > -1) {
+                settings.lockedFolders.splice(idx, 1);
+            } else {
+                settings.lockedFolders.push(folderName);
+                if (settings.collapsedFolders) {
+                    const cIdx = settings.collapsedFolders.indexOf(folderName);
+                    if (cIdx > -1) settings.collapsedFolders.splice(cIdx, 1);
+                }
+            }
+            saveData();
+            renderSidebar();
+        };
+    }
+
+    // Edit Folder
+    const editBtn = popup.querySelector('.folder-popup-edit');
+    if (editBtn) {
+        editBtn.onclick = () => {
+            popup.remove();
+            showFolderEditModal(folderName);
+        };
+    }
+
+    // Close on click outside
+    setTimeout(() => {
+        const closeHandler = (evt) => {
+            if (!popup.contains(evt.target) && !headerElement.contains(evt.target)) {
+                popup.remove();
+                document.removeEventListener('click', closeHandler);
+            }
+        };
+        document.addEventListener('click', closeHandler);
+    }, 0);
 }
 
 /**
