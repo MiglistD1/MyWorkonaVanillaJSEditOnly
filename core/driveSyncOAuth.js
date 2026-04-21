@@ -12,7 +12,7 @@
 
 export const GDRIVE_CLIENT_ID = '586837492075-e2cf86u76n2c9dil0equ98trbraqnngh.apps.googleusercontent.com';
 
-const GDRIVE_SCOPE      = 'https://www.googleapis.com/auth/drive.file';
+const GDRIVE_SCOPE      = 'https://www.googleapis.com/auth/drive';
 const GDRIVE_API        = 'https://www.googleapis.com/drive/v3';
 const GDRIVE_UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3';
 const FOLDER_MIME       = 'application/vnd.google-apps.folder';
@@ -218,6 +218,36 @@ export async function listDriveFolders() {
     const q    = `mimeType='${FOLDER_MIME}' and trashed=false`;
     const data = await _api(`/files?q=${encodeURIComponent(q)}&fields=files(id,name)&orderBy=name&pageSize=50`);
     return data.files || [];
+}
+
+export async function searchFolderByName(name) {
+    if (!name?.trim()) throw new Error('Folder name required');
+    const q    = `mimeType='${FOLDER_MIME}' and name='${name.replace(/'/g, "\\'")}' and trashed=false`;
+    const data = await _api(`/files?q=${encodeURIComponent(q)}&fields=files(id,name)&pageSize=10`);
+    return data.files || [];
+}
+
+export async function searchFolderByLink(link) {
+    if (!link?.trim()) throw new Error('Link required');
+    let folderId = null;
+    const patterns = [
+        /\/folders\/([a-zA-Z0-9_-]+)/,
+        /[?&]id=([a-zA-Z0-9_-]+)/,
+        /\/d\/([a-zA-Z0-9_-]+)/,
+    ];
+    for (const p of patterns) {
+        const m = link.match(p);
+        if (m) { folderId = m[1]; break; }
+    }
+    if (!folderId) throw new Error('Could not extract folder ID from link');
+    console.log('[GDrive] Folder ID from link:', folderId);
+    try {
+        const data = await _api(`/files/${folderId}?fields=id,name,mimeType`);
+        if (data.mimeType !== FOLDER_MIME) throw new Error('Link does not point to a folder');
+        return [data];
+    } catch (err) {
+        throw new Error('Folder not accessible or link invalid: ' + err.message);
+    }
 }
 
 export function selectDriveFolder(id, name) {

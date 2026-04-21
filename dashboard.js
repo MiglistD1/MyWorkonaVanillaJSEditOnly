@@ -637,7 +637,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     _updateGDriveMobileUI();
                 } finally {
                     const connectBtn = document.getElementById('btn-gdrive-connect');
-                    if (connectBtn && connectBtn.innerHTML === 'Connecting...') {
+                    if (connectBtn) {
                         connectBtn.disabled = false;
                     }
                 }
@@ -650,6 +650,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (typeof window.showToast === 'function') window.showToast('Disconnected from Google Drive');
             });
 
+            const _populateFolderList = (folders, listEl) => {
+                if (!listEl) return;
+                if (folders.length === 0) {
+                    listEl.innerHTML = '<div style="font-size:10px;color:var(--text-muted);padding:4px;">No folders found</div>';
+                } else {
+                    listEl.innerHTML = folders.map(f =>
+                        `<button data-id="${f.id}" data-name="${f.name.replace(/"/g,'&quot;')}" class="gdrive-folder-item" style="display:flex;align-items:center;gap:6px;padding:4px 8px;border:none;background:transparent;color:var(--text-main);font-size:11px;font-weight:600;cursor:pointer;border-radius:4px;text-align:left;width:100%;box-sizing:border-box;">📁 ${f.name}</button>`
+                    ).join('');
+                    listEl.querySelectorAll('.gdrive-folder-item').forEach(btn => {
+                        btn.addEventListener('mouseover', () => btn.style.background = 'var(--hover-bg)');
+                        btn.addEventListener('mouseout',  () => btn.style.background = 'transparent');
+                        btn.addEventListener('click', (ev) => {
+                            ev.stopPropagation();
+                            selectDriveFolder(btn.dataset.id, btn.dataset.name);
+                            document.getElementById('drive-gdrive-folder-picker').style.display = 'none';
+                            _updateGDriveMobileUI();
+                        });
+                    });
+                }
+            };
+
             document.getElementById('btn-gdrive-pick-folder')?.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 const picker = document.getElementById('drive-gdrive-folder-picker');
@@ -661,24 +682,46 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (listEl) listEl.innerHTML = '<div style="font-size:10px;color:var(--text-muted);padding:4px;">Loading...</div>';
                 try {
                     const folders = await listDriveFolders();
-                    if (listEl) {
-                        if (folders.length === 0) {
-                            listEl.innerHTML = '<div style="font-size:10px;color:var(--text-muted);padding:4px;">No folders found</div>';
-                        } else {
-                            listEl.innerHTML = folders.map(f =>
-                                `<button data-id="${f.id}" data-name="${f.name.replace(/"/g,'&quot;')}" class="gdrive-folder-item" style="display:flex;align-items:center;gap:6px;padding:4px 8px;border:none;background:transparent;color:var(--text-main);font-size:11px;font-weight:600;cursor:pointer;border-radius:4px;text-align:left;width:100%;box-sizing:border-box;">📁 ${f.name}</button>`
-                            ).join('');
-                            listEl.querySelectorAll('.gdrive-folder-item').forEach(btn => {
-                                btn.addEventListener('mouseover', () => btn.style.background = 'var(--hover-bg)');
-                                btn.addEventListener('mouseout',  () => btn.style.background = 'transparent');
-                                btn.addEventListener('click', (ev) => {
-                                    ev.stopPropagation();
-                                    selectDriveFolder(btn.dataset.id, btn.dataset.name);
-                                    picker.style.display = 'none';
-                                    _updateGDriveMobileUI();
-                                });
-                            });
-                        }
+                    _populateFolderList(folders, listEl);
+                } catch (err) {
+                    if (listEl) listEl.innerHTML = `<div style="font-size:10px;color:#ef4444;padding:4px;">Error: ${err.message}</div>`;
+                }
+            });
+
+            document.getElementById('btn-gdrive-search-name')?.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const input = document.getElementById('drive-gdrive-search-name-input');
+                const name = (input?.value || '').trim();
+                if (!name) { if (typeof window.showToast === 'function') window.showToast('⚠️ Enter folder name'); return; }
+                const listEl = document.getElementById('drive-gdrive-folder-list');
+                if (listEl) listEl.innerHTML = '<div style="font-size:10px;color:var(--text-muted);padding:4px;">Searching...</div>';
+                try {
+                    const { searchFolderByName } = await import('./core/driveSyncOAuth.js');
+                    const folders = await searchFolderByName(name);
+                    _populateFolderList(folders, listEl);
+                    if (folders.length === 0 && typeof window.showToast === 'function') window.showToast('ℹ️ No folder "' + name + '" found');
+                } catch (err) {
+                    if (listEl) listEl.innerHTML = `<div style="font-size:10px;color:#ef4444;padding:4px;">Error: ${err.message}</div>`;
+                }
+            });
+
+            document.getElementById('btn-gdrive-search-link')?.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const input = document.getElementById('drive-gdrive-search-link-input');
+                const link = (input?.value || '').trim();
+                if (!link) { if (typeof window.showToast === 'function') window.showToast('⚠️ Paste Drive link'); return; }
+                const listEl = document.getElementById('drive-gdrive-folder-list');
+                if (listEl) listEl.innerHTML = '<div style="font-size:10px;color:var(--text-muted);padding:4px;">Checking link...</div>';
+                try {
+                    const { searchFolderByLink } = await import('./core/driveSyncOAuth.js');
+                    const folders = await searchFolderByLink(link);
+                    _populateFolderList(folders, listEl);
+                    if (folders.length === 1) {
+                        selectDriveFolder(folders[0].id, folders[0].name);
+                        document.getElementById('drive-gdrive-folder-picker').style.display = 'none';
+                        _updateGDriveMobileUI();
+                        if (input) input.value = '';
+                        if (typeof window.showToast === 'function') window.showToast('✅ Folder from link selected');
                     }
                 } catch (err) {
                     if (listEl) listEl.innerHTML = `<div style="font-size:10px;color:#ef4444;padding:4px;">Error: ${err.message}</div>`;

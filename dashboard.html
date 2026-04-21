@@ -282,11 +282,29 @@
               <button id="btn-gdrive-disconnect" class="btn btn-outline" style="font-size:9px; padding:2px 6px; height:auto; flex-shrink:0; color:#ef4444; border-color:#fecaca;">&#10005;</button>
             </div>
             <!-- Folder picker panel -->
-            <div id="drive-gdrive-folder-picker" style="display:none; width:100%; flex-direction:column; gap:4px; max-height:130px; overflow-y:auto; background:var(--bg-body); border:1px solid var(--border-color); border-radius:6px; padding:4px; box-sizing:border-box;">
-              <div id="drive-gdrive-folder-list" style="display:flex; flex-direction:column; gap:2px; width:100%;"><div style="font-size:10px; color:var(--text-muted); padding:4px;">Loading folders...</div></div>
-              <div style="display:flex; gap:5px; margin-top:4px; padding:4px 0 0; border-top:1px dashed var(--border-color);">
-                <input type="text" id="drive-gdrive-new-folder-input" placeholder="New folder name" style="flex:1; height:26px; padding:0 8px; font-size:11px; border-radius:5px; border:1px solid var(--border-color); background:var(--bg-card); color:var(--text-main); outline:none; box-sizing:border-box;">
-                <button id="btn-gdrive-create-folder" class="btn btn-primary" style="height:26px; padding:0 8px; font-size:10px; font-weight:800; justify-content:center; flex-shrink:0; border-radius:5px;">+ Create</button>
+            <div id="drive-gdrive-folder-picker" style="display:none; width:100%; flex-direction:column; gap:4px; max-height:200px; overflow-y:auto; background:var(--bg-body); border:1px solid var(--border-color); border-radius:6px; padding:6px; box-sizing:border-box;">
+              <!-- List from Drive -->
+              <div id="drive-gdrive-folder-list" style="display:flex; flex-direction:column; gap:2px; width:100%; max-height:80px; overflow-y:auto;"><div style="font-size:10px; color:var(--text-muted); padding:4px;">Loading folders...</div></div>
+              
+              <!-- Divider -->
+              <div style="width:100%; height:1px; background:var(--border-color); opacity:0.3; margin:4px 0;"></div>
+              
+              <!-- Search by Name -->
+              <div style="display:flex; gap:4px; align-items:center;">
+                <input type="text" id="drive-gdrive-search-name-input" placeholder="Folder name" style="flex:1; height:24px; padding:0 6px; font-size:9px; border-radius:4px; border:1px solid var(--border-color); background:var(--bg-card); color:var(--text-main); outline:none; box-sizing:border-box;">
+                <button id="btn-gdrive-search-name" class="btn btn-primary" style="height:24px; padding:0 6px; font-size:9px; font-weight:700; justify-content:center; flex-shrink:0; border-radius:4px;">Search</button>
+              </div>
+              
+              <!-- Search by Link -->
+              <div style="display:flex; gap:4px; align-items:center;">
+                <input type="text" id="drive-gdrive-search-link-input" placeholder="Paste link" style="flex:1; height:24px; padding:0 6px; font-size:9px; border-radius:4px; border:1px solid var(--border-color); background:var(--bg-card); color:var(--text-main); outline:none; box-sizing:border-box;">
+                <button id="btn-gdrive-search-link" class="btn btn-primary" style="height:24px; padding:0 6px; font-size:9px; font-weight:700; justify-content:center; flex-shrink:0; border-radius:4px;">Use</button>
+              </div>
+              
+              <!-- Create New -->
+              <div style="display:flex; gap:4px; margin-top:4px; padding:4px 0 0; border-top:1px dashed var(--border-color);">
+                <input type="text" id="drive-gdrive-new-folder-input" placeholder="New folder name" style="flex:1; height:24px; padding:0 6px; font-size:9px; border-radius:4px; border:1px solid var(--border-color); background:var(--bg-card); color:var(--text-main); outline:none; box-sizing:border-box;">
+                <button id="btn-gdrive-create-folder" class="btn btn-primary" style="height:24px; padding:0 6px; font-size:9px; font-weight:700; justify-content:center; flex-shrink:0; border-radius:4px;">+ Create</button>
               </div>
             </div>
             <!-- Divider -->
