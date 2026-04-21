@@ -1,5 +1,5 @@
 import { initFocusTimer } from './features/focusTimer.js';
-import { initFirebaseSync, forcePushNote, forcePullNote, updateSyncStatusUI, handleAutoSyncActivation, switchSpaceContext, cleanupFirebaseSync, subscribeToMetadata, subscribeToSpace } from "./core/firebaseSync.js";
+import { initFirebaseSync, forcePushNote, forcePullNote, updateSyncStatusUI, handleAutoSyncActivation, switchSpaceContext, cleanupFirebaseSync, subscribeToMetadata, subscribeToSpace, forcePushToCloud, forcePullFromCloud } from "./core/firebaseSync.js";
 
 import { initScheduleMode } from './features/scheduleMode.js';
 import { initSidebar, renderSidebar } from './components/sidebar.js';
@@ -167,6 +167,14 @@ function updateArchivedStateUI() {
 
 // Use DOMContentLoaded for reliable loading
 document.addEventListener('DOMContentLoaded', () => {
+    // 🔍 DIAGNOSTIC: Read raw chrome.storage BEFORE loadData to confirm what was actually written
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        chrome.storage.local.get(['mySpacesData', 'myLocalDeviceSettings'], (raw) => {
+            const details = (raw.mySpacesData || []).map(s => `${s.name}:${s.tasks?.filter(t => !t.isDeleted).length ?? 0}tasks`).join(' | ');
+            console.log('[DIAG] Raw storage — spaces:', raw.mySpacesData?.length, '| autoSync:', raw.myLocalDeviceSettings?.firebaseAutoSync, '| expiry:', raw.myLocalDeviceSettings?.autoSyncSessionExpiry);
+            console.log('[DIAG] Space details:', details || '(empty)');
+        });
+    }
     loadData(() => {
         const appSettings = getAppSettings();
         const lSettings = getLocalSettings();
@@ -174,8 +182,17 @@ document.addEventListener('DOMContentLoaded', () => {
         // ⏱️ Device-Specific Auto Sync Persistence Logic
         const now = Date.now();
         const expiry = lSettings.autoSyncSessionExpiry || 0;
+        const spaceDetails = (getSpaces() || []).map(s => `${s.name}:${s.tasks?.filter(t => !t.isDeleted).length ?? 0}tasks`).join(' | ');
+        console.log('[STARTUP] flag:', localStorage.getItem('myws-just-imported'), '| expiry:', expiry, '| firebaseAutoSync:', lSettings.firebaseAutoSync, '| spaces:', getSpaces()?.length);
+        console.log('[STARTUP] Space details:', spaceDetails || '(empty)');
 
-        if (expiry > now) {
+        // 🛡️ If we just restored a backup, force Auto Sync OFF regardless of what was in the file
+        if (localStorage.getItem('myws-just-imported') === '1') {
+            localStorage.removeItem('myws-just-imported');
+            lSettings.firebaseAutoSync = false;
+            lSettings.autoSyncSessionExpiry = 0;
+            console.log('[STARTUP] 🛡️ Just-imported flag detected — Auto Sync forced OFF');
+        } else if (expiry > now) {
             // 🟢 ตรวจพบ Session ที่ยังไม่หมดอายุ: บังคับเปิด Auto Sync ทันที
             lSettings.firebaseAutoSync = true;
         } else {
@@ -444,6 +461,26 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('btn-firebase-push')?.addEventListener('click', () => { forcePushNote(); if(syncPopup) syncPopup.style.display = 'none'; });
         document.getElementById('btn-firebase-pull')?.addEventListener('click', () => { forcePullNote(); if(syncPopup) syncPopup.style.display = 'none'; });
 
+        document.getElementById('btn-force-push')?.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const scope = document.getElementById('force-sync-scope')?.value || 'current';
+            const scopeLabel = scope === 'all' ? 'ทุก Space' : 'Space นี้';
+            const confirmed = confirm(`⚠️ Force Push — เขียนข้อมูลจากเครื่องนี้ทับ Cloud (${scopeLabel})\n\nข้อมูลบน Cloud จะถูกแทนที่ทั้งหมด ดำเนินการต่อ?`);
+            if (!confirmed) return;
+            if (syncPopup) syncPopup.style.display = 'none';
+            await forcePushToCloud(scope);
+        });
+
+        document.getElementById('btn-force-pull')?.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const scope = document.getElementById('force-sync-scope')?.value || 'current';
+            const scopeLabel = scope === 'all' ? 'ทุก Space' : 'Space นี้';
+            const confirmed = confirm(`⚠️ Force Pull — ดึงข้อมูลจาก Cloud มาทับเครื่องนี้ (${scopeLabel})\n\nข้อมูลใน Local จะถูกแทนที่ทั้งหมด ดำเนินการต่อ?`);
+            if (!confirmed) return;
+            if (syncPopup) syncPopup.style.display = 'none';
+            await forcePullFromCloud(scope);
+        });
+
         const unarchiveBtn = document.getElementById('btn-unarchive-from-banner');
         if (unarchiveBtn) {
             unarchiveBtn.addEventListener('click', () => {
@@ -564,27 +601,67 @@ document.addEventListener('DOMContentLoaded', () => {
 
         btnImportData?.addEventListener('click', () => fileImportInput?.click());
 
-        fileImportInput?.addEventListener('change', (e) => {
+        fileImportInput?.addEventListener('change', async (e) => {
             const file = e.target.files?.[0];
             if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                try {
-                    const data = JSON.parse(event.target.result);
-                    if (confirm('Replace all existing data with this backup? This will reload the application.')) {
-                        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-                            chrome.storage.local.clear(() => {
-                                chrome.storage.local.set(data, () => { location.reload(); });
-                            });
-                        } else {
-                            localStorage.clear();
-                            Object.keys(data).forEach(k => localStorage.setItem(k, JSON.stringify(data[k])));
-                            location.reload();
-                        }
+            e.target.value = ''; // Reset input so the same file can be re-selected if needed
+
+            // --- Step 1: Parse & Validate ---
+            let data;
+            try {
+                data = JSON.parse(await file.text());
+            } catch {
+                alert('Invalid backup file: not valid JSON.');
+                return;
+            }
+            if (!Array.isArray(data.mySpacesData) || data.mySpacesData.length === 0) {
+                alert('Invalid backup file: no space data found.');
+                return;
+            }
+
+            if (!confirm(`Restore backup? (${data.mySpacesData.length} space(s) found)\n\nThis will REPLACE ALL current data and reload the app.`)) return;
+
+            // --- Step 2: Build clean restore payload ---
+            // Hard reset: clear() + set() = 100% replacement, no merge/timestamp logic
+            // Strip stale snapshot keys; force Auto Sync OFF to prevent Firebase overwrite on reload
+            const restore = {};
+            for (const [k, v] of Object.entries(data)) {
+                if (!k.startsWith('snapshot-space-')) restore[k] = v;
+            }
+            restore['myLocalDeviceSettings'] = { firebaseAutoSync: false, autoSyncSessionExpiry: 0 };
+
+            // --- Step 3: Lock UI to prevent double-click during async write ---
+            if (btnImportData) { btnImportData.disabled = true; btnImportData.textContent = 'Importing…'; }
+
+            // --- Step 4: Write to storage & reload ---
+            try {
+                if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+                    // MV3 native Promise API — errors throw as exceptions (no lastError needed)
+                    await chrome.storage.local.clear();
+                    await chrome.storage.local.set(restore);
+                    // 🛡️ localStorage flag: not cleared by chrome.storage.local.clear(), survives reload
+                    localStorage.setItem('myws-just-imported', '1');
+                    console.log('[IMPORT] ✅ chrome.storage written. Spaces:', restore.mySpacesData?.length, '| autoSync:', restore.myLocalDeviceSettings?.firebaseAutoSync, '| flag:', localStorage.getItem('myws-just-imported'));
+                } else {
+                    localStorage.clear();
+                    for (const [k, v] of Object.entries(restore)) {
+                        localStorage.setItem(k, JSON.stringify(v));
                     }
-                } catch (err) { alert('Invalid JSON file.'); }
-            };
-            reader.readAsText(file);
+                    // 🛡️ Re-set flag after localStorage.clear()
+                    localStorage.setItem('myws-just-imported', '1');
+                    console.log('[IMPORT] ✅ localStorage written. Spaces:', restore.mySpacesData?.length, '| autoSync:', restore.myLocalDeviceSettings?.firebaseAutoSync, '| flag:', localStorage.getItem('myws-just-imported'));
+                }
+                location.reload();
+            } catch (err) {
+                if (btnImportData) { btnImportData.disabled = false; btnImportData.textContent = 'Import'; }
+                const isQuota = err.message && (err.message.includes('QUOTA') || err.message.includes('quota'));
+                if (isQuota) {
+                    alert('Import failed: backup file exceeds the 10 MB storage limit.\nTo fix: add "unlimitedStorage" to permissions in manifest.json.');
+                } else {
+                    alert('Import failed — storage error: ' + err.message + '\n\nPlease try again.');
+                }
+                console.error('[IMPORT ERROR]', err);
+            }
         });
 
         // 🌙 อัปเดตตัวแปร Global เมื่อมีการสลับ Dark Mode

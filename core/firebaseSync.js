@@ -1019,12 +1019,14 @@ export async function subscribeToSpace(spaceId) {
                 }
 
                 // 🟢 PHASE 3: Update with granular item-level merge + normalize incoming items
+                // BUG FIX: Also filter LOCAL tasks through tombstones to prevent deleted tasks from being re-added
+                const filteredLocalTasks = filterGhosts(localSpace.tasks || [], mergedTombstones);
                 const mergedSpace = {
                     ...cloudSpace,
                     deletedTaskIds: pruneTombstones(mergedTombstones),
                     tasks: mergeItemsGranular(
                         normalizeItemsWithVersion(cloudSpace.tasks || [], 'createdAt'),
-                        normalizeItemsWithVersion(localSpace.tasks || [], 'createdAt'),
+                        normalizeItemsWithVersion(filteredLocalTasks, 'createdAt'),
                         'createdAt'
                     ),
                     resources: mergeItemsGranular(
@@ -1257,6 +1259,8 @@ export function initFirebaseSync() {
                 space.tasks = normalizeItemsWithVersion(space.tasks || [], 'createdAt', deviceId);
                 space.resources = normalizeItemsWithVersion(space.resources || [], 'url', deviceId);
                 space.driveFiles = normalizeItemsWithVersion(space.driveFiles || [], 'url', deviceId);
+                // BUG FIX: Stamp lastModifiedAt=now so the pushing device always wins on receiving side
+                space.tasks = space.tasks.map(t => ({ ...t, lastModifiedAt: now }));
                 
                 // Increment version immediately before save
                 space.syncVersion = (space.syncVersion || 0) + 1;
@@ -1560,45 +1564,62 @@ export async function showHandshakeConflictModal(handshakeResult) {
     let modal = document.getElementById(modalId);
     if (modal) modal.remove();
 
+    const fmtTimeDiff = (ms) => {
+        const s = Math.round(Math.abs(ms) / 1000);
+        if (s < 60) return `${s} วินาที`;
+        const m = Math.floor(s / 60), rem = s % 60;
+        return rem > 0 ? `${m} นาที ${rem} วิ` : `${m} นาที`;
+    };
     const conflictHtml = conflicts.length > 0 ? `
         <div style="margin-top: 12px; padding: 10px; background: rgba(239, 68, 68, 0.1); border-radius: 8px; border-left: 3px solid #ef4444;">
-            <div style="font-weight: 700; font-size: 12px; color: #dc2626; margin-bottom: 6px;">⚠️ ${conflicts.length} Conflicts Detected:</div>
-            ${conflicts.map(c => `
-                <div style="font-size: 11px; color: var(--text-main); margin: 4px 0; padding: 6px; background: var(--bg-body); border-radius: 4px; border-left: 2px solid #ef4444;">
-                    📌 <strong>${c.name}</strong><br>
-                    <span style="opacity: 0.7;">v${c.localVer}→${c.cloudVer} | ${c.localTaskCount}→${c.cloudTaskCount} tasks | ${Math.round(Math.abs(c.cloudTime - c.localTime) / 1000)}s apart</span>
-                </div>
-            `).join('')}
+            <div style="font-weight: 700; font-size: 12px; color: #dc2626; margin-bottom: 6px;">⚠️ พบข้อมูลขัดแย้ง ${conflicts.length} Space:</div>
+            ${conflicts.map(c => {
+                const timeDiff = fmtTimeDiff(c.cloudTime - c.localTime);
+                const localNewer = c.localVer > c.cloudVer || c.localTime > c.cloudTime;
+                const newerLabel = localNewer ? '📱 เครื่องนี้ใหม่กว่า' : '☁️ Cloud ใหม่กว่า';
+                return `
+                <div style="font-size: 11px; color: var(--text-main); margin: 4px 0; padding: 8px; background: var(--bg-body); border-radius: 4px; border-left: 2px solid #ef4444;">
+                    📌 <strong>${c.name}</strong>
+                    <span style="float:right; font-size:10px; font-weight:700; color:${localNewer ? '#f59e0b' : '#3b82f6'}; background:${localNewer ? 'rgba(245,158,11,0.1)' : 'rgba(59,130,246,0.1)'}; padding:1px 5px; border-radius:4px;">${newerLabel}</span><br>
+                    <div style="margin-top:5px; display:flex; gap:8px; flex-wrap:wrap;">
+                        <span style="opacity:0.8;">📱 v${c.localVer} / ${c.localTaskCount} งาน</span>
+                        <span style="opacity:0.4;">vs</span>
+                        <span style="opacity:0.8;">☁️ v${c.cloudVer} / ${c.cloudTaskCount} งาน</span>
+                        <span style="opacity:0.6; margin-left:auto;">⏱ ต่างกัน ${timeDiff}</span>
+                    </div>
+                </div>`;
+            }).join('')}
         </div>
     ` : '';
 
     const syncHtml = syncCount > 0 ? `
         <div style="margin-top: 8px; padding: 10px; background: rgba(59, 130, 246, 0.1); border-radius: 8px; border-left: 3px solid #3b82f6;">
-            <div style="font-weight: 700; font-size: 12px; color: #1e40af; margin-bottom: 4px;">ℹ️ ${syncCount} spaces need sync (newer version/timestamp)</div>
+            <div style="font-weight: 700; font-size: 12px; color: #1e40af; margin-bottom: 4px;">ℹ️ ${syncCount} Space ที่ยังไม่ได้ซิงค์</div>
+            ${toSync.map(s => `<div style="font-size:11px; color:var(--text-muted); margin-top:3px;">• ${s.name} <span style="opacity:0.6;">(${s.direction === 'pull' ? '☁️ Cloud ใหม่กว่า' : '📱 เครื่องนี้ใหม่กว่า'})</span></div>`).join('')}
         </div>
     ` : '';
 
     const unchangedHtml = unchanged.length > 0 ? `
         <div style="margin-top: 8px; padding: 10px; background: rgba(16, 185, 129, 0.1); border-radius: 8px; border-left: 3px solid #10b981;">
-            <div style="font-weight: 700; font-size: 12px; color: #065f46;">✅ ${unchanged.length} Already Synced</div>
+            <div style="font-weight: 700; font-size: 12px; color: #065f46;">✅ ซิงค์แล้ว ${unchanged.length} Space</div>
         </div>
     ` : '';
 
     const modalHTML = `
         <div class="modal-overlay" id="${modalId}" style="display:flex; z-index:21000; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px);">
             <div class="modal-content" style="width:380px; max-height:70vh; padding:20px; text-align:center; border-radius:14px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); background:var(--bg-card); border:1px solid var(--border-color); overflow-y:auto;">
-                <h2 style="margin:0 0 12px 0; font-size:16px; font-weight:800; color:var(--text-main);">🤝 Sync Handshake</h2>
-                <div style="font-size:12px; color:var(--text-muted); margin-bottom:16px;">Checking ${totalSpaces} space(s)...</div>
+                <h2 style="margin:0 0 12px 0; font-size:16px; font-weight:800; color:var(--text-main);">🤝 ตรวจสอบก่อนซิงค์</h2>
+                <div style="font-size:12px; color:var(--text-muted); margin-bottom:16px;">ตรวจพบ ${totalSpaces} Space ทั้งหมด</div>
                 
                 ${conflictHtml}
                 ${syncHtml}
                 ${unchangedHtml}
 
-                <div style="margin-top:16px; padding:12px; background:rgba(59,130,246,0.05); border-radius:8px; font-size:11px; color:var(--text-muted); line-height:1.5;">
-                    <strong>Choose action:</strong><br>
-                    🧬 <strong>Merge:</strong> Combine items from both<br>
-                    ⬇️ <strong>Pull:</strong> Use cloud versions<br>
-                    ⬆️ <strong>Push:</strong> Use local versions
+                <div style="margin-top:16px; padding:12px; background:rgba(59,130,246,0.05); border-radius:8px; font-size:11px; color:var(--text-muted); line-height:1.6;">
+                    <strong>เลือกวิธีการซิงค์:</strong><br>
+                    🧬 <strong>Merge</strong> — ผสานข้อมูลจากทั้งสองฝั่ง<br>
+                    ⬇️ <strong>Pull</strong> — ใช้ข้อมูลจาก Cloud เป็นหลัก<br>
+                    ⬆️ <strong>Push</strong> — ใช้ข้อมูลจากเครื่องนี้เป็นหลัก
                 </div>
 
                 <div style="margin-top:14px; display:grid; grid-template-columns:1fr 1fr; gap:10px;">
@@ -1612,7 +1633,7 @@ export async function showHandshakeConflictModal(handshakeResult) {
                         ⬆️ Push
                     </button>
                     <button id="btn-resolve-cancel" style="padding:10px; border:1px solid var(--border-color); border-radius:8px; background:var(--bg-body); cursor:pointer; font-weight:700; font-size:12px; color:var(--text-muted);">
-                        ✕ Cancel
+                        ✕ ยกเลิก
                     </button>
                 </div>
             </div>
@@ -1778,11 +1799,115 @@ export async function cleanupFirebaseSync() {
         // Unsubscribe all listeners
         await listenerManager.unsubscribeAll();
         
-        // Final save
-        saveData(true);
+        // Final save — skip if a backup import just ran (chrome.storage was hard-reset by import handler)
+        if (!localStorage.getItem('myws-just-imported')) {
+            saveData(true);
+        }
         
         console.log('✅ Cleanup complete');
     } catch (error) {
         console.error('🔴 Cleanup error:', error);
+    }
+}
+
+// ========== ⚠️ FORCE SYNC (Nuclear Option) ==========
+
+/**
+ * ⚠️ Force Push: เขียน Local ทับ Cloud ทั้งหมด ไม่มี merge
+ * @param {'current'|'all'} scope - 'current' = space ที่เปิดอยู่, 'all' = ทุก space
+ */
+export async function forcePushToCloud(scope = 'current') {
+    updateSyncStatusUI('syncing', 'Force Push...');
+    try {
+        const localSpaces = getSpaces();
+        const spacesToPush = scope === 'all'
+            ? localSpaces
+            : localSpaces.filter(s => s.id === getCurrentSpaceId());
+
+        if (spacesToPush.length === 0) {
+            updateSyncStatusUI('offline');
+            return false;
+        }
+
+        const batch = writeBatch(db);
+        const deviceId = getDeviceId();
+        const now = Date.now();
+
+        for (const space of spacesToPush) {
+            const payload = {
+                ...space,
+                tasks: (space.tasks || [])
+                    .filter(t => !t.isDeleted)
+                    .map(t => ({
+                        ...t,
+                        lastModifiedAt: now,
+                        lastModifiedBy: deviceId,
+                        subtasks: (t.subtasks || []).filter(s => !s.isDeleted)
+                    })),
+                resources: (space.resources || []).filter(r => !r.isDeleted),
+                driveFiles: (space.driveFiles || []).filter(d => !d.isDeleted),
+                deletedTaskIds: pruneTombstones(buildTombstones(space)),
+                syncVersion: (space.syncVersion || 0) + 1,
+                lastModifiedBy: deviceId,
+                lastModifiedAt: now,
+                lastUpdated: now
+            };
+            batch.set(doc(db, 'workspaces', String(space.id)), payload);
+            initializeSpaceSnapshot(space.id, payload);
+        }
+
+        await batch.commit();
+        updateSyncStatusUI('synced', `Force Push ↑ (${spacesToPush.length} space${spacesToPush.length > 1 ? 's' : ''})`);
+        console.log(`✅ Force Push complete: ${spacesToPush.length} spaces`);
+        return true;
+    } catch (error) {
+        console.error('🔴 Force Push error:', error);
+        updateSyncStatusUI('offline');
+        return false;
+    }
+}
+
+/**
+ * ⚠️ Force Pull: ดึง Cloud มาทับ Local ทั้งหมด ไม่มี merge
+ * @param {'current'|'all'} scope - 'current' = space ที่เปิดอยู่, 'all' = ทุก space
+ */
+export async function forcePullFromCloud(scope = 'current') {
+    updateSyncStatusUI('syncing', 'Force Pull...');
+    try {
+        const localSpaces = getSpaces();
+        const spaceIdsToFetch = scope === 'all'
+            ? localSpaces.map(s => s.id)
+            : [getCurrentSpaceId()];
+
+        const cloudDocs = await Promise.all(
+            spaceIdsToFetch.map(id => getDoc(doc(db, 'workspaces', String(id))))
+        );
+
+        let updated = 0;
+        const newSpaces = [...localSpaces];
+
+        for (const snap of cloudDocs) {
+            if (!snap.exists()) continue;
+            const cloudSpace = { ...snap.data(), id: parseInt(snap.id) };
+            const idx = newSpaces.findIndex(s => s.id === cloudSpace.id);
+            if (idx >= 0) {
+                newSpaces[idx] = cloudSpace;
+            } else {
+                newSpaces.push(cloudSpace);
+            }
+            initializeSpaceSnapshot(cloudSpace.id, cloudSpace);
+            updated++;
+        }
+
+        setSpaces(newSpaces);
+        saveData(true, true);
+        if (window.renderAll) window.renderAll();
+        updateSyncStatusUI('synced', `Force Pull ↓ (${updated} space${updated > 1 ? 's' : ''})`);
+        console.log(`✅ Force Pull complete: ${updated} spaces`);
+        return true;
+    } catch (error) {
+        console.error('🔴 Force Pull error:', error);
+        updateSyncStatusUI('offline');
+        return false;
     }
 }
