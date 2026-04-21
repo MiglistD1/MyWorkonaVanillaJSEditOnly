@@ -229,14 +229,21 @@ function initNestedSortable(container, space, refreshFn, disabled = false) {
                     delete movedItem.blockColor;
                 }
 
-                // 🧱 Block Drop Zone: assign blockId and re-insert at end, then re-render.
+                // 🧱 Block Drop Zone: assign blockId and re-insert at drop position, then re-render.
                 if (to && to.classList.contains('block-drop-zone')) {
                     movedItem.blockId = to.dataset.blockId || null;
                     movedItem.blockName = to.dataset.blockName || '';
                     movedItem.blockColor = to.dataset.blockColor || '';
                     // Clear subtask parentage if dragged from a subtask list
                     if (fromIsSub) delete movedItem.parentCreatedAt;
-                    destSpace.tasks.push(movedItem);
+
+                    // Position-aware insertion (use sibling's data-index)
+                    let nextEl = item.nextElementSibling;
+                    while (nextEl && !nextEl.hasAttribute('data-index')) nextEl = nextEl.nextElementSibling;
+                    let finalIdx = nextEl ? parseInt(nextEl.getAttribute('data-index')) : destSpace.tasks.length;
+                    if (srcSpace === destSpace && finalIdx > itemIdx) finalIdx--;
+                    destSpace.tasks.splice(finalIdx, 0, movedItem);
+
                     saveData(true);
                     refreshFn();
                     return;
@@ -2604,6 +2611,10 @@ export function initTodoManager(callbacks) {
                 }
                 delete task._isProcessingRepeat; // 🔓 ปลดล็อคเมื่อทำงานเสร็จ
             }
+
+            // 🟢 FIX: Increment syncVersion so detectItemChanges sees this as a change and pushes to cloud
+            task.syncVersion = (task.syncVersion || 0) + 1;
+            task.lastModifiedAt = Date.now();
 
             saveData(true); // บันทึกทันที
 

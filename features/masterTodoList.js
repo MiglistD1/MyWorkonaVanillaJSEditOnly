@@ -109,7 +109,11 @@ export function renderMasterHeaderControls(totalTasks = masterTodoListState.visi
     return `
         <div class="master-header-filters-row">
             <div class="master-header-primary">
-                <button id="btn-master-toggle-progress" class="btn-icon master-header-square-btn" title="${masterTodoListState.isProgressVisible ? 'Hide Space Tags' : 'Show Space Tags'}" style="opacity: 0.72;">
+                    <button id="btn-master-close-all-spaces" class="btn-icon master-header-square-btn" title="Hide All Spaces" style="opacity: 0.72;">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+
+                    <button id="btn-master-toggle-progress" class="btn-icon master-header-square-btn" title="${masterTodoListState.isProgressVisible ? 'Hide Space Tags' : 'Show Space Tags'}" style="opacity: 0.72;">
                     <svg class="svg-icon-sm" style="transform: ${masterTodoListState.isProgressVisible ? 'rotate(0deg)' : 'rotate(180deg)'}; transition: transform 0.2s;"><use href="#icon-chevron-up"></use></svg>
                 </button>
 
@@ -363,7 +367,9 @@ function renderTaskGroups(allSpaces) {
                             <svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
                         </button>
                         <div class="master-space-toolbar-items">
-                            <button class="btn btn-outline btn-master-goto-space" data-space-id="${space.id}" style="padding: 2px 8px; font-size: 10px; height: 20px; border-radius: 4px; font-weight: 600;">open space</button>
+                            <button class="btn-icon btn-master-space-tool btn-master-goto-space" data-space-id="${space.id}" title="Open Space">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                            </button>
                             <button class="btn-icon btn-master-space-tool btn-space-peek ${peekState.spaceId === space.id ? 'is-peeking' : ''}" data-space-id="${space.id}" title="Peek this space"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg></button>
                             <button class="btn-icon btn-master-space-tool ${areTaskActionsVisible ? 'is-active' : ''}" data-space-id="${space.id}" data-action="actions" title="Toggle Task Actions">
                                 <span class="toggle-actions-btn circle-icon ${areTaskActionsVisible ? 'expanded' : ''}" style="margin:0; pointer-events:none; border-color: currentColor;"></span>
@@ -1017,6 +1023,13 @@ export function initMasterEvents() {
         const settings = getAppSettings();
         settings.masterIsModeLocked = !settings.masterIsModeLocked;
         saveData();
+        onRefresh();
+    };
+
+    const closeAllBtn = document.getElementById('btn-master-close-all-spaces');
+    if (closeAllBtn) closeAllBtn.onclick = () => {
+        const allSpaces = getSpaces().filter(s => !s.isArchived && !s.isDeleted);
+        masterTodoListState.activeSpaceFilters = new Set(allSpaces.map(s => s.id));
         onRefresh();
     };
 

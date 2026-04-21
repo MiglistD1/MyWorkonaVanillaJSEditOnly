@@ -256,12 +256,18 @@ export function initBlockDropZones(container, spaceId, renderFn) {
                 delete movedItem.blockColor;
 
                 if (to?.classList.contains('block-drop-zone')) {
-                    // Block → Block: assign to destination block
+                    // Block → Block (or within same block): assign to destination block
                     movedItem.blockId    = to.dataset.blockId    || null;
                     movedItem.blockName  = to.dataset.blockName  || '';
                     movedItem.blockColor = to.dataset.blockColor || '';
                     const destSpace = getSpaceFromEl(to) || srcSpace;
-                    destSpace.tasks.push(movedItem);
+
+                    // Position-aware insertion (use sibling's data-index)
+                    let nextEl = item.nextElementSibling;
+                    while (nextEl && !nextEl.hasAttribute('data-index')) nextEl = nextEl.nextElementSibling;
+                    let finalIdx = nextEl ? parseInt(nextEl.getAttribute('data-index')) : destSpace.tasks.length;
+                    if (srcSpace === destSpace && finalIdx > itemIdx) finalIdx--;
+                    destSpace.tasks.splice(finalIdx, 0, movedItem);
                 } else {
                     // Block → main list: insert at dropped position
                     const destSpace = getSpaceFromEl(to) || srcSpace;

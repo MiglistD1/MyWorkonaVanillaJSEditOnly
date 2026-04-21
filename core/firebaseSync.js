@@ -804,9 +804,9 @@ export async function initializeSpaceSnapshot(spaceId, spaceData) {
         id: spaceId,
         syncedAt: Date.now(),
         syncVersion: spaceData.syncVersion || 0,
-        tasks: (spaceData.tasks || []).map(t => ({ createdAt: t.createdAt, syncVersion: t.syncVersion || 0 })),
-        resources: (spaceData.resources || []).map(r => ({ url: r.url, syncVersion: r.syncVersion || 0 })),
-        driveFiles: (spaceData.driveFiles || []).map(d => ({ url: d.url, syncVersion: d.syncVersion || 0 }))
+        tasks: (spaceData.tasks || []).map(t => ({ createdAt: t.createdAt, syncVersion: t.syncVersion || 0, lastModifiedAt: t.lastModifiedAt || 0 })),
+        resources: (spaceData.resources || []).map(r => ({ url: r.url, syncVersion: r.syncVersion || 0, lastModifiedAt: r.lastModifiedAt || 0 })),
+        driveFiles: (spaceData.driveFiles || []).map(d => ({ url: d.url, syncVersion: d.syncVersion || 0, lastModifiedAt: d.lastModifiedAt || 0 }))
     };
     
     const key = `snapshot-space-${spaceId}`;
@@ -912,7 +912,10 @@ function detectArrayChanges(snapshotArray = [], currentArray = [], uniqueKey) {
         const snapshotItem = snapshotMap.get(key);
         if (!snapshotItem) {
             result.added.push(currentItem);
-        } else if ((currentItem.syncVersion || 0) !== snapshotItem.syncVersion) {
+        } else if (
+            (currentItem.syncVersion || 0) !== snapshotItem.syncVersion ||
+            (currentItem.lastModifiedAt || 0) > (snapshotItem.lastModifiedAt || 0)
+        ) {
             result.modified.push(currentItem);
         }
     }

@@ -521,6 +521,9 @@ export function attachSubtaskEventListeners(container, space, onRenderCallback, 
             if (space.tasks[pIdx]?.subtasks?.[sIdx]) {
                 const subtask = space.tasks[pIdx].subtasks[sIdx];
                 subtask.completed = isChecked;
+                // 🟢 FIX: Increment syncVersion so Firebase sync detects the change
+                subtask.syncVersion = (subtask.syncVersion || 0) + 1;
+                subtask.lastModifiedAt = Date.now();
 
                 // Sync subtask tick: avatar→original or original→avatars
                 const parentTask = space.tasks[pIdx];
