@@ -400,6 +400,58 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+        function showSessionDurationModal() {
+            return new Promise((resolve) => {
+                const modalId = 'sdm-' + Date.now();
+                const presets = [
+                    { label: '5m',  ms: 5  * 60 * 1000 },
+                    { label: '15m', ms: 15 * 60 * 1000 },
+                    { label: '30m', ms: 30 * 60 * 1000 },
+                    { label: '1h',  ms: 60 * 60 * 1000 },
+                    { label: '2h',  ms: 2  * 60 * 60 * 1000 },
+                ];
+                document.body.insertAdjacentHTML('beforeend', `
+                    <div id="${modalId}" style="position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.45);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;">
+                        <div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;padding:20px;width:280px;box-shadow:0 12px 40px rgba(0,0,0,0.3);display:flex;flex-direction:column;gap:12px;">
+                            <div style="text-align:center;">
+                                <div style="font-size:22px;margin-bottom:4px;">⏱</div>
+                                <div style="font-size:14px;font-weight:800;color:var(--text-main);">Stay Active After Refresh?</div>
+                                <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Auto Sync จะ reset เมื่อ refresh ถ้าไม่ตั้งเวลา</div>
+                            </div>
+                            <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;">
+                                ${presets.map(p => `<button data-ms="${p.ms}" class="sdm-preset" style="padding:6px 12px;border-radius:8px;border:1.5px solid var(--border-color);background:var(--bg-body);color:var(--text-main);font-size:12px;font-weight:700;cursor:pointer;transition:background 0.15s,color 0.15s,border-color 0.15s;">${p.label}</button>`).join('')}
+                            </div>
+                            <div style="display:flex;gap:6px;align-items:center;">
+                                <input id="sdm-custom-input" type="text" placeholder="30m or 1.5h" style="flex:1;height:30px;padding:0 10px;font-size:12px;font-weight:700;border-radius:6px;border:1.5px solid var(--border-color);background:var(--bg-body);color:var(--text-main);outline:none;box-sizing:border-box;">
+                                <button id="sdm-custom-set" style="height:30px;padding:0 12px;font-size:11px;font-weight:800;border-radius:6px;border:none;background:var(--primary-color);color:#fff;cursor:pointer;">Set</button>
+                            </div>
+                            <button id="sdm-skip" style="width:100%;padding:8px;border-radius:8px;border:1px dashed var(--border-color);background:transparent;color:var(--text-muted);font-size:11px;font-weight:700;cursor:pointer;">ข้ามไปก่อน (Reset on Refresh)</button>
+                        </div>
+                    </div>
+                `);
+                const modal = document.getElementById(modalId);
+                const finish = (ms) => { modal.remove(); resolve(ms); };
+
+                modal.querySelectorAll('.sdm-preset').forEach(btn => {
+                    btn.addEventListener('mouseenter', () => { btn.style.background = 'var(--primary-color)'; btn.style.color = '#fff'; btn.style.borderColor = 'var(--primary-color)'; });
+                    btn.addEventListener('mouseleave', () => { btn.style.background = 'var(--bg-body)'; btn.style.color = 'var(--text-main)'; btn.style.borderColor = 'var(--border-color)'; });
+                    btn.addEventListener('click', () => finish(parseInt(btn.dataset.ms)));
+                });
+
+                document.getElementById('sdm-custom-set').addEventListener('click', () => {
+                    const raw = (document.getElementById('sdm-custom-input').value || '').toLowerCase().trim();
+                    let ms = 0;
+                    if (raw.endsWith('m'))      ms = parseFloat(raw) * 60 * 1000;
+                    else if (raw.endsWith('h')) ms = parseFloat(raw) * 60 * 60 * 1000;
+                    else if (parseFloat(raw) > 0) ms = parseFloat(raw) * 60 * 60 * 1000;
+                    if (ms > 0) finish(ms);
+                });
+
+                document.getElementById('sdm-skip').addEventListener('click', () => finish(0));
+                modal.addEventListener('click', (e) => { if (e.target === modal) finish(0); });
+            });
+        }
+
         const muteReminderWrapper = document.getElementById('wrapper-mute-reminder');
         const muteReminderChk = document.getElementById('chk-mute-sync-reminder');
         const updateReminderUI = () => {
@@ -422,7 +474,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     if (success) {
                         lSettings.firebaseAutoSync = true;
-                        
+
+                        // ⏱ Ask user for session duration (Stay Active After Refresh)
+                        const sessionMs = await showSessionDurationModal();
+                        if (sessionMs > 0) {
+                            lSettings.autoSyncSessionExpiry = Date.now() + sessionMs;
+                            updateExpiryUI();
+                        }
+
                         // 🟢 FIX #5: Activate scoped listeners
                         await subscribeToMetadata();
                         await subscribeToSpace(getCurrentSpaceId());
