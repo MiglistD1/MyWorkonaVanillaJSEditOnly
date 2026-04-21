@@ -1,5 +1,7 @@
 import { initFocusTimer } from './features/focusTimer.js';
 import { initFirebaseSync, forcePushNote, forcePullNote, updateSyncStatusUI, handleAutoSyncActivation, switchSpaceContext, cleanupFirebaseSync, subscribeToMetadata, subscribeToSpace, forcePushToCloud, forcePullFromCloud } from "./core/firebaseSync.js";
+import { initDriveSync, markDirty as driveDirty, pushToDrive, pullFromDrive, forcePush, setupVault, startAutoSync as driveStartAutoSync, stopAutoSync as driveStopAutoSync, isDirty, getLastSyncedAt, getVaultFolderName, getHasConflict, clearConflict, getSyncHistory, clearSyncHistory } from './core/driveSync.js';
+import { setOnSaveDriveHook } from './core/storage.js';
 
 import { initScheduleMode } from './features/scheduleMode.js';
 import { initSidebar, renderSidebar } from './components/sidebar.js';
@@ -262,6 +264,317 @@ document.addEventListener('DOMContentLoaded', () => {
         initCustomLaunchers();
         initDashboardQuickNote();
         initFirebaseSync();
+
+        // 🗂️ GDrive Sync: realtime push on every save
+        setOnSaveDriveHook((data) => {
+            if (localStorage.getItem('drive-sync-enabled') !== 'false') pushToDrive(data);
+        }); // fromUserGesture=false, auto-sync path
+        initDriveSync();
+
+        // ── Vault Sync Popup Logic ──────────────────────────────────────────────────────────────
+        {
+            const driveSyncContainer = document.getElementById('drive-sync-container');
+            const driveSyncPopup     = document.getElementById('drive-sync-popup');
+
+            const positionDrivePopup = () => {
+                if (!driveSyncPopup || !driveSyncContainer) return;
+                if (window.innerWidth <= 768) {
+                    const rect   = driveSyncContainer.getBoundingClientRect();
+                    const margin = 8;
+                    const top    = Math.min(window.innerHeight - 70, rect.bottom + 8);
+                    const width  = Math.min(280, window.innerWidth - margin * 2);
+                    let left = rect.right - width;
+                    if (left < margin) left = margin;
+                    driveSyncPopup.style.position  = 'fixed';
+                    driveSyncPopup.style.width     = `${width}px`;
+                    driveSyncPopup.style.left      = `${left}px`;
+                    driveSyncPopup.style.right     = 'auto';
+                    driveSyncPopup.style.top       = `${top}px`;
+                    driveSyncPopup.style.maxHeight = `calc(100vh - ${top + margin}px)`;
+                    driveSyncPopup.style.overflowY = 'auto';
+                } else {
+                    driveSyncPopup.style.position  = 'absolute';
+                    driveSyncPopup.style.width     = '';
+                    driveSyncPopup.style.left      = 'auto';
+                    driveSyncPopup.style.right     = '0';
+                    driveSyncPopup.style.top       = '115%';
+                    driveSyncPopup.style.maxHeight = '';
+                    driveSyncPopup.style.overflowY = '';
+                }
+            };
+
+            const _updateSyncEnabledRow = () => {
+                const enabled = localStorage.getItem('drive-sync-enabled') !== 'false';
+                const row  = document.getElementById('drive-sync-enabled-row');
+                const icon = document.getElementById('drive-sync-enabled-icon');
+                const chk  = document.getElementById('chk-drive-sync-enabled');
+                if (row) {
+                    row.style.background  = enabled ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)';
+                    row.style.borderColor = enabled ? 'rgba(16,185,129,0.3)'  : 'rgba(239,68,68,0.3)';
+                }
+                if (icon) icon.textContent = enabled ? '\uD83D\uDD04' : '\u23F8';
+                if (chk)  chk.checked = enabled;
+                const dot = document.getElementById('drive-topbar-dot');
+                if (dot && !enabled) { dot.style.background = '#ef4444'; dot.title = 'Vault Sync paused'; }
+                else if (dot && enabled) { dot.style.background = '#94a3b8'; dot.title = ''; }
+            };
+
+            const updateDriveStayActiveLabel = () => {
+                const label  = document.getElementById('drive-stay-active-label');
+                if (!label) return;
+                const expiry = parseInt(localStorage.getItem('drive-stay-active-expiry') ?? '0', 10);
+                if (expiry > Date.now()) {
+                    const diff = expiry - Date.now();
+                    const hrs  = Math.floor(diff / (1000 * 60 * 60));
+                    const mins = Math.round((diff % (1000 * 60 * 60)) / (1000 * 60));
+                    label.textContent = hrs > 0 ? `Active for ${hrs}h ${mins}m` : `Active for ${mins}m`;
+                } else {
+                    label.textContent = 'Reset on Refresh';
+                }
+            };
+
+            const refreshDrivePopupUI = () => {
+                const lsa = getLastSyncedAt();
+                const lastSyncEl = document.getElementById('drive-last-sync-time');
+                if (lastSyncEl) lastSyncEl.textContent = lsa ? `Last Synced: ${new Date(lsa).toLocaleTimeString()}` : 'Last Synced: Never';
+                _updateSyncEnabledRow();
+                updateDriveStayActiveLabel();
+                const histContent  = document.getElementById('drive-sync-history-content');
+                const clearHistBtn = document.getElementById('btn-drive-clear-history');
+                if (histContent) {
+                    const hist = getSyncHistory();
+                    if (hist.length === 0) {
+                        histContent.innerHTML = '<span>No sync history yet</span>';
+                        if (clearHistBtn) clearHistBtn.style.display = 'none';
+                    } else {
+                        histContent.innerHTML = hist.map(h => {
+                            const icon  = h.status === 'success' ? '✓' : '⚠';
+                            const color = h.status === 'success' ? '#10b981' : '#ef4444';
+                            const time  = new Date(h.time).toLocaleTimeString();
+                            return `<div style="display:flex;justify-content:space-between;"><span style="color:${color};font-weight:700;">${icon} ${h.type}</span><span>${time}</span></div>`;
+                        }).join('');
+                        if (clearHistBtn) clearHistBtn.style.display = 'flex';
+                    }
+                }
+            };
+
+            const _getDriveData = async () => {
+                const { getSpaces, getAppSettings, getGlobalLaunchers, getLauncherTags, getCurrentSpaceId } = await import('./core/storage.js');
+                return { mySpacesData: getSpaces(), lastSpaceId: getCurrentSpaceId(), appSettings: getAppSettings(), globalLaunchers: getGlobalLaunchers(), launcherTags: getLauncherTags() };
+            };
+
+            const _applyPulledData = async (data) => {
+                try {
+                    const { setSpaces, setCurrentSpaceId, setAppSettings, setGlobalLaunchers, setLauncherTags, saveData } = await import('./core/storage.js');
+                    if (data.mySpacesData)    setSpaces(data.mySpacesData);
+                    if (data.lastSpaceId)     setCurrentSpaceId(data.lastSpaceId);
+                    if (data.appSettings)     setAppSettings(data.appSettings);
+                    if (data.globalLaunchers) setGlobalLaunchers(data.globalLaunchers);
+                    if (data.launcherTags)    setLauncherTags(data.launcherTags);
+                    saveData(true);
+                } catch (err) {
+                    console.error('[DriveSync] Apply pulled data error:', err);
+                }
+                if (typeof window.showToast === 'function') window.showToast('Vault data applied. Reloading…');
+                setTimeout(() => window.location.reload(), 700);
+            };
+
+            // ─ Toggle popup
+            document.getElementById('btn-drive-sync-now-topbar')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (!driveSyncPopup) return;
+                const isHidden = driveSyncPopup.style.display === 'none';
+                driveSyncPopup.style.display = isHidden ? 'flex' : 'none';
+                if (isHidden) { positionDrivePopup(); refreshDrivePopupUI(); }
+            });
+
+            window.addEventListener('resize', () => {
+                if (driveSyncPopup && driveSyncPopup.style.display !== 'none') positionDrivePopup();
+            });
+
+            document.addEventListener('click', (e) => {
+                if (!driveSyncPopup || driveSyncPopup.style.display === 'none') return;
+                if (!driveSyncPopup.contains(e.target) && !driveSyncContainer?.contains(e.target)) {
+                    driveSyncPopup.style.display = 'none';
+                }
+            });
+
+            // ─ Pick folder
+            document.getElementById('btn-drive-pick-folder-popup')?.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                await setupVault();
+            });
+
+            // ─ Sync Now (fromUserGesture: true — re-auth dialog allowed)
+            document.getElementById('btn-drive-sync-now-popup')?.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (localStorage.getItem('drive-sync-enabled') === 'false') {
+                    if (typeof window.showToast === 'function') window.showToast('\u23F8 Vault Sync is paused — enable sync first');
+                    return;
+                }
+                const data = await _getDriveData();
+                await pushToDrive(data, { fromUserGesture: true });
+                refreshDrivePopupUI();
+            });
+
+            // ─ Push
+            document.getElementById('btn-drive-push')?.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (!confirm('Push local data → vault?\n\nThis will overwrite vault files with current local data.')) return;
+                const data = await _getDriveData();
+                await pushToDrive(data, { fromUserGesture: true });
+                refreshDrivePopupUI();
+                if (driveSyncPopup) driveSyncPopup.style.display = 'none';
+            });
+
+            // ─ Pull
+            document.getElementById('btn-drive-pull')?.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (!confirm('Pull vault → local data?\n\nThis will overwrite local data with vault files. Page will reload.')) return;
+                const pulled = await pullFromDrive({ fromUserGesture: true });
+                if (pulled) { await _applyPulledData(pulled); clearConflict(); }
+                if (driveSyncPopup) driveSyncPopup.style.display = 'none';
+            });
+
+            // ─ Force Push
+            document.getElementById('btn-drive-force-push')?.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (!confirm('⚠️ Force Push — write local data to vault WITHOUT any merge.\n\nAll vault files will be completely overwritten. Are you sure?')) return;
+                const data = await _getDriveData();
+                await forcePush(data, { fromUserGesture: true });
+                clearConflict();
+                refreshDrivePopupUI();
+                if (driveSyncPopup) driveSyncPopup.style.display = 'none';
+            });
+
+            // ─ Force Pull
+            document.getElementById('btn-drive-force-pull')?.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (!confirm('⚠️ Force Pull — load vault into local data WITHOUT any merge.\n\nAll local data will be completely replaced. Page will reload. Are you sure?')) return;
+                const pulled = await pullFromDrive({ fromUserGesture: true });
+                if (pulled) { clearConflict(); await _applyPulledData(pulled); }
+                if (driveSyncPopup) driveSyncPopup.style.display = 'none';
+            });
+
+            // ─ Conflict banner buttons
+            document.getElementById('btn-drive-conflict-pull')?.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (!confirm('Pull vault → local? Vault version is newer.\n\nLocal data will be replaced. Page will reload.')) return;
+                const pulled = await pullFromDrive({ fromUserGesture: true });
+                if (pulled) { clearConflict(); await _applyPulledData(pulled); }
+            });
+
+            document.getElementById('btn-drive-conflict-force-push')?.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (!confirm('⚠️ Force Push — keep local data and overwrite vault?\n\nNewer vault version will be lost.')) return;
+                const data = await _getDriveData();
+                await forcePush(data, { fromUserGesture: true });
+                clearConflict();
+                refreshDrivePopupUI();
+            });
+
+            // ─ Reminders toggle
+            const driveReminderChk = document.getElementById('chk-drive-reminders');
+            if (driveReminderChk) {
+                driveReminderChk.checked = localStorage.getItem('drive-reminders-enabled') === 'true';
+                driveReminderChk.onchange = (e) => { e.stopPropagation(); localStorage.setItem('drive-reminders-enabled', String(driveReminderChk.checked)); };
+            }
+
+            // ─ Sync Enabled toggle
+            const driveSyncEnabledChk = document.getElementById('chk-drive-sync-enabled');
+            if (driveSyncEnabledChk) {
+                _updateSyncEnabledRow();
+                driveSyncEnabledChk.onchange = (e) => {
+                    e.stopPropagation();
+                    localStorage.setItem('drive-sync-enabled', String(driveSyncEnabledChk.checked));
+                    _updateSyncEnabledRow();
+                    if (!driveSyncEnabledChk.checked) {
+                        if (typeof window.showToast === 'function') window.showToast('\u23F8 Vault Sync paused — data will not be written to vault');
+                    } else {
+                        if (typeof window.showToast === 'function') window.showToast('\uD83D\uDD04 Vault Sync resumed');
+                    }
+                };
+            }
+
+            // ─ Stay Active After Refresh (timed)
+
+            document.getElementById('btn-drive-stay-active-set')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const raw = (document.getElementById('drive-stay-active-input')?.value ?? '').toLowerCase().trim();
+                let ms = 0;
+                if (raw.endsWith('m'))           ms = parseFloat(raw) * 60 * 1000;
+                else if (raw.endsWith('h'))      ms = parseFloat(raw) * 60 * 60 * 1000;
+                else if (parseFloat(raw) > 0)   ms = parseFloat(raw) * 60 * 60 * 1000;
+                if (ms > 0) {
+                    localStorage.setItem('drive-stay-active-expiry', String(Date.now() + ms));
+                    updateDriveStayActiveLabel();
+                    const setBtn = document.getElementById('btn-drive-stay-active-set');
+                    if (setBtn) { setBtn.classList.add('flash-confirm'); setTimeout(() => setBtn.classList.remove('flash-confirm'), 500); }
+                }
+            });
+
+            document.getElementById('btn-drive-stay-active-off')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                localStorage.removeItem('drive-stay-active-expiry');
+                const input = document.getElementById('drive-stay-active-input');
+                if (input) input.value = '';
+                updateDriveStayActiveLabel();
+            });
+
+            // ─ History toggle
+            document.getElementById('btn-drive-view-history')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const list = document.getElementById('drive-sync-history-list');
+                if (!list) return;
+                const isHidden = list.style.display === 'none';
+                list.style.display = isHidden ? 'flex' : 'none';
+                if (isHidden) refreshDrivePopupUI();
+            });
+
+            document.getElementById('btn-drive-clear-history')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                clearSyncHistory();
+                refreshDrivePopupUI();
+            });
+
+            // ─ Reminders interval
+            let _lastDisabledReminderAt = 0;
+            const DRIVE_REMINDER_MS          = 10 * 60 * 1000;
+            const DRIVE_DISABLED_REMINDER_MS =  5 * 60 * 1000;
+            setInterval(() => {
+                if (localStorage.getItem('drive-reminders-enabled') !== 'true') return;
+
+                // Reminder: sync is OFF
+                if (localStorage.getItem('drive-sync-enabled') === 'false') {
+                    if (Date.now() - _lastDisabledReminderAt > DRIVE_DISABLED_REMINDER_MS) {
+                        _lastDisabledReminderAt = Date.now();
+                        const dot = document.getElementById('drive-topbar-dot');
+                        if (dot) { dot.style.background = '#ef4444'; dot.title = 'Vault Sync paused'; }
+                        if (typeof window.showToast === 'function')
+                            window.showToast('\u23F8 Vault Sync is still paused — remember to re-enable sync');
+                    }
+                    return;
+                }
+
+                // Reminder: unsaved data
+                if (!isDirty()) return;
+                const lsa = getLastSyncedAt();
+                if (lsa > 0 && (Date.now() - lsa) > DRIVE_REMINDER_MS) {
+                    const dot = document.getElementById('drive-topbar-dot');
+                    if (dot) { dot.style.background = '#f59e0b'; dot.title = 'Vault not synced for 10+ min'; }
+                    if (typeof window.showToast === 'function') window.showToast('Vault has unsaved changes for 10+ minutes — tap Sync');
+                }
+            }, 60 * 1000);
+
+            // Expose globals for settings/external UI
+            window.drivePushNow      = async () => { const d = await _getDriveData(); const ok = await pushToDrive(d, { fromUserGesture: true }); refreshDrivePopupUI(); return ok; };
+            window.drivePullNow      = async () => { const pulled = await pullFromDrive({ fromUserGesture: true }); refreshDrivePopupUI(); return pulled; };
+            window.driveForcePushNow = async () => { const d = await _getDriveData(); const ok = await forcePush(d, { fromUserGesture: true }); refreshDrivePopupUI(); return ok; };
+            window.driveSetupVault    = setupVault;
+            window.driveStartAutoSync = driveStartAutoSync;
+            window.driveStopAutoSync  = driveStopAutoSync;
+        }
+
         initRewardSystem();
 
         // 🔒 Edit Safe Zone Button
@@ -565,6 +878,30 @@ document.addEventListener('DOMContentLoaded', () => {
         const utilityMoreBtn = document.getElementById('btn-utility-more');
         const utilityGroup = document.getElementById('utility-group');
 
+        // Keep vault sync container in topbar-nav-group on mobile,
+        // and restore its original desktop position before utility-group.
+        const repositionTopbarVaultSyncByViewport = () => {
+            const syncContainer = document.getElementById('drive-sync-container');
+            const topbar   = document.querySelector('.topbar');
+            const navGroup = document.querySelector('.topbar-nav-group');
+            const divider  = navGroup?.querySelector('.topbar-divider');
+            if (!syncContainer || !topbar || !utilityGroup || !navGroup) return;
+
+            if (window.matchMedia('(max-width: 1100px)').matches) {
+                if (syncContainer.parentElement !== navGroup) {
+                    navGroup.insertBefore(syncContainer, divider || null);
+                }
+                return;
+            }
+
+            // Desktop: always keep vault sync container right before utility-group.
+            if (syncContainer.parentElement !== topbar || syncContainer.nextElementSibling !== utilityGroup) {
+                topbar.insertBefore(syncContainer, utilityGroup);
+            }
+        };
+        repositionTopbarVaultSyncByViewport();
+        window.addEventListener('resize', repositionTopbarVaultSyncByViewport);
+
         if (utilityMoreBtn && utilityGroup) {
             utilityMoreBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -579,84 +916,160 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Advanced Data Management Logic
         const subfolderInput = document.getElementById('export-subfolder');
-        const autoExportToggle = document.getElementById('auto-export-enabled');
         const btnManualExport = document.getElementById('btn-manual-export');
         const btnImportData = document.getElementById('btn-import-data');
         const fileImportInput = document.getElementById('file-import-data');
+        const btnPickFolder = document.getElementById('btn-pick-export-folder');
+        const folderNameLabel = document.getElementById('export-folder-name');
+        const intervalSel = document.getElementById('auto-export-interval');
+
+        // ── IndexedDB handle storage (survives page reload) ────────────────
+        const FS_DB = 'myworkona-fs', FS_STORE = 'handles';
+        async function _openFsDb() {
+            return new Promise((res, rej) => {
+                const r = indexedDB.open(FS_DB, 1);
+                r.onupgradeneeded = e => e.target.result.createObjectStore(FS_STORE);
+                r.onsuccess = e => res(e.target.result);
+                r.onerror = rej;
+            });
+        }
+        async function saveFolderHandle(h) {
+            const db = await _openFsDb();
+            return new Promise((res, rej) => {
+                const tx = db.transaction(FS_STORE, 'readwrite');
+                tx.objectStore(FS_STORE).put(h, 'exportFolder');
+                tx.oncomplete = res; tx.onerror = rej;
+            });
+        }
+        async function loadFolderHandle() {
+            const db = await _openFsDb();
+            return new Promise((res, rej) => {
+                const tx = db.transaction(FS_STORE, 'readonly');
+                const r = tx.objectStore(FS_STORE).get('exportFolder');
+                r.onsuccess = () => res(r.result || null); r.onerror = rej;
+            });
+        }
+
+        // Restore handle name label on load
+        let _folderHandle = null;
+        loadFolderHandle().then(h => {
+            if (h) { _folderHandle = h; if (folderNameLabel) folderNameLabel.textContent = h.name; }
+        }).catch(() => {});
+
+        // Pick folder button
+        btnPickFolder?.addEventListener('click', async () => {
+            try {
+                const h = await window.showDirectoryPicker({ mode: 'readwrite' });
+                _folderHandle = h;
+                await saveFolderHandle(h);
+                if (folderNameLabel) folderNameLabel.textContent = h.name;
+                if (typeof window.showToast === 'function') window.showToast(`Local folder set: ${h.name}`);
+            } catch (e) {
+                if (e.name !== 'AbortError') console.error('[Export] showDirectoryPicker:', e);
+            }
+        });
 
         window.updateExportUI = () => {
-            if (btnManualExport) btnManualExport.innerHTML = "💻 Export (PC / Laptop)";
+            if (btnManualExport) btnManualExport.innerHTML = "💻 Export Now";
         };
 
         if (subfolderInput) subfolderInput.value = appSettings.exportSubfolder || "MyBackups";
-        if (autoExportToggle) autoExportToggle.checked = !!appSettings.autoExportEnabled;
+        if (intervalSel && appSettings.autoExportIntervalMin != null)
+            intervalSel.value = String(appSettings.autoExportIntervalMin);
 
         const saveDataManagementSettings = () => {
             appSettings.exportSubfolder = subfolderInput?.value.trim() || "MyBackups";
-            appSettings.autoExportEnabled = !!autoExportToggle?.checked;
+            appSettings.autoExportIntervalMin = parseInt(intervalSel?.value || '0', 10);
             appSettings.exportTarget = "computer";
             saveData(true);
+            _restartAutoExportTimer();
         };
 
-        if (autoExportToggle) autoExportToggle.addEventListener('change', saveDataManagementSettings);
         if (subfolderInput) subfolderInput.addEventListener('change', saveDataManagementSettings);
+        if (intervalSel) intervalSel.addEventListener('change', saveDataManagementSettings);
 
         window.updateExportUI();
 
-
-        btnManualExport?.addEventListener('click', () => {
-            const performExport = (allData) => {
-                const settings = getAppSettings();
-                const target = settings.exportTarget || "computer";
-                const folder = (settings.exportSubfolder || "MyBackups").trim();
-
-                const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const d = new Date();
-                const timestamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}_${String(d.getHours()).padStart(2, '0')}-${String(d.getMinutes()).padStart(2, '0')}`;
-                
-                let filename;
-                if (target === "computer") {
-                    // 💻 โหมดคอมพิวเตอร์: ใช้ Path เต็มรูปแบบ (ทำงานได้ดีใน Extension)
-                    filename = `${folder}/MyWorkspace_Backup_${timestamp}.json`;
-                } else {
-                    // 📱 โหมดมือถือ: Browser ไม่ยอมให้สร้างโฟลเดอร์ จึงใช้การเชื่อมชื่อแทน
-                    const cleanFolder = folder.replace(/[\/\\?%*:|"<>]/g, '-');
-                    filename = `${cleanFolder}_Backup_${timestamp}.json`;
-                }
-                
-                if (typeof chrome !== 'undefined' && chrome.downloads) {
-                    chrome.downloads.download({ url, filename }, () => {
-                        settings.lastExportTimestamp = Date.now();
-                        saveData();
-                        URL.revokeObjectURL(url);
-                    });
-                } else {
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = filename; // 🟢 FIX: ไม่ใช้ .pop() เพื่อรักษาโครงสร้างชื่อไฟล์/โฟลเดอร์
-                    a.click();
-                    settings.lastExportTimestamp = Date.now();
-                    saveData();
-                    
-                    if (target === "mobile") {
-                        alert("💡 Mobile Mode Active:\nเนื่องจากข้อกำหนดของมือถือ ไฟล์จะถูกเซฟลงโฟลเดอร์ 'Downloads' โดยระบบได้ใส่ชื่อ '" + folder + "_' นำหน้าไฟล์ไว้เพื่อให้คุณค้นหาและจัดกลุ่มได้ง่ายขึ้นครับ");
-                    }
-                    setTimeout(() => URL.revokeObjectURL(url), 100);
-                }
-            };
-
-            if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-                chrome.storage.local.get(null, performExport);
-            } else {
-                const data = {};
-                for (let i = 0; i < localStorage.length; i++) {
-                    const key = localStorage.key(i);
-                    try { data[key] = JSON.parse(localStorage.getItem(key)); } catch(e) { data[key] = localStorage.getItem(key); }
-                }
-                performExport(data);
+        // ── Silent export via File System Access API ───────────────────────
+        async function _silentWriteToFolder(handle, filename, content) {
+            const perm = await handle.queryPermission({ mode: 'readwrite' });
+            if (perm !== 'granted') {
+                await handle.requestPermission({ mode: 'readwrite' });
             }
+            const fh = await handle.getFileHandle(filename, { create: true });
+            const wr = await fh.createWritable();
+            await wr.write(content); await wr.close();
+        }
+
+        // ── Core export function (silent if folder handle available) ───────
+        window.performSilentExport = async (allData) => {
+            const content = JSON.stringify(allData, null, 2);
+            const d = new Date();
+            const ts = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}_${String(d.getHours()).padStart(2,'0')}-${String(d.getMinutes()).padStart(2,'0')}`;
+            const filename = `myworkona_backup_${ts}.json`;
+
+            if (_folderHandle) {
+                try {
+                    await _silentWriteToFolder(_folderHandle, filename, content);
+                    getAppSettings().lastExportTimestamp = Date.now();
+                    saveData();
+                    if (typeof window.showToast === 'function') window.showToast('✓ Auto-exported to local folder');
+                    return;
+                } catch (err) {
+                    console.warn('[Export] Silent write failed, falling back to download:', err);
+                }
+            }
+            // Fallback: browser download
+            const blob = new Blob([content], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const settings = getAppSettings();
+            const folder = (settings.exportSubfolder || 'MyBackups').trim();
+            const dlFilename = `${folder}/myworkona_backup_${ts}.json`;
+            if (typeof chrome !== 'undefined' && chrome.downloads) {
+                chrome.downloads.download({ url, filename: dlFilename }, () => {
+                    settings.lastExportTimestamp = Date.now(); saveData(); URL.revokeObjectURL(url);
+                });
+            } else {
+                const a = document.createElement('a');
+                a.href = url; a.download = filename; a.click();
+                settings.lastExportTimestamp = Date.now(); saveData();
+                setTimeout(() => URL.revokeObjectURL(url), 100);
+            }
+        };
+
+        function _getExportData() {
+            return new Promise(res => {
+                if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+                    chrome.storage.local.get(null, res);
+                } else {
+                    const data = {};
+                    for (let i = 0; i < localStorage.length; i++) {
+                        const key = localStorage.key(i);
+                        try { data[key] = JSON.parse(localStorage.getItem(key)); } catch(e) { data[key] = localStorage.getItem(key); }
+                    }
+                    res(data);
+                }
+            });
+        }
+
+        btnManualExport?.addEventListener('click', async () => {
+            const data = await _getExportData();
+            await window.performSilentExport(data);
         });
+
+        // ── Auto export timer ──────────────────────────────────────────────
+        let _autoExportTimer = null;
+        function _restartAutoExportTimer() {
+            if (_autoExportTimer) { clearInterval(_autoExportTimer); _autoExportTimer = null; }
+            const mins = appSettings.autoExportIntervalMin || 0;
+            if (mins <= 0) return;
+            _autoExportTimer = setInterval(async () => {
+                const data = await _getExportData();
+                await window.performSilentExport(data);
+            }, mins * 60 * 1000);
+            console.log(`[Export] Auto-export every ${mins} min`);
+        }
+        _restartAutoExportTimer(); // kick off on load
 
         btnImportData?.addEventListener('click', () => fileImportInput?.click());
 
@@ -891,29 +1304,6 @@ document.addEventListener('DOMContentLoaded', () => {
         renderSidebar();
         renderMainContent();
         updateArchivedStateUI();
-
-        // 🟢 Step 3: Auto Sync Reminder Logic (Dismissible for this session)
-        if (!lSettings.firebaseAutoSync) {
-            const msg = "คุณยังไม่ได้เปิด Auto Sync อย่าลืมเปิดหากต้องการให้ข้อมูลบันทึกลงคลาวด์อัตโนมัตินะครับ\n\n(คุณสามารถปิดการเตือนนี้ได้ที่สวิตช์ 'Reminders' ในเมนู Cloud Sync ครับ)";
-            
-            const triggerReminder = () => {
-                // ตรวจสอบทั้งสถานะการตั้งค่า และสถานะที่ผู้ใช้กดปิดไว้ในเซสชั่น
-                if (sessionReminderActive && !lSettings.firebaseAutoSync) {
-                    if (typeof window.showToast === 'function') {
-                        window.showToast(msg);
-                    } else {
-                        // ใช้ confirm แทน alert เพื่อให้มีปุ่ม Cancel สำหรับการ Dismiss
-                        if (!confirm(msg)) {
-                            sessionReminderActive = false;
-                            updateReminderUI();
-                        }
-                    }
-                }
-            };
-
-            triggerReminder(); // 🔔 แสดงการแจ้งเตือนทันทีที่โหลดเสร็จ
-            setInterval(triggerReminder, 300000); // ⏱️ ตั้งรอบถามทุกๆ 5 นาที
-        }
     });
 });
 

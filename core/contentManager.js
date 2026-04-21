@@ -24,6 +24,7 @@ export function renderMainContent() {
   const navGroup = document.querySelector('.topbar-nav-group');
   const rewardsBtn = document.getElementById('btn-open-rewards-topbar');
   const utilityGroup = document.getElementById('utility-group');
+  const actionsRow = utilityGroup?.querySelector('.utility-actions-row');
   const topbar = document.querySelector('.topbar');
 
   // 🟢 UI มือถือ: เพิ่มปุ่ม Refresh (F5) สำหรับกรณีแอปมีปัญหา
@@ -46,9 +47,10 @@ export function renderMainContent() {
 
   if (isMobile && syncContainer && navGroup && rewardsBtn && syncContainer.nextElementSibling !== rewardsBtn) {
       navGroup.insertBefore(syncContainer, rewardsBtn);
-  } else if (!isMobile && syncContainer && utilityGroup && topbar && syncContainer.nextElementSibling !== utilityGroup) {
-      topbar.insertBefore(syncContainer, utilityGroup);
+  } else if (!isMobile && syncContainer && actionsRow && syncContainer.parentElement !== actionsRow) {
+      actionsRow.appendChild(syncContainer);
   }
+
   const tagBar = document.getElementById('tag-bar-container');
   const defaultContainer = document.getElementById('default-dashboard-container');
   const sBar = document.getElementById('schedule-mode-bar');

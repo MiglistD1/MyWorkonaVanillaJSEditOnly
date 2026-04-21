@@ -19,6 +19,13 @@ export function renderMainContent() {
   const globalSettings = getAppSettings();
   const mainGrid = document.getElementById('main-grid');
   const isMobile = window.matchMedia("(max-width: 768px)").matches;
+    // 🟢 จัดการการย้ายปุ่ม Cloud Sync เข้า Utility Group
+  const syncContainer = document.getElementById('firebase-sync-container');
+  const navGroup = document.querySelector('.topbar-nav-group');
+  const rewardsBtn = document.getElementById('btn-open-rewards-topbar');
+  const utilityGroup = document.getElementById('utility-group');
+  const actionsRow = utilityGroup?.querySelector('.utility-actions-row');
+
   const tagBar = document.getElementById('tag-bar-container');
   const defaultContainer = document.getElementById('default-dashboard-container');
   const sBar = document.getElementById('schedule-mode-bar');
@@ -32,6 +39,13 @@ export function renderMainContent() {
   document.querySelectorAll('.btn-cc-trigger').forEach(btn => {
       btn.style.color = (spaceId === 0) ? 'var(--primary-color)' : '';
   });
+
+  // 🟢 ย้ายปุ่ม Cloud Sync ตามโหมดหน้าจอ
+  if (isMobile && syncContainer && navGroup && rewardsBtn && syncContainer.nextElementSibling !== rewardsBtn) {
+      navGroup.insertBefore(syncContainer, rewardsBtn);
+  } else if (!isMobile && syncContainer && actionsRow && syncContainer.parentElement !== actionsRow) {
+      actionsRow.appendChild(syncContainer);
+  }
 
   // Handle Default Dashboard (Command Center) view
   if (spaceId === 0) {

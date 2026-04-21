@@ -386,14 +386,3 @@ export function initSettingsManager(callbacks) {
         });
     }
 }
-    // Toggle Dark Mode
-    const btnToggleDark = document.getElementById('btn-toggle-darkmode');
-    if (btnToggleDark) {
-        btnToggleDark.addEventListener('click', () => { 
-            const settings = getAppSettings(); 
-            settings.isDarkMode = !settings.isDarkMode; 
-            saveData(); 
-            applyAppSettings(); 
-        });
-    }
-}

@@ -1,7 +1,8 @@
 import { 
     getAppSettings, getSpaces, getCurrentSpaceId, 
     setSpaces, setAppSettings, setCurrentSpaceId, 
-    saveData, getShortDate 
+    saveData, getShortDate,
+    getLocalSettings, setLocalSettings
 } from './storage.js';
 
 export function applyAppSettings() {
@@ -571,9 +572,76 @@ export function applyAppSettings() {
         }
     `;
 }
+function _initDriveVaultUI() {
+    const ls = getLocalSettings();
 
+    const chkEnabled  = document.getElementById('chk-drive-sync-enabled');
+    const intervalSel = document.getElementById('drive-sync-interval');
+
+    if (chkEnabled)  chkEnabled.checked = !!ls.driveSyncEnabled;
+    if (intervalSel && ls.driveAutoSyncMinutes) intervalSel.value = String(ls.driveAutoSyncMinutes);
+
+    // Enable toggle
+    if (chkEnabled) {
+        chkEnabled.addEventListener('change', () => {
+            setLocalSettings({ driveSyncEnabled: chkEnabled.checked });
+        });
+    }
+
+    // Interval change → restart auto-sync timer
+    if (intervalSel) {
+        intervalSel.addEventListener('change', () => {
+            const mins = parseInt(intervalSel.value, 10);
+            setLocalSettings({ driveAutoSyncMinutes: mins });
+            if (window.driveStartAutoSync) window.driveStartAutoSync(mins);
+        });
+    }
+
+    // Pick Folder button
+    const btnSetup = document.getElementById('btn-drive-setup-vault');
+    if (btnSetup) {
+        btnSetup.addEventListener('click', async () => {
+            btnSetup.disabled = true;
+            btnSetup.textContent = 'Picking…';
+            try {
+                if (window.driveSetupVault) {
+                    const handle = await window.driveSetupVault();
+                    if (handle) {
+                        setLocalSettings({ driveSyncEnabled: true });
+                        if (chkEnabled) chkEnabled.checked = true;
+                    }
+                }
+            } catch (err) {
+                const badge = document.getElementById('drive-sync-badge');
+                if (badge) { badge.textContent = '⚠ Setup failed'; badge.style.color = '#ef4444'; }
+                console.error('[Settings] Drive setup error:', err);
+            }
+            btnSetup.disabled = false;
+            btnSetup.textContent = 'Pick Folder';
+        });
+    }
+
+    // Sync Now button
+    const btnSync = document.getElementById('btn-drive-sync-now');
+    if (btnSync) {
+        btnSync.addEventListener('click', async () => {
+            btnSync.disabled = true;
+            btnSync.textContent = 'Syncing…';
+            try {
+                if (window.drivePushNow) await window.drivePushNow();
+            } catch (err) {
+                console.error('[Settings] Drive sync error:', err);
+            }
+            btnSync.disabled = false;
+            btnSync.textContent = 'Sync Now';
+        });
+    }
+}
 export function initSettingsManager(callbacks) {
     const { onRenderAll } = callbacks;
+
+    // ── GDrive Vault UI ─────────────────────────────────────────────────────
+    _initDriveVaultUI();
 
     // Export Backup
     const btnExport = document.getElementById('btn-export-backup');

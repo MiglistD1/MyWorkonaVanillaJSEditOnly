@@ -1,6 +1,9 @@
 let firebaseSaveHook = null;
 export const setOnSaveFirebaseHook = (cb) => { firebaseSaveHook = cb; };
 
+let driveSaveHook = null;
+export const setOnSaveDriveHook = (cb) => { driveSaveHook = cb; };
+
 /** 🆔 สร้างหรือดึง Device ID ประจำเครื่อง */
 export function getDeviceId() {
     let id = localStorage.getItem('my_workspace_device_id');
@@ -83,7 +86,11 @@ let appSettings = {
 // 🏠 Device-Specific Settings (ไม่ซิงค์ข้ามเครื่อง, ไม่อยู่ในไฟล์ Backup)
 let localSettings = {
     firebaseAutoSync: false,
-    autoSyncSessionExpiry: 0
+    autoSyncSessionExpiry: 0,
+    // GDrive Vault
+    driveVaultFolderId: null,
+    driveAutoSyncMinutes: 5,
+    driveSyncEnabled: false
 };
 
 // URL Params Logic
@@ -145,6 +152,10 @@ export const getSpaces = () => spaces;
 export const getCurrentSpaceId = () => currentSpaceId;
 export const getAppSettings = () => appSettings;
 export const getLocalSettings = () => localSettings; // 🟢 Getter ใหม่
+export function setLocalSettings(updates) {
+    Object.assign(localSettings, updates);
+    saveDataItem('myLocalDeviceSettings', localSettings);
+}
 export const getGlobalLaunchers = () => globalLaunchers;
 
 export const getLauncherTags = () => launcherTags;
@@ -216,6 +227,9 @@ export function saveData(immediate = false, isRemoteUpdate = false) {
 
         // 🟢 เรียกใช้ Firebase Hook เฉพาะเมื่อเป็นการแก้ไขจาก Local
         if (firebaseSaveHook && !isRemoteUpdate) firebaseSaveHook(data);
+
+        // 🗂️ เรียกใช้ Drive Hook เพื่อ mark dirty flag
+        if (driveSaveHook && !isRemoteUpdate) driveSaveHook(data);
         
         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
             saveDataItem(data); 

@@ -1,7 +1,89 @@
 @media (max-width: 1100px) {
   .utility-group { display: none; }
-  #btn-utility-more { display: flex !important; }
-  .topbar { flex-wrap: wrap; }
+    #btn-utility-more { display: flex !important; }
+    .topbar {
+        flex-wrap: wrap;
+        column-gap: 10px;
+        row-gap: 10px;
+        align-items: center;
+    }
+    .workspace-title {
+        order: 1;
+        flex: 1 1 100%;
+    }
+    .topbar-nav-group {
+        order: 2;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-left: 0 !important;
+    }
+    .topbar-divider {
+        display: none;
+    }
+    #btn-drive-sync-now-topbar,
+    #drive-sync-container,
+    #firebase-sync-container,
+    #btn-utility-more {
+        order: 2;
+        margin: 0 !important;
+    }
+    #btn-command-center-topbar,
+    #btn-toggle-spacebar,
+    #btn-open-rewards-topbar,
+    #drive-sync-container,
+    #firebase-sync-container,
+    #btn-utility-more {
+        flex: 0 0 auto;
+    }
+    #btn-command-center-topbar,
+    #btn-toggle-spacebar,
+    #btn-open-rewards-topbar,
+    #btn-drive-sync-now-topbar,
+    #btn-firebase-sync-trigger,
+    #btn-utility-more {
+        width: 32px !important;
+        height: 32px !important;
+        min-width: 32px !important;
+        min-height: 32px !important;
+        box-sizing: border-box;
+    }
+    #btn-drive-sync-now-topbar,
+    #btn-firebase-sync-trigger,
+    #btn-utility-more {
+        background: var(--bg-body) !important;
+        border: 1px solid var(--border-color) !important;
+        border-radius: 8px !important;
+        padding: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+    #btn-drive-sync-now-topbar svg {
+        width: 16px !important;
+        height: 16px !important;
+    }
+    #drive-sync-container {
+        position: relative;
+        display: inline-flex !important;
+        align-items: center;
+        justify-content: center;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    #firebase-sync-container {
+        position: relative;
+        display: inline-flex !important;
+        align-items: center;
+        justify-content: center;
+        margin-right: 0 !important;
+        padding: 0 !important;
+    }
+    #btn-toggle-spacebar.sidebar-hidden,
+    #btn-command-center-topbar.sidebar-hidden {
+        transform: none !important;
+        box-shadow: none !important;
+    }
 
   /* ย้ายการซ่อนปุ่มไปที่ 768px เพื่อให้สัมพันธ์กับปุ่ม 3 จุดใน todoManager.js */
   /* #btn-toggle-task-actions... ลบออกจากจุดนี้ */
@@ -42,13 +124,18 @@
     justify-content: center;
     margin: 0;
     flex: 1;
-    height: 36px;
+    height: 36px !important;
+    width: auto !important;
     padding: 0 8px !important;
   }
 
   .utility-group.show-popup .utility-actions-row #toggle-tools-btn {
     flex: 2.5; 
     font-size: 11px !important;
+  }
+
+  .utility-group.show-popup .utility-actions-row #btn-toggle-darkmode {
+    font-size: 16px !important;
   }
 
   .content-grid { grid-template-columns: 1fr !important; overflow-y: visible !important; height: auto !important; }
@@ -140,6 +227,23 @@
 }
 
 @media (max-width: 768px) {
+    #drive-sync-popup {
+        min-width: 0 !important;
+        width: 280px !important;
+        max-width: calc(100vw - 16px) !important;
+        max-height: calc(100vh - 90px) !important;
+        overflow-y: auto !important;
+        padding: 10px !important;
+        box-sizing: border-box !important;
+    }
+    #drive-sync-popup .btn {
+        padding: 4px 8px !important;
+        font-size: 10px !important;
+    }
+    #drive-sync-popup .switch {
+        transform: scale(0.85);
+    }
+
     #firebase-sync-popup {
         min-width: 0 !important;
         width: 280px !important;

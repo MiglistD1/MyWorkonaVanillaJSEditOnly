@@ -1157,7 +1157,14 @@ export async function subscribeToMetadata() {
 }
 
 export function initFirebaseSync() {
-    // 🟢 ระบบเปิด/ปิดประวัติการซิงค์
+    // � GDrive mode: skip Firebase init entirely
+    const ls = getLocalSettings();
+    if (ls.driveSyncEnabled) {
+        console.log('[FirebaseSync] Drive mode active — Firebase sync disabled.');
+        return;
+    }
+
+    // �🟢 ระบบเปิด/ปิดประวัติการซิงค์
     const historyBtn = document.getElementById('btn-view-sync-history');
     const historyList = document.getElementById('sync-history-list');
     if (historyBtn && historyList) {

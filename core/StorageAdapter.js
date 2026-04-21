@@ -81,8 +81,8 @@ export async function initializeStateManager() {
       stateManager.update('launcherTags', remoteData.launcherTags, { silent: true });
     }
     
-    // Call original hook if it exists
-    if (originalFirebaseHook) originalFirebaseHook(remoteData);
+    // NOTE: originalFirebaseHook is the setter fn (setOnSaveFirebaseHook), NOT a callback.
+    // Calling it here would overwrite the hook with a data object → do not call.
   });
   
   console.log('✅ StateManager initialized successfully');

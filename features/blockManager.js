@@ -186,6 +186,9 @@ export function generateBlockSectionHTML(blockHeader, assignedHTML, assignedCoun
       <span class="block-name" data-block-id="${blockId}">${escapeHtml(blockName)}</span>
       <span class="block-task-count" style="color:${blockColor};">${assignedCount} task${assignedCount !== 1 ? 's' : ''}</span>
     </div>
+        <button class="btn-icon block-btn-toggle-actions" data-block-id="${blockId}" title="Toggle block actions" aria-label="Toggle block actions">
+            <svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="12" x2="6.01" y2="12"/><line x1="12" y1="12" x2="12.01" y2="12"/><line x1="18" y1="12" x2="18.01" y2="12"/></svg>
+        </button>
     <div class="block-header-actions">
       <button class="btn-icon block-btn-rename" data-block-id="${blockId}" title="Rename block">
         <svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -218,12 +221,14 @@ export function generateBlockSectionHTML(blockHeader, assignedHTML, assignedCoun
  */
 export function initBlockDropZones(container, spaceId, renderFn) {
     if (!container) return;
+    const isMobile = window.matchMedia('(max-width: 768px)').matches;
     container.querySelectorAll('.block-drop-zone').forEach(zone => {
         if (zone._blockSortable) zone._blockSortable.destroy();
         zone._blockSortable = Sortable.create(zone, {
             group: 'nested-tasks',
             animation: 150,
             ghostClass: 'sortable-ghost',
+            disabled: isMobile,
             onAdd: (evt) => {
                 // Data mutation (blockId assignment) is handled by initNestedSortable's onEnd.
                 // Remove the ghost element so Sortable doesn't leave a stale DOM node.
@@ -295,7 +300,22 @@ export function initBlockDropZones(container, spaceId, renderFn) {
 export function attachBlockActionListeners(container, space, renderFn) {
     if (!container) return;
 
-    container.addEventListener('click', (e) => {
+    if (container._blockActionHandler) {
+        container.removeEventListener('click', container._blockActionHandler);
+    }
+
+    const clickHandler = (e) => {
+        // ── Mobile toggle for header actions ──
+        const toggleBtn = e.target.closest('.block-btn-toggle-actions');
+        if (toggleBtn) {
+            const blockEl = toggleBtn.closest('.block-container');
+            if (!blockEl) return;
+            const willOpen = !blockEl.classList.contains('mobile-actions-open');
+            container.querySelectorAll('.block-container.mobile-actions-open').forEach(el => el.classList.remove('mobile-actions-open'));
+            if (willOpen) blockEl.classList.add('mobile-actions-open');
+            return;
+        }
+
         // ── Delete ──
         const deleteBtn = e.target.closest('.block-btn-delete');
         if (deleteBtn) {
@@ -348,7 +368,10 @@ export function attachBlockActionListeners(container, space, renderFn) {
             renderFn();
             return;
         }
-    });
+    };
+
+    container._blockActionHandler = clickHandler;
+    container.addEventListener('click', clickHandler);
 }
 
 /**
