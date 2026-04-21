@@ -1,6 +1,7 @@
 import { initFocusTimer } from './features/focusTimer.js';
 import { initFirebaseSync, forcePushNote, forcePullNote, updateSyncStatusUI, handleAutoSyncActivation, switchSpaceContext, cleanupFirebaseSync, subscribeToMetadata, subscribeToSpace, forcePushToCloud, forcePullFromCloud } from "./core/firebaseSync.js";
 import { initDriveSync, markDirty as driveDirty, pushToDrive, pullFromDrive, forcePush, setupVault, startAutoSync as driveStartAutoSync, stopAutoSync as driveStopAutoSync, isDirty, getLastSyncedAt, getVaultFolderName, getHasConflict, clearConflict, getSyncHistory, clearSyncHistory } from './core/driveSync.js';
+import { initGDriveOAuth, connectGDrive, disconnectGDrive, isGDriveConnected, getGDriveFolderName, getGDriveFolderId, getGDriveLastSyncAt, listDriveFolders, selectDriveFolder, createDriveFolder, pushToGDrive, pullFromGDrive, GDRIVE_CLIENT_ID } from './core/driveSyncOAuth.js';
 import { setOnSaveDriveHook } from './core/storage.js';
 
 import { initScheduleMode } from './features/scheduleMode.js';
@@ -265,10 +266,22 @@ document.addEventListener('DOMContentLoaded', () => {
         initDashboardQuickNote();
         initFirebaseSync();
 
-        // 🗂️ GDrive Sync: realtime push on every save
-        setOnSaveDriveHook((data) => {
-            if (localStorage.getItem('drive-sync-enabled') !== 'false') pushToDrive(data);
+        // 🗂️ GDrive Sync: realtime push on every save (routes to desktop or mobile based on mode)
+        setOnSaveDriveHook(async (data) => {
+            if (localStorage.getItem('drive-sync-enabled') === 'false') return;
+            const mode = localStorage.getItem('drive-device-mode') || 'desktop';
+            if (mode === 'desktop') {
+                pushToDrive(data);
+            } else if (mode === 'mobile' && isGDriveConnected() && getGDriveFolderId()) {
+                pushToGDrive(data).catch(e => console.warn('[GDrive] Auto push failed:', e));
+            }
         }); // fromUserGesture=false, auto-sync path
+
+        // Auto-set device mode on first run
+        if (!localStorage.getItem('drive-device-mode')) {
+            localStorage.setItem('drive-device-mode', 'showDirectoryPicker' in window ? 'desktop' : 'mobile');
+        }
+        initGDriveOAuth();
         initDriveSync();
 
         // ── Vault Sync Popup Logic ──────────────────────────────────────────────────────────────
@@ -334,6 +347,62 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             };
 
+            // ─ Google Drive Mobile helpers
+            const _updateGDriveMobileUI = () => {
+                const connected  = isGDriveConnected();
+                const folderId   = getGDriveFolderId();
+                const folderName = getGDriveFolderName();
+                const lastSync   = getGDriveLastSyncAt();
+                const connectBtn  = document.getElementById('btn-gdrive-connect');
+                const statusRow   = document.getElementById('drive-gdrive-status-row');
+                const folderLabel = document.getElementById('drive-gdrive-folder-name-label');
+                const syncNowBtn  = document.getElementById('btn-gdrive-sync-now');
+                const pullBtn     = document.getElementById('btn-gdrive-pull-data');
+                const lastSyncEl  = document.getElementById('drive-gdrive-last-sync');
+                const notCfgEl    = document.getElementById('drive-gdrive-not-configured');
+                if (notCfgEl) notCfgEl.style.display = !GDRIVE_CLIENT_ID ? 'block' : 'none';
+                if (connectBtn) {
+                    if (connected) {
+                        connectBtn.innerHTML = '✓ Connected to Google Drive';
+                        connectBtn.style.color = '#10b981';
+                        connectBtn.style.borderColor = '#6ee7b7';
+                    } else {
+                        connectBtn.innerHTML = '<svg style="width:14px;height:14px;flex-shrink:0;margin-right:6px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>Connect Google Drive';
+                        connectBtn.style.color = '#94a3b8';
+                        connectBtn.style.borderColor = 'var(--border-color)';
+                    }
+                }
+                if (statusRow)  statusRow.style.display  = connected ? 'flex' : 'none';
+                if (folderLabel && folderName) folderLabel.textContent = folderName;
+                else if (folderLabel) folderLabel.textContent = 'Not selected';
+                const showSync = connected && !!folderId;
+                if (syncNowBtn) syncNowBtn.style.display = showSync ? 'flex' : 'none';
+                if (pullBtn)    pullBtn.style.display    = showSync ? 'flex' : 'none';
+                if (lastSyncEl) {
+                    lastSyncEl.style.display = showSync ? 'block' : 'none';
+                    if (lastSync) lastSyncEl.textContent = `Last Synced: ${new Date(lastSync).toLocaleTimeString()}`;
+                }
+            };
+
+            const _applyDeviceModeUI = () => {
+                const mode       = localStorage.getItem('drive-device-mode') || 'desktop';
+                const desktopBtn = document.getElementById('btn-drive-mode-desktop');
+                const mobileBtn  = document.getElementById('btn-drive-mode-mobile');
+                const desktopSec = document.getElementById('drive-vault-desktop-section');
+                const mobileSec  = document.getElementById('drive-vault-mobile-section');
+                if (desktopBtn) {
+                    desktopBtn.style.background = mode === 'desktop' ? 'var(--primary-color)' : 'transparent';
+                    desktopBtn.style.color      = mode === 'desktop' ? '#fff' : 'var(--text-muted)';
+                }
+                if (mobileBtn) {
+                    mobileBtn.style.background = mode === 'mobile' ? 'var(--primary-color)' : 'transparent';
+                    mobileBtn.style.color      = mode === 'mobile' ? '#fff' : 'var(--text-muted)';
+                }
+                if (desktopSec) desktopSec.style.display = mode === 'desktop' ? 'contents' : 'none';
+                if (mobileSec)  mobileSec.style.display  = mode === 'mobile'  ? 'flex'     : 'none';
+                if (mode === 'mobile') _updateGDriveMobileUI();
+            };
+
             const _updateSyncEnabledRow = () => {
                 const enabled = localStorage.getItem('drive-sync-enabled') !== 'false';
                 const row  = document.getElementById('drive-sync-enabled-row');
@@ -369,7 +438,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const lastSyncEl = document.getElementById('drive-last-sync-time');
                 if (lastSyncEl) lastSyncEl.textContent = lsa ? `Last Synced: ${new Date(lsa).toLocaleTimeString()}` : 'Last Synced: Never';
                 _updateSyncEnabledRow();
-                _applyDeviceCapabilityUI();
+                _applyDeviceModeUI();
                 updateDriveStayActiveLabel();
                 const histContent  = document.getElementById('drive-sync-history-content');
                 const clearHistBtn = document.getElementById('btn-drive-clear-history');
@@ -431,7 +500,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
 
-            // ─ Pick folder
+            // ─ Device mode selector buttons
+            document.getElementById('btn-drive-mode-desktop')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                localStorage.setItem('drive-device-mode', 'desktop');
+                _applyDeviceModeUI();
+            });
+            document.getElementById('btn-drive-mode-mobile')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                localStorage.setItem('drive-device-mode', 'mobile');
+                _applyDeviceModeUI();
+            });
+
+            // ─ Pick folder (desktop)
             document.getElementById('btn-drive-pick-folder-popup')?.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 await setupVault();
@@ -527,6 +608,123 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 };
             }
+
+            // ─ Google Drive Mobile handlers
+            document.getElementById('btn-gdrive-connect')?.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (!GDRIVE_CLIENT_ID) {
+                    if (typeof window.showToast === 'function') window.showToast('⚠️ Set GDRIVE_CLIENT_ID in core/driveSyncOAuth.js first');
+                    return;
+                }
+                try {
+                    const connectBtn = document.getElementById('btn-gdrive-connect');
+                    if (connectBtn) { connectBtn.innerHTML = 'Connecting...'; connectBtn.disabled = true; }
+                    await connectGDrive();
+                    _updateGDriveMobileUI();
+                    if (typeof window.showToast === 'function') window.showToast('✅ Connected to Google Drive');
+                } catch (err) {
+                    console.error('[GDrive] Connect error:', err);
+                    if (typeof window.showToast === 'function') window.showToast('❌ Google Drive connection failed: ' + err.message);
+                    _updateGDriveMobileUI();
+                }
+            });
+
+            document.getElementById('btn-gdrive-disconnect')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                disconnectGDrive();
+                _updateGDriveMobileUI();
+                if (typeof window.showToast === 'function') window.showToast('Disconnected from Google Drive');
+            });
+
+            document.getElementById('btn-gdrive-pick-folder')?.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const picker = document.getElementById('drive-gdrive-folder-picker');
+                const listEl = document.getElementById('drive-gdrive-folder-list');
+                if (!picker) return;
+                const isOpen = picker.style.display !== 'none';
+                if (isOpen) { picker.style.display = 'none'; return; }
+                picker.style.display = 'flex';
+                if (listEl) listEl.innerHTML = '<div style="font-size:10px;color:var(--text-muted);padding:4px;">Loading...</div>';
+                try {
+                    const folders = await listDriveFolders();
+                    if (listEl) {
+                        if (folders.length === 0) {
+                            listEl.innerHTML = '<div style="font-size:10px;color:var(--text-muted);padding:4px;">No folders found</div>';
+                        } else {
+                            listEl.innerHTML = folders.map(f =>
+                                `<button data-id="${f.id}" data-name="${f.name.replace(/"/g,'&quot;')}" class="gdrive-folder-item" style="display:flex;align-items:center;gap:6px;padding:4px 8px;border:none;background:transparent;color:var(--text-main);font-size:11px;font-weight:600;cursor:pointer;border-radius:4px;text-align:left;width:100%;box-sizing:border-box;">📁 ${f.name}</button>`
+                            ).join('');
+                            listEl.querySelectorAll('.gdrive-folder-item').forEach(btn => {
+                                btn.addEventListener('mouseover', () => btn.style.background = 'var(--hover-bg)');
+                                btn.addEventListener('mouseout',  () => btn.style.background = 'transparent');
+                                btn.addEventListener('click', (ev) => {
+                                    ev.stopPropagation();
+                                    selectDriveFolder(btn.dataset.id, btn.dataset.name);
+                                    picker.style.display = 'none';
+                                    _updateGDriveMobileUI();
+                                });
+                            });
+                        }
+                    }
+                } catch (err) {
+                    if (listEl) listEl.innerHTML = `<div style="font-size:10px;color:#ef4444;padding:4px;">Error: ${err.message}</div>`;
+                }
+            });
+
+            document.getElementById('btn-gdrive-create-folder')?.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const input = document.getElementById('drive-gdrive-new-folder-input');
+                const name  = (input?.value || '').trim();
+                if (!name) return;
+                try {
+                    await createDriveFolder(name);
+                    document.getElementById('drive-gdrive-folder-picker').style.display = 'none';
+                    if (input) input.value = '';
+                    _updateGDriveMobileUI();
+                    if (typeof window.showToast === 'function') window.showToast(`📁 Created folder "${name}"`);
+                } catch (err) {
+                    if (typeof window.showToast === 'function') window.showToast('❌ Create folder failed: ' + err.message);
+                }
+            });
+
+            document.getElementById('btn-gdrive-sync-now')?.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const syncBtn = document.getElementById('btn-gdrive-sync-now');
+                try {
+                    if (syncBtn) { syncBtn.textContent = 'Syncing...'; syncBtn.disabled = true; }
+                    const data = await _getDriveData();
+                    await pushToGDrive(data);
+                    _updateGDriveMobileUI();
+                    if (typeof window.showToast === 'function') window.showToast('✅ Pushed to Google Drive');
+                } catch (err) {
+                    if (typeof window.showToast === 'function') window.showToast('❌ Sync failed: ' + err.message);
+                } finally {
+                    if (syncBtn) { syncBtn.innerHTML = '<svg style="width:14px;height:14px;margin-right:6px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>Sync Now'; syncBtn.disabled = false; }
+                }
+            });
+
+            document.getElementById('btn-gdrive-pull-data')?.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (!confirm('Pull data from Google Drive?\n\nThis will overwrite local data with Drive files. Page will reload.')) return;
+                try {
+                    const pulled = await pullFromGDrive();
+                    if (pulled) await _applyPulledData(pulled);
+                } catch (err) {
+                    if (typeof window.showToast === 'function') window.showToast('❌ Pull failed: ' + err.message);
+                }
+            });
+
+            // Mobile GDrive auto-sync interval (every 5 minutes when connected)
+            setInterval(async () => {
+                if (localStorage.getItem('drive-device-mode') !== 'mobile') return;
+                if (localStorage.getItem('drive-sync-enabled') === 'false') return;
+                if (!isGDriveConnected() || !getGDriveFolderId()) return;
+                try {
+                    const data = await _getDriveData();
+                    await pushToGDrive(data);
+                    _updateGDriveMobileUI();
+                } catch (e) { console.warn('[GDrive] Auto sync failed:', e); }
+            }, 5 * 60 * 1000);
 
             // ─ Stay Active After Refresh (timed)
 
@@ -749,11 +947,12 @@ document.addEventListener('DOMContentLoaded', () => {
             return new Promise((resolve) => {
                 const modalId = 'sdm-' + Date.now();
                 const presets = [
-                    { label: '5m',  ms: 5  * 60 * 1000 },
-                    { label: '15m', ms: 15 * 60 * 1000 },
-                    { label: '30m', ms: 30 * 60 * 1000 },
-                    { label: '1h',  ms: 60 * 60 * 1000 },
-                    { label: '2h',  ms: 2  * 60 * 60 * 1000 },
+                    { label: '5m',     ms: 5  * 60 * 1000 },
+                    { label: '15m',    ms: 15 * 60 * 1000 },
+                    { label: '30m',    ms: 30 * 60 * 1000 },
+                    { label: '1h',     ms: 60 * 60 * 1000 },
+                    { label: '2h',     ms: 2  * 60 * 60 * 1000 },
+                    { label: 'Always', ms: 365 * 24 * 60 * 60 * 1000 },
                 ];
                 document.body.insertAdjacentHTML('beforeend', `
                     <div id="${modalId}" style="position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.45);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;">

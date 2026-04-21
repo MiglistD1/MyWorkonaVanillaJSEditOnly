@@ -177,10 +177,10 @@
             </div>
             <label class="switch"><input type="checkbox" id="chk-drive-sync-enabled" checked><span class="slider"></span></label>
           </div>
-          <!-- Device capability badge -->
-          <div id="drive-device-badge" style="display:flex;align-items:center;gap:5px;width:100%;padding:3px 8px;border-radius:5px;font-size:9px;font-weight:700;color:var(--text-muted);background:var(--bg-body);border:1px dashed var(--border-color);box-sizing:border-box;text-transform:uppercase;letter-spacing:0.3px;">
-            <span id="drive-device-badge-icon">⌛</span>
-            <span id="drive-device-badge-text">Detecting device...</span>
+          <!-- Device mode selector: Desktop / Mobile -->
+          <div id="drive-device-selector" style="display:flex; width:100%; border-radius:7px; overflow:hidden; border:1px solid var(--border-color);">
+            <button id="btn-drive-mode-desktop" style="flex:1; padding:5px 0; font-size:10px; font-weight:800; border:none; cursor:pointer; background:var(--primary-color); color:#fff; transition:all 0.2s; letter-spacing:0.3px;">&#128187; Desktop</button>
+            <button id="btn-drive-mode-mobile"  style="flex:1; padding:5px 0; font-size:10px; font-weight:800; border:none; cursor:pointer; background:transparent; color:var(--text-muted); transition:all 0.2s; letter-spacing:0.3px;">&#128241; Mobile</button>
           </div>
           <!-- ── Desktop-only section (requires File System Access API) ── -->
           <div id="drive-vault-desktop-section" style="display:contents;">
@@ -263,11 +263,46 @@
             </div>
           </div>
           </div><!-- /drive-vault-desktop-section -->
-          <!-- Not supported on this device/browser -->
-          <div id="drive-not-supported-msg" style="display:none; width:100%; flex-direction:column; gap:8px; padding:12px 10px; background:rgba(148,163,184,0.06); border:1px dashed var(--border-color); border-radius:8px; box-sizing:border-box; text-align:center;">
-            <span style="font-size:20px; line-height:1;">&#128241;</span>
-            <div style="font-size:11px; font-weight:700; color:var(--text-main); margin-top:2px;">Vault Sync requires desktop</div>
-            <div style="font-size:10px; color:var(--text-muted); line-height:1.6;">File System Access API is not supported on this browser/device.<br>Open on <strong>Chrome</strong> or <strong>Edge</strong> on a laptop/desktop<br>to use local vault sync.</div>
+          <!-- Mobile: Google Drive section -->
+          <div id="drive-vault-mobile-section" style="display:none; width:100%; flex-direction:column; gap:8px; align-items:center;">
+            <!-- Client ID not configured warning -->
+            <div id="drive-gdrive-not-configured" style="display:none; width:100%; padding:6px 10px; background:rgba(239,68,68,0.08); border:1px solid #fecaca; border-radius:6px; font-size:10px; color:#dc2626; font-weight:700; text-align:center; box-sizing:border-box;">&#9888; Google OAuth Client ID not set.<br><span style="font-size:9px; font-weight:500; color:var(--text-muted);">Set GDRIVE_CLIENT_ID in core/driveSyncOAuth.js</span></div>
+            <!-- Connect button -->
+            <button id="btn-gdrive-connect" class="btn btn-outline" style="width:100%; justify-content:center; padding:7px 12px; font-size:11px; font-weight:800; gap:6px; transition:all 0.3s;">
+              <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
+              Connect Google Drive
+            </button>
+            <!-- Status row (after connect) -->
+            <div id="drive-gdrive-status-row" style="display:none; width:100%; align-items:center; gap:6px;">
+              <div style="flex:1; overflow:hidden; min-width:0;">
+                <div style="font-size:9px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Vault Folder</div>
+                <div id="drive-gdrive-folder-name-label" style="font-size:11px; font-weight:600; color:var(--text-main); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Not selected</div>
+              </div>
+              <button id="btn-gdrive-pick-folder" class="btn btn-outline" style="font-size:9px; padding:2px 8px; height:auto; flex-shrink:0;">Pick</button>
+              <button id="btn-gdrive-disconnect" class="btn btn-outline" style="font-size:9px; padding:2px 6px; height:auto; flex-shrink:0; color:#ef4444; border-color:#fecaca;">&#10005;</button>
+            </div>
+            <!-- Folder picker panel -->
+            <div id="drive-gdrive-folder-picker" style="display:none; width:100%; flex-direction:column; gap:4px; max-height:130px; overflow-y:auto; background:var(--bg-body); border:1px solid var(--border-color); border-radius:6px; padding:4px; box-sizing:border-box;">
+              <div id="drive-gdrive-folder-list" style="display:flex; flex-direction:column; gap:2px; width:100%;"><div style="font-size:10px; color:var(--text-muted); padding:4px;">Loading folders...</div></div>
+              <div style="display:flex; gap:5px; margin-top:4px; padding:4px 0 0; border-top:1px dashed var(--border-color);">
+                <input type="text" id="drive-gdrive-new-folder-input" placeholder="New folder name" style="flex:1; height:26px; padding:0 8px; font-size:11px; border-radius:5px; border:1px solid var(--border-color); background:var(--bg-card); color:var(--text-main); outline:none; box-sizing:border-box;">
+                <button id="btn-gdrive-create-folder" class="btn btn-primary" style="height:26px; padding:0 8px; font-size:10px; font-weight:800; justify-content:center; flex-shrink:0; border-radius:5px;">+ Create</button>
+              </div>
+            </div>
+            <!-- Divider -->
+            <div style="width:100%; height:1px; background:var(--border-color); opacity:0.5;"></div>
+            <!-- Sync Now -->
+            <button id="btn-gdrive-sync-now" class="btn btn-primary" style="width:100%; justify-content:center; padding:8px; font-size:12px; font-weight:700; display:none;">
+              <svg style="width:14px;height:14px;margin-right:6px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+              Sync Now
+            </button>
+            <!-- Pull from Drive -->
+            <button id="btn-gdrive-pull-data" class="btn btn-outline" style="width:100%; justify-content:center; padding:6px; font-size:11px; display:none;">
+              <svg style="width:12px;height:12px;margin-right:5px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+              Pull from Drive &#8595;
+            </button>
+            <!-- Last sync -->
+            <div id="drive-gdrive-last-sync" style="font-size:9px; color:var(--text-muted); text-align:center; width:100%; display:none;">Last Synced: Never</div>
           </div>
         </div>
       </div>
