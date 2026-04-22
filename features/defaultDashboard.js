@@ -8,15 +8,33 @@ import Sortable from '../sortable.esm.js';
 
 let ccWidgetStateCache = null; // 🟢 แคชสถานะ UI ไว้ในแรมเพื่อให้ทำงานเร็วขึ้น
 
+function saveCommandCenterUiState(uiState) {
+    const settings = getAppSettings();
+    settings.commandCenterUiState = {
+        minimized: Array.isArray(uiState.minimized) ? [...uiState.minimized] : [],
+        order: Array.isArray(uiState.order) ? [...uiState.order] : ['todo', 'flow'],
+        isLocked: !!uiState.isLocked,
+    };
+
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        chrome.storage.local.set({ ccWidgetState: uiState });
+    } else {
+        localStorage.setItem('ccWidgetState', JSON.stringify(uiState));
+    }
+
+    saveData();
+}
+
 export async function renderDefaultDashboard() {
     const container = document.getElementById('default-dashboard-container');
     if (!container) return;
 
     // 🟢 โหลดจาก Storage เฉพาะครั้งแรก ครั้งต่อไปอ่านจากแรมทันที
     if (!ccWidgetStateCache) {
+        const syncedUiState = getAppSettings().commandCenterUiState;
         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
             const uiRes = await chrome.storage.local.get(['ccWidgetState']);
-            ccWidgetStateCache = uiRes.ccWidgetState || {
+            ccWidgetStateCache = uiRes.ccWidgetState || syncedUiState || {
                 minimized: [],
                 order: ['todo', 'flow'],
                 isLocked: false
@@ -24,11 +42,11 @@ export async function renderDefaultDashboard() {
         } else {
             // Fallback สำหรับ Web/Mobile
             const saved = localStorage.getItem('ccWidgetState');
-            ccWidgetStateCache = saved ? JSON.parse(saved) : {
+            ccWidgetStateCache = saved ? JSON.parse(saved) : (syncedUiState || {
                 minimized: [],
                 order: ['todo', 'flow'],
                 isLocked: false
-            };
+            });
         }
     }
     const uiState = ccWidgetStateCache;
@@ -141,11 +159,7 @@ export async function renderDefaultDashboard() {
         btn.onclick = () => {
             const id = btn.dataset.id;
             if (!uiState.minimized.includes(id)) uiState.minimized.push(id);
-            if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-                chrome.storage.local.set({ ccWidgetState: uiState });
-            } else {
-                localStorage.setItem('ccWidgetState', JSON.stringify(uiState));
-            }
+            saveCommandCenterUiState(uiState);
             renderDefaultDashboard(); // 🟢 วาดใหม่ทันที ไม่ต้องรอ Storage Callback
         };
     });
@@ -163,7 +177,7 @@ export async function renderDefaultDashboard() {
     container.querySelectorAll('.btn-toggle-all-flow-actions').forEach(btn => {
         btn.onclick = () => {
             flowState.showActions = !flowState.showActions;
-            renderDefaultDashboard();
+            saveFlow().then(() => renderDefaultDashboard());
         };
     });
 
@@ -171,11 +185,7 @@ export async function renderDefaultDashboard() {
         bub.onclick = () => {
             const id = bub.dataset.id;
             uiState.minimized = uiState.minimized.filter(m => m !== id);
-            if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-                chrome.storage.local.set({ ccWidgetState: uiState });
-            } else {
-                localStorage.setItem('ccWidgetState', JSON.stringify(uiState));
-            }
+            saveCommandCenterUiState(uiState);
             renderDefaultDashboard(); // 🟢 กู้คืนทันที
         };
     });
@@ -193,11 +203,7 @@ export async function renderDefaultDashboard() {
                 const finalOrder = [...newOrder];
                 uiState.order.forEach(id => { if(!finalOrder.includes(id)) finalOrder.push(id); });
                 uiState.order = finalOrder;
-                if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-                    chrome.storage.local.set({ ccWidgetState: uiState });
-                } else {
-                    localStorage.setItem('ccWidgetState', JSON.stringify(uiState));
-                }
+                saveCommandCenterUiState(uiState);
             }
         });
     }
@@ -207,11 +213,7 @@ export async function renderDefaultDashboard() {
     if (lockBtn) {
         lockBtn.onclick = () => {
             uiState.isLocked = !uiState.isLocked;
-            if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-                chrome.storage.local.set({ ccWidgetState: uiState });
-            } else {
-                localStorage.setItem('ccWidgetState', JSON.stringify(uiState));
-            }
+            saveCommandCenterUiState(uiState);
             renderDefaultDashboard(); // 🟢 ล็อคทันที
         };
     }

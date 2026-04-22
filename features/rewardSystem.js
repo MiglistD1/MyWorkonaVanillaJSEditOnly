@@ -108,6 +108,7 @@ async function saveRewardData() {
         }
         // 🟢 ซิงค์ข้อมูลรางวัลไปยัง Firestore แบบ Real-time
         await setDoc(docRefRewards, rewardData, { merge: true });
+        saveData();
     } catch (e) {
         console.error("Failed to save reward data", e);
     }

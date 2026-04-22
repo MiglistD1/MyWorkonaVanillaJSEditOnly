@@ -334,6 +334,12 @@ async function _pushToGDriveImpl(data) {
         launcherTags: data.launcherTags || [],
         lastSpaceId: data.lastSpaceId ?? null,
     });
+    await _upsertJsonFile(_folderId, 'smartflow.json', data.smartFlowData || {
+        smartFlowItems: [],
+        smartFlowTags: [],
+        smartFlowFocusTimer: null,
+    });
+    await _upsertJsonFile(_folderId, 'rewards.json', data.rewardData || {});
 
     const currentSpaceIds = new Set();
     for (const space of (data.mySpacesData || [])) {
@@ -413,6 +419,29 @@ export async function pullFromGDrive() {
         }
     }
 
+    const smartFlowFile = latestRootByName.get('smartflow.json');
+    if (smartFlowFile) {
+        try {
+            const smartFlowData = await _readFile(smartFlowFile.id);
+            result.smartFlowData = {
+                smartFlowItems: smartFlowData?.smartFlowItems || [],
+                smartFlowTags: smartFlowData?.smartFlowTags || [],
+                smartFlowFocusTimer: smartFlowData?.smartFlowFocusTimer || null,
+            };
+        } catch (err) {
+            console.warn(`[GDrive] Skipping unreadable file "${smartFlowFile.name}" (${smartFlowFile.id}):`, err.message);
+        }
+    }
+
+    const rewardsFile = latestRootByName.get('rewards.json');
+    if (rewardsFile) {
+        try {
+            result.rewardData = await _readFile(rewardsFile.id);
+        } catch (err) {
+            console.warn(`[GDrive] Skipping unreadable file "${rewardsFile.name}" (${rewardsFile.id}):`, err.message);
+        }
+    }
+
     const chosenSpaceFiles = new Map();
     const spacesFolders = rootFiles.filter((file) => file.mimeType === FOLDER_MIME && file.name === SPACES_DIR_NAME);
     for (const folder of _sortNewestFirst(spacesFolders)) {
@@ -446,6 +475,8 @@ export async function pullFromGDrive() {
         result.mySpacesData.length === 0 &&
         !settingsFile &&
         !globalFile &&
+        !smartFlowFile &&
+        !rewardsFile &&
         spacesFolders.length === 0
     ) {
         throw new Error('Drive folder does not contain a compatible vault structure yet');

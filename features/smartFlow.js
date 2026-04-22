@@ -90,6 +90,37 @@ export const flowState = {
     }
 };
 
+function buildSmartFlowUiState() {
+    return {
+        showActions: !!flowState.showActions,
+        hideCompleted: !!flowState.hideCompleted,
+        hideLocked: !!flowState.hideLocked,
+        showOnlyToday: !!flowState.showOnlyToday,
+        areTagsVisible: flowState.areTagsVisible !== false,
+        currentFilterTags: Array.isArray(flowState.currentFilterTags) ? [...flowState.currentFilterTags] : [],
+        currentFilterMode: flowState.currentFilterMode || 'OR',
+        isSingleSelectMode: !!flowState.isSingleSelectMode,
+        postConfirmPopupState: { ...(flowState.postConfirmPopupState || {}) },
+    };
+}
+
+function applySmartFlowUiState(appSettings) {
+    const uiState = appSettings?.smartFlowUiState;
+    if (!uiState || typeof uiState !== 'object') return;
+
+    flowState.showActions = !!uiState.showActions;
+    flowState.hideCompleted = !!uiState.hideCompleted;
+    flowState.hideLocked = !!uiState.hideLocked;
+    flowState.showOnlyToday = !!uiState.showOnlyToday;
+    flowState.areTagsVisible = uiState.areTagsVisible !== false;
+    flowState.currentFilterTags = Array.isArray(uiState.currentFilterTags) ? [...uiState.currentFilterTags] : [];
+    flowState.currentFilterMode = uiState.currentFilterMode || flowState.currentFilterMode;
+    flowState.isSingleSelectMode = !!uiState.isSingleSelectMode;
+    if (uiState.postConfirmPopupState && typeof uiState.postConfirmPopupState === 'object') {
+        flowState.postConfirmPopupState = { ...flowState.postConfirmPopupState, ...uiState.postConfirmPopupState };
+    }
+}
+
 /**
  * 🟢 Render Focus Persistent Popup (ลอยอยู่เหนือทุก Space)
  * ย้ายขึ้นมาด้านบนเพื่อให้แน่ใจว่าถูกนิยามก่อนเรียกใช้
@@ -309,6 +340,7 @@ export async function initSmartFlow() {
     flowItems = res.smartFlowItems || [];
     flowState.managedTags = res.smartFlowTags || [];
     const appSettings = getAppSettings();
+    applySmartFlowUiState(appSettings);
     flowState.focusPopupState = appSettings.focusPopupState || flowState.focusPopupState;
 
     flowState.postConfirmPopupState = appSettings.postConfirmPopupState || { x: 0, y: 0, isLocked: false }; // NEW: Load postConfirmPopupState
@@ -356,10 +388,15 @@ export async function initSmartFlow() {
 }
 
 export async function saveFlow() {
+    const appSettings = getAppSettings();
+    appSettings.focusPopupState = { ...flowState.focusPopupState };
+    appSettings.postConfirmPopupState = { ...(flowState.postConfirmPopupState || {}) };
+    appSettings.smartFlowUiState = buildSmartFlowUiState();
+
     const data = {
         'smartFlowItems': flowItems,
         'smartFlowTags': flowState.managedTags,
-        'appSettings': { ...getAppSettings(), focusPopupState: flowState.focusPopupState },
+        'appSettings': { ...appSettings },
         'smartFlowFocusTimer': {
             focusMode: flowState.focusMode,
             isFocusRunning: flowState.isFocusRunning,
@@ -378,6 +415,7 @@ export async function saveFlow() {
 
     // 🟢 ซิงค์ข้อมูล Smart Flow ไปยัง Firestore แบบ Real-time
     await setDoc(docRefSmartFlow, data, { merge: true });
+    saveData();
 }
 
 /**
@@ -469,7 +507,7 @@ export function renderSmartFlow(container) {
     if (todayBtn) {
         todayBtn.onclick = () => {
             flowState.showOnlyToday = !flowState.showOnlyToday;
-            renderSmartFlow(container);
+            saveFlow().then(() => renderSmartFlow(container));
         };
     }
 
@@ -502,7 +540,7 @@ export function renderSmartFlow(container) {
     container.querySelectorAll('.sf-view-opt').forEach(cb => {
         cb.onchange = () => {
             flowState[cb.dataset.prop] = cb.checked;
-            renderSmartFlow(container); // Re-render whole section
+            saveFlow().then(() => renderSmartFlow(container)); // Re-render whole section
         };
     });
     renderFocusPersistentPopup(); // 🟢 Render persistent popup on dashboard load
@@ -603,7 +641,7 @@ function renderSmartFlowTagBar() {
 
     container.querySelector('#sf-tag-visibility-toggle').onclick = () => {
         flowState.areTagsVisible = !flowState.areTagsVisible;
-        renderSmartFlowTagBar();
+        saveFlow().then(renderSmartFlowTagBar);
     };
 
     container.querySelector('#sf-btn-tag-lock').onclick = (e) => {
@@ -652,8 +690,10 @@ function renderSmartFlowTagBar() {
                     else flowState.currentFilterTags.push(tag);
                 }
             }
-            renderSmartFlowTagBar();
-            renderFlowList();
+            saveFlow().then(() => {
+                renderSmartFlowTagBar();
+                renderFlowList();
+            });
         };
         
         // 🟢 ปุ่มเมนู (Context Menu) - ตรวจสอบก่อนว่าป้ายนี้มีปุ่มเมนูหรือไม่ (เฉพาะป้ายที่แก้ไขได้)

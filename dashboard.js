@@ -22,7 +22,7 @@ import { initDashboardQuickNote } from './features/dashboardQuickNote.js';
 import { initStateManagerIntegration, stateManager, eventBus, Events } from './core/StateManagerIntegration.js';
 import { createMaintenanceButton, initMaintenanceTracking } from './core/maintenance-button.js';
 import { 
-  getAppSettings, saveData, loadData, getSpaces,
+  getAppSettings, saveData, loadData, getSpaces, loadDataItem, saveDataItem,
   getCurrentSpaceId, setCurrentSpaceId, getFilterTags, setFilterTags, setSearchQuery, getCurrentSpace, getFilterMode, setFilterMode, getLocalSettings
 } from './core/storage.js';
 
@@ -585,17 +585,40 @@ document.addEventListener('DOMContentLoaded', () => {
             };
 
             const _getDriveData = async () => {
-                const { getSpaces, getAppSettings, getGlobalLaunchers, getLauncherTags, getCurrentSpaceId } = await import('./core/storage.js');
-                return { mySpacesData: getSpaces(), lastSpaceId: getCurrentSpaceId(), appSettings: getAppSettings(), globalLaunchers: getGlobalLaunchers(), launcherTags: getLauncherTags() };
+                const { getSpaces, getAppSettings, getGlobalLaunchers, getLauncherTags, getCurrentSpaceId, loadDataItem } = await import('./core/storage.js');
+                const extraState = await loadDataItem(['smartFlowItems', 'smartFlowTags', 'smartFlowFocusTimer', 'questRewardData']);
+                return {
+                    mySpacesData: getSpaces(),
+                    lastSpaceId: getCurrentSpaceId(),
+                    appSettings: getAppSettings(),
+                    globalLaunchers: getGlobalLaunchers(),
+                    launcherTags: getLauncherTags(),
+                    smartFlowData: {
+                        smartFlowItems: extraState.smartFlowItems || [],
+                        smartFlowTags: extraState.smartFlowTags || [],
+                        smartFlowFocusTimer: extraState.smartFlowFocusTimer || null,
+                    },
+                    rewardData: extraState.questRewardData || null,
+                };
             };
 
             const _applyPulledData = async (data) => {
                 try {
-                    const { setSpaces, setCurrentSpaceId, setAppSettings, setGlobalLaunchers, setLauncherTags, saveData } = await import('./core/storage.js');
+                    const { setSpaces, setCurrentSpaceId, setAppSettings, setGlobalLaunchers, setLauncherTags, saveData, saveDataItem } = await import('./core/storage.js');
                     if (Array.isArray(data.mySpacesData)) setSpaces(data.mySpacesData);
                     if ('appSettings' in data) setAppSettings(data.appSettings || {});
                     if (Array.isArray(data.globalLaunchers)) setGlobalLaunchers(data.globalLaunchers);
                     if (Array.isArray(data.launcherTags)) setLauncherTags(data.launcherTags);
+                    if (data.smartFlowData) {
+                        await saveDataItem({
+                            smartFlowItems: data.smartFlowData.smartFlowItems || [],
+                            smartFlowTags: data.smartFlowData.smartFlowTags || [],
+                            smartFlowFocusTimer: data.smartFlowData.smartFlowFocusTimer || null,
+                        });
+                    }
+                    if (data.rewardData) {
+                        await saveDataItem('questRewardData', data.rewardData);
+                    }
                     const nextSpaceId = data.lastSpaceId ?? data.mySpacesData?.[0]?.id ?? 1;
                     setCurrentSpaceId(nextSpaceId);
                     _mobileDriveDirty = false;

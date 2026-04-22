@@ -263,6 +263,12 @@ export async function pushToDrive(data, { fromUserGesture = false } = {}) {
             globalLaunchers: data.globalLaunchers ?? [],
             launcherTags:    data.launcherTags    ?? [],
         });
+        await _writeJSON(_dirHandle, 'smartflow.json', data.smartFlowData ?? {
+            smartFlowItems: [],
+            smartFlowTags: [],
+            smartFlowFocusTimer: null,
+        });
+        await _writeJSON(_dirHandle, 'rewards.json', data.rewardData ?? {});
         const spacesDir = await _getOrCreateSubdir(_dirHandle, 'spaces');
         const currentSpaceIds = new Set();
         for (const space of (data.mySpacesData ?? [])) {
@@ -315,6 +321,12 @@ export async function forcePush(data, { fromUserGesture = true } = {}) {
             globalLaunchers: data.globalLaunchers ?? [],
             launcherTags:    data.launcherTags    ?? [],
         });
+        await _writeJSON(_dirHandle, 'smartflow.json', data.smartFlowData ?? {
+            smartFlowItems: [],
+            smartFlowTags: [],
+            smartFlowFocusTimer: null,
+        });
+        await _writeJSON(_dirHandle, 'rewards.json', data.rewardData ?? {});
         const spacesDir = await _getOrCreateSubdir(_dirHandle, 'spaces');
         const currentSpaceIds = new Set();
         for (const space of (data.mySpacesData ?? [])) {
@@ -363,6 +375,8 @@ export async function pullFromDrive({ fromUserGesture = false } = {}) {
         const index_   = await _readJSON(_dirHandle, 'index.json')    ?? {};
         const settings = await _readJSON(_dirHandle, 'settings.json') ?? {};
         const global_  = await _readJSON(_dirHandle, 'global.json')   ?? {};
+        const smartFlow = await _readJSON(_dirHandle, 'smartflow.json') ?? null;
+        const rewards = await _readJSON(_dirHandle, 'rewards.json') ?? null;
         // Read per-space files
         const spaces = [];
         try {
@@ -383,6 +397,8 @@ export async function pullFromDrive({ fromUserGesture = false } = {}) {
             appSettings:     settings.appSettings ?? {},
             globalLaunchers: global_.globalLaunchers ?? [],
             launcherTags:    global_.launcherTags    ?? [],
+            smartFlowData:   smartFlow ?? { smartFlowItems: [], smartFlowTags: [], smartFlowFocusTimer: null },
+            rewardData:      rewards ?? null,
         };
         // ── Conflict detection ─────────────────────────────────────────────────
         const vaultTime = index_.lastUpdated ? new Date(index_.lastUpdated).getTime() : 0;

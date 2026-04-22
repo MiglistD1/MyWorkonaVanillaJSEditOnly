@@ -76,6 +76,36 @@ export const masterTodoListState = {
 };
 window.masterTodoListState = masterTodoListState; // 🟢 เชื่อมโยงสถานะให้ระบบ Mirror Portal เข้าถึงได้
 
+function hydrateMasterTodoSyncState() {
+    const settings = getAppSettings();
+    const synced = settings.masterTodoSyncState;
+    if (!synced || typeof synced !== 'object') return;
+
+    masterTodoListState.activeSpaceFilters = new Set((synced.activeSpaceFilters || []).map(id => parseInt(id)));
+    masterTodoListState.showOnlyFlagged = !!synced.showOnlyFlagged;
+    masterTodoListState.dateFilter = synced.dateFilter || 'all';
+    masterTodoListState.isProgressVisible = synced.isProgressVisible !== false;
+    masterTodoListState.showMasterTaskActions = !!synced.showMasterTaskActions;
+    masterTodoListState.selectedQuickAddSpaceId = synced.selectedQuickAddSpaceId ?? null;
+    masterTodoListState.lastAppliedTemplateName = synced.lastAppliedTemplateName || null;
+    masterTodoListState.activeFolderTab = synced.activeFolderTab || null;
+}
+
+function persistMasterTodoSyncState() {
+    const settings = getAppSettings();
+    settings.masterTodoSyncState = {
+        activeSpaceFilters: Array.from(masterTodoListState.activeSpaceFilters || []),
+        showOnlyFlagged: !!masterTodoListState.showOnlyFlagged,
+        dateFilter: masterTodoListState.dateFilter || 'all',
+        isProgressVisible: masterTodoListState.isProgressVisible !== false,
+        showMasterTaskActions: !!masterTodoListState.showMasterTaskActions,
+        selectedQuickAddSpaceId: masterTodoListState.selectedQuickAddSpaceId ?? null,
+        lastAppliedTemplateName: masterTodoListState.lastAppliedTemplateName || null,
+        activeFolderTab: masterTodoListState.activeFolderTab || null,
+    };
+    saveData();
+}
+
 const peekState = { spaceId: null, isFloat: false, floatX: 80, floatY: 80, inlineWidth: 268 };
 let _peekResizeHandler = null;
 
@@ -100,6 +130,7 @@ function applyDateFilter(tasks) {
  * Renders the controls (Buttons & Input Bar) typically placed in the header.
  */
 export function renderMasterHeaderControls(totalTasks = masterTodoListState.visibleTaskCount || 0) {
+    hydrateMasterTodoSyncState();
     const settings = getAppSettings();
     const isSingle = settings.masterIsSingleSelectMode ?? masterTodoListState.isSingleSelectMode;
     const isLocked = !!settings.masterIsModeLocked;
@@ -169,6 +200,7 @@ export function renderMasterHeaderControls(totalTasks = masterTodoListState.visi
  */
 export function renderMasterTodoList(container) {
     if (!container) return;
+    hydrateMasterTodoSyncState();
 
     const active = document.activeElement;
     const isSubmitting = active?.dataset?.isSubmitting === 'true';
@@ -484,6 +516,7 @@ function showFolderSpacesDropdown(anchorEl, folderName, onRefresh) {
             e.stopPropagation();
             const sid = parseInt(item.dataset.id);
             toggleSpaceFilter(sid, isSingle);
+            persistMasterTodoSyncState();
             
             if (isSingle) {
                 dropdown.remove();
@@ -654,7 +687,7 @@ function renderSpacePeekPanel(spaceId) {
             }
         }
         s.spacePeekSettings.isLocked = !s.spacePeekSettings.isLocked;
-        saveData();
+        persistMasterTodoSyncState();
         renderSpacePeekPanel(peekState.spaceId);
     });
 
@@ -775,7 +808,7 @@ function setupInlineResize(panel) {
         const s = getAppSettings();
         if (s.spacePeekSettings?.isLocked) {
             s.spacePeekSettings.inlineWidth = peekState.inlineWidth;
-            saveData();
+            persistMasterTodoSyncState();
         }
     };
 
@@ -894,7 +927,7 @@ function openTemplateManagePopup(anchorEl, onRefresh) {
             s.viewTemplates.spaceOrder = tpl.spaceOrder || [];
             masterTodoListState.activeSpaceFilters = new Set((tpl.activeFilters || []).map(id => parseInt(id)));
             masterTodoListState.lastAppliedTemplateName = btn.dataset.name; // 🟢 อัปเดตชื่อเมื่อกด Apply จาก Popup
-            saveData();
+            persistMasterTodoSyncState();
             popup.remove();
             anchorEl.classList.remove('active');
             onRefresh();
@@ -907,7 +940,7 @@ function openTemplateManagePopup(anchorEl, onRefresh) {
             const spaceOrder = getSpaceOrder();
             s.viewTemplates[btn.dataset.name] = { spaceOrder, activeFilters: Array.from(masterTodoListState.activeSpaceFilters) };
             s.viewTemplates.spaceOrder = spaceOrder;
-            saveData();
+            persistMasterTodoSyncState();
             popup.remove();
             anchorEl.classList.remove('active');
             onRefresh();
@@ -998,16 +1031,16 @@ export function initMasterEvents() {
     };
 
     const toggleProgressBtn = document.getElementById('btn-master-toggle-progress');
-    if (toggleProgressBtn) toggleProgressBtn.onclick = () => { masterTodoListState.isProgressVisible = !masterTodoListState.isProgressVisible; onRefresh(); };
+    if (toggleProgressBtn) toggleProgressBtn.onclick = () => { masterTodoListState.isProgressVisible = !masterTodoListState.isProgressVisible; persistMasterTodoSyncState(); onRefresh(); };
 
     const toggleActionsBtn = document.getElementById('btn-master-toggle-task-actions');
-    if (toggleActionsBtn) toggleActionsBtn.onclick = () => { masterTodoListState.showMasterTaskActions = !masterTodoListState.showMasterTaskActions; onRefresh(); };
+    if (toggleActionsBtn) toggleActionsBtn.onclick = () => { masterTodoListState.showMasterTaskActions = !masterTodoListState.showMasterTaskActions; persistMasterTodoSyncState(); onRefresh(); };
 
     const filterFlagBtn = document.getElementById('btn-master-filter-flagged');
-    if (filterFlagBtn) filterFlagBtn.onclick = () => { masterTodoListState.showOnlyFlagged = !masterTodoListState.showOnlyFlagged; onRefresh(); };
+    if (filterFlagBtn) filterFlagBtn.onclick = () => { masterTodoListState.showOnlyFlagged = !masterTodoListState.showOnlyFlagged; persistMasterTodoSyncState(); onRefresh(); };
 
     const dateFilterSelect = document.getElementById('master-date-filter');
-    if (dateFilterSelect) dateFilterSelect.onchange = () => { masterTodoListState.dateFilter = dateFilterSelect.value; onRefresh(); };
+    if (dateFilterSelect) dateFilterSelect.onchange = () => { masterTodoListState.dateFilter = dateFilterSelect.value; persistMasterTodoSyncState(); onRefresh(); };
 
     const toggleSelectBtn = document.getElementById('btn-master-toggle-select-mode');
     if (toggleSelectBtn) toggleSelectBtn.onclick = () => { 
@@ -1030,17 +1063,20 @@ export function initMasterEvents() {
     if (closeAllBtn) closeAllBtn.onclick = () => {
         const allSpaces = getSpaces().filter(s => !s.isArchived && !s.isDeleted);
         masterTodoListState.activeSpaceFilters = new Set(allSpaces.map(s => s.id));
+        masterTodoListState.lastAppliedTemplateName = null;
+        persistMasterTodoSyncState();
         onRefresh();
     };
 
     const allPill = document.getElementById('btn-master-filter-all');
-    if (allPill) allPill.onclick = () => { masterTodoListState.activeSpaceFilters.clear(); masterTodoListState.activeFolderTab = null; onRefresh(); };
+    if (allPill) allPill.onclick = () => { masterTodoListState.activeSpaceFilters.clear(); masterTodoListState.activeFolderTab = null; masterTodoListState.lastAppliedTemplateName = null; persistMasterTodoSyncState(); onRefresh(); };
 
     document.querySelectorAll('.space-switcher-pill').forEach(pill => {
         if (pill.id === 'btn-master-filter-all') return;
         pill.onclick = (e) => {
             const settings = getAppSettings();
             toggleSpaceFilter(parseInt(pill.dataset.spaceId), settings.masterIsSingleSelectMode ?? masterTodoListState.isSingleSelectMode);
+            persistMasterTodoSyncState();
             onRefresh();
         };
     });
@@ -1067,6 +1103,7 @@ export function initMasterEvents() {
             if (!name) {
                 // 🟢 ล้างชื่อถ้าผู้ใช้เลือกกลับเป็นค่าเริ่มต้น
                 masterTodoListState.lastAppliedTemplateName = null;
+                persistMasterTodoSyncState();
                 onRefresh();
                 return;
             }
@@ -1079,7 +1116,7 @@ export function initMasterEvents() {
 
             settings.viewTemplates.spaceOrder = tpl.spaceOrder || [];
             masterTodoListState.activeSpaceFilters = new Set((tpl.activeFilters || []).map(id => parseInt(id)));
-            saveData();
+            persistMasterTodoSyncState();
             onRefresh();
         };
     }
@@ -1090,7 +1127,7 @@ export function initMasterEvents() {
         const settings = getAppSettings();
         if (settings.viewTemplates) settings.viewTemplates.spaceOrder = [];
         masterTodoListState.lastAppliedTemplateName = null; // 🟢 ล้างชื่อเมื่อกด Reset Order
-        saveData();
+        persistMasterTodoSyncState();
         onRefresh();
     };
 
