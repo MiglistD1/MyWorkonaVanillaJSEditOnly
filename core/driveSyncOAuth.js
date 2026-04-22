@@ -51,6 +51,15 @@ export function getGDriveFolderName() { return _folderName; }
 export function getGDriveFolderId()   { return _folderId; }
 export function getGDriveLastSyncAt() { return parseInt(localStorage.getItem(LS_LAST_SYNC) || '0', 10); }
 
+/**
+ * Lightweight connection test — calls /about?fields=user.
+ * Does NOT push or pull any data. Returns the user's display name.
+ */
+export async function verifyGDriveConnection() {
+    const data = await _api('/about?fields=user');
+    return data?.user?.displayName ?? 'Connected';
+}
+
 export function disconnectGDrive() {
     _token = null;
     localStorage.removeItem(LS_TOKEN);

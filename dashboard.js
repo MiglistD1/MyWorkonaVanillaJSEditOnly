@@ -348,6 +348,51 @@ document.addEventListener('DOMContentLoaded', () => {
             };
 
             // ─ Google Drive Mobile helpers
+
+            // ── Verified-state helper: locks/unlocks Push & Pull, updates button appearance ──
+            const _setMobileVerifiedState = (verified, silent = false) => {
+                localStorage.setItem('gdrive-connection-verified', String(verified));
+                const syncBtn   = document.getElementById('btn-gdrive-sync-now');
+                const statusEl  = document.getElementById('drive-gdrive-verify-status');
+                const pushBtn   = document.getElementById('btn-gdrive-push-data');
+                const pullBtn   = document.getElementById('btn-gdrive-pull-data');
+
+                if (verified) {
+                    // Button → green "Verified" state
+                    if (syncBtn) {
+                        syncBtn.style.color        = '#10b981';
+                        syncBtn.style.borderColor  = '#6ee7b7';
+                        syncBtn.style.background   = 'rgba(16,185,129,0.08)';
+                        syncBtn.innerHTML = '<svg style="width:13px;height:13px;margin-right:6px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>Verified \u2014 Connected';
+                    }
+                    if (statusEl) statusEl.style.display = 'none';
+                    // Unlock Push/Pull
+                    if (pushBtn) { pushBtn.disabled = false; pushBtn.classList.remove('vs-locked'); }
+                    if (pullBtn) { pullBtn.disabled = false; pullBtn.classList.remove('vs-locked'); }
+                    // Auto-enable Sync Enabled (only on first successful verify, not on page-load restore)
+                    if (!silent) {
+                        const chk = document.getElementById('chk-drive-sync-enabled');
+                        if (chk && !chk.checked) {
+                            chk.checked = true;
+                            localStorage.setItem('drive-sync-enabled', 'true');
+                            _updateSyncEnabledRow();
+                        }
+                    }
+                } else {
+                    // Button → gray "Connect & Verify" state
+                    if (syncBtn) {
+                        syncBtn.style.color       = '#94a3b8';
+                        syncBtn.style.borderColor = 'var(--border-color)';
+                        syncBtn.style.background  = '';
+                        syncBtn.innerHTML = '<svg style="width:13px;height:13px;margin-right:6px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>Connect &amp; Verify';
+                    }
+                    if (statusEl) statusEl.style.display = 'none';
+                    // Lock Push/Pull
+                    if (pushBtn) { pushBtn.disabled = true; pushBtn.classList.add('vs-locked'); }
+                    if (pullBtn) { pullBtn.disabled = true; pullBtn.classList.add('vs-locked'); }
+                }
+            };
+
             const _updateGDriveMobileUI = () => {
                 console.log('[Dashboard] 🔵 _updateGDriveMobileUI called');
                 const connected  = isGDriveConnected();
@@ -359,7 +404,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const statusRow   = document.getElementById('drive-gdrive-status-row');
                 const folderLabel = document.getElementById('drive-gdrive-folder-name-label');
                 const syncNowBtn  = document.getElementById('btn-gdrive-sync-now');
-                const pullBtn     = document.getElementById('btn-gdrive-pull-data');
                 const lastSyncEl  = document.getElementById('drive-gdrive-last-sync');
                 const notCfgEl    = document.getElementById('drive-gdrive-not-configured');
                 if (notCfgEl) notCfgEl.style.display = !GDRIVE_CLIENT_ID ? 'block' : 'none';
@@ -381,15 +425,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 else if (folderLabel) folderLabel.textContent = 'Not selected';
                 const showSync = connected && !!folderId;
                 if (syncNowBtn) syncNowBtn.style.display = showSync ? 'flex' : 'none';
-                if (pullBtn)    pullBtn.style.display    = showSync ? 'flex' : 'none';
-                const forcePushBtn = document.getElementById('btn-gdrive-force-push');
-                const forcePullBtn = document.getElementById('btn-gdrive-force-pull');
-                if (forcePushBtn) forcePushBtn.style.display = showSync ? 'flex' : 'none';
-                if (forcePullBtn) forcePullBtn.style.display = showSync ? 'flex' : 'none';
+                const pushPullRow = document.getElementById('drive-gdrive-pushpull-row');
+                if (pushPullRow) pushPullRow.style.display = showSync ? 'flex' : 'none';
                 if (lastSyncEl) {
                     lastSyncEl.style.display = showSync ? 'block' : 'none';
                     if (lastSync) lastSyncEl.textContent = `Last Synced: ${new Date(lastSync).toLocaleTimeString()}`;
                 }
+                // Auto-restore verified state if token + folder still valid across refresh
+                const autoVerified = showSync && localStorage.getItem('gdrive-connection-verified') === 'true';
+                _setMobileVerifiedState(autoVerified, /*silent=*/true);
             };
 
             const _applyDeviceModeUI = () => {
@@ -429,16 +473,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const updateDriveStayActiveLabel = () => {
                 const label  = document.getElementById('drive-stay-active-label');
-                if (!label) return;
+                const labelM = document.getElementById('drive-stay-active-label-mobile');
+                if (!label && !labelM) return;
                 const expiry = parseInt(localStorage.getItem('drive-stay-active-expiry') ?? '0', 10);
+                let text;
                 if (expiry > Date.now()) {
                     const diff = expiry - Date.now();
                     const hrs  = Math.floor(diff / (1000 * 60 * 60));
                     const mins = Math.round((diff % (1000 * 60 * 60)) / (1000 * 60));
-                    label.textContent = hrs > 0 ? `Active for ${hrs}h ${mins}m` : `Active for ${mins}m`;
+                    text = hrs > 0 ? `Active for ${hrs}h ${mins}m` : `Active for ${mins}m`;
                 } else {
-                    label.textContent = 'Reset on Refresh';
+                    text = 'Reset on Refresh';
                 }
+                if (label)  label.textContent  = text;
+                if (labelM) labelM.textContent = text;
             };
 
             const refreshDrivePopupUI = () => {
@@ -649,6 +697,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             document.getElementById('btn-gdrive-disconnect')?.addEventListener('click', (e) => {
                 e.stopPropagation();
+                localStorage.removeItem('gdrive-connection-verified');
                 disconnectGDrive();
                 _updateGDriveMobileUI();
                 if (typeof window.showToast === 'function') window.showToast('Disconnected from Google Drive');
@@ -751,16 +800,67 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('btn-gdrive-sync-now')?.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 const syncBtn = document.getElementById('btn-gdrive-sync-now');
+                const statusEl = document.getElementById('drive-gdrive-verify-status');
                 try {
-                    if (syncBtn) { syncBtn.textContent = 'Syncing...'; syncBtn.disabled = true; }
-                    const data = await _getDriveData();
-                    await pushToGDrive(data);
-                    _updateGDriveMobileUI();
-                    if (typeof window.showToast === 'function') window.showToast('✅ Pushed to Google Drive');
+                    if (syncBtn) {
+                        syncBtn.innerHTML = '<svg class="vs-spin-inline" style="width:13px;height:13px;margin-right:6px;animation:vs-spin 0.9s linear infinite;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>Verifying\u2026';
+                        syncBtn.style.color       = '#3b82f6';
+                        syncBtn.style.borderColor = '#93c5fd';
+                        syncBtn.style.background  = 'rgba(59,130,246,0.06)';
+                        syncBtn.disabled = true;
+                    }
+                    if (statusEl) statusEl.style.display = 'none';
+                    const { verifyGDriveConnection } = await import('./core/driveSyncOAuth.js');
+                    const userName = await verifyGDriveConnection();
+                    _setMobileVerifiedState(true);
+                    if (statusEl) {
+                        statusEl.textContent = `✓ Connected as ${userName}`;
+                        statusEl.style.display = 'block';
+                        statusEl.style.background = 'rgba(16,185,129,0.1)';
+                        statusEl.style.color = '#059669';
+                        statusEl.style.border = '1px solid #6ee7b7';
+                    }
+                    if (typeof window.showToast === 'function') window.showToast('✅ Google Drive connected — Push & Pull unlocked');
                 } catch (err) {
-                    if (typeof window.showToast === 'function') window.showToast('❌ Sync failed: ' + err.message);
+                    _setMobileVerifiedState(false);
+                    if (syncBtn) {
+                        syncBtn.innerHTML = '<svg style="width:13px;height:13px;margin-right:6px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Connection Failed — Retry';
+                        syncBtn.style.color       = '#ef4444';
+                        syncBtn.style.borderColor = '#fecaca';
+                        syncBtn.style.background  = 'rgba(239,68,68,0.06)';
+                        syncBtn.classList.add('vs-error');
+                        setTimeout(() => syncBtn.classList.remove('vs-error'), 600);
+                    }
+                    if (statusEl) {
+                        statusEl.textContent = '⚠ ' + err.message;
+                        statusEl.style.display = 'block';
+                        statusEl.style.background = 'rgba(239,68,68,0.08)';
+                        statusEl.style.color = '#dc2626';
+                        statusEl.style.border = '1px solid #fecaca';
+                    }
+                    if (typeof window.showToast === 'function') window.showToast('❌ Cannot connect: ' + err.message);
                 } finally {
-                    if (syncBtn) { syncBtn.innerHTML = '<svg style="width:14px;height:14px;margin-right:6px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>Sync Now'; syncBtn.disabled = false; }
+                    if (syncBtn) syncBtn.disabled = false;
+                }
+            });
+
+            // ─ Mobile Push to Drive
+            document.getElementById('btn-gdrive-push-data')?.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const pushBtn = document.getElementById('btn-gdrive-push-data');
+                if (!confirm('Push local data to Google Drive?\n\nThis will overwrite files in the selected Drive folder. Continue?')) return;
+                try {
+                    if (pushBtn) { pushBtn.disabled = true; pushBtn.classList.add('vs-syncing'); }
+                    const data = await _getDriveData();
+                    const ok = await pushToGDrive(data);
+                    if (pushBtn) { pushBtn.classList.remove('vs-syncing'); pushBtn.classList.add('vs-success'); setTimeout(() => pushBtn.classList.remove('vs-success'), 900); }
+                    if (ok && typeof window.showToast === 'function') window.showToast('✅ Pushed to Google Drive');
+                    _updateGDriveMobileUI();
+                } catch (err) {
+                    if (pushBtn) { pushBtn.classList.remove('vs-syncing'); pushBtn.classList.add('vs-error'); setTimeout(() => pushBtn.classList.remove('vs-error'), 600); }
+                    if (typeof window.showToast === 'function') window.showToast('❌ Push failed: ' + err.message);
+                } finally {
+                    if (pushBtn) pushBtn.disabled = false;
                 }
             });
 
@@ -799,12 +899,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
             document.getElementById('btn-gdrive-pull-data')?.addEventListener('click', async (e) => {
                 e.stopPropagation();
+                const pullBtn = document.getElementById('btn-gdrive-pull-data');
                 if (!confirm('Pull data from Google Drive?\n\nThis will overwrite local data with Drive files. Page will reload.')) return;
                 try {
+                    if (pullBtn) { pullBtn.disabled = true; pullBtn.classList.add('vs-syncing'); }
                     const pulled = await pullFromGDrive();
-                    if (pulled) await _applyPulledData(pulled);
+                    if (pulled) {
+                        if (pullBtn) { pullBtn.classList.remove('vs-syncing'); pullBtn.classList.add('vs-success'); }
+                        await _applyPulledData(pulled);
+                    }
                 } catch (err) {
+                    if (pullBtn) { pullBtn.classList.remove('vs-syncing'); pullBtn.classList.add('vs-error'); setTimeout(() => pullBtn.classList.remove('vs-error'), 600); }
                     if (typeof window.showToast === 'function') window.showToast('❌ Pull failed: ' + err.message);
+                } finally {
+                    if (pullBtn) pullBtn.disabled = false;
                 }
             });
 
@@ -841,6 +949,30 @@ document.addEventListener('DOMContentLoaded', () => {
                 e.stopPropagation();
                 localStorage.removeItem('drive-stay-active-expiry');
                 const input = document.getElementById('drive-stay-active-input');
+                if (input) input.value = '';
+                updateDriveStayActiveLabel();
+            });
+
+            // ─ Stay Active After Refresh — Mobile
+            document.getElementById('btn-drive-stay-active-set-mobile')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const raw = (document.getElementById('drive-stay-active-input-mobile')?.value ?? '').toLowerCase().trim();
+                let ms = 0;
+                if (raw.endsWith('m'))         ms = parseFloat(raw) * 60 * 1000;
+                else if (raw.endsWith('h'))    ms = parseFloat(raw) * 60 * 60 * 1000;
+                else if (parseFloat(raw) > 0)  ms = parseFloat(raw) * 60 * 60 * 1000;
+                if (ms > 0) {
+                    localStorage.setItem('drive-stay-active-expiry', String(Date.now() + ms));
+                    updateDriveStayActiveLabel();
+                    const setBtn = document.getElementById('btn-drive-stay-active-set-mobile');
+                    if (setBtn) { setBtn.classList.add('flash-confirm'); setTimeout(() => setBtn.classList.remove('flash-confirm'), 500); }
+                }
+            });
+
+            document.getElementById('btn-drive-stay-active-off-mobile')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                localStorage.removeItem('drive-stay-active-expiry');
+                const input = document.getElementById('drive-stay-active-input-mobile');
                 if (input) input.value = '';
                 updateDriveStayActiveLabel();
             });

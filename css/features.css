@@ -2087,6 +2087,69 @@ label[for="drive-merge-mode"],
     background: #10b981 !important;
 }
 
+/* ═══════════════════════════════════════════════════
+   📱  VAULT SYNC — Mobile Button Animations
+   ═══════════════════════════════════════════════════ */
+
+/* ── Button press feel ── */
+#btn-gdrive-sync-now,
+#btn-gdrive-push-data,
+#btn-gdrive-pull-data {
+    transition: transform 0.12s ease, box-shadow 0.2s ease, background 0.2s ease !important;
+}
+#btn-gdrive-sync-now:active,
+#btn-gdrive-push-data:active,
+#btn-gdrive-pull-data:active {
+    transform: scale(0.92) !important;
+}
+
+/* ── SYNCING state ── */
+#btn-gdrive-sync-now.vs-syncing svg,
+#btn-gdrive-push-data.vs-syncing svg,
+#btn-gdrive-pull-data.vs-syncing svg {
+    animation: vs-spin 0.9s linear infinite;
+}
+
+/* ── SUCCESS state ── */
+#btn-gdrive-sync-now.vs-success {
+    background: rgba(16, 185, 129, 0.15) !important;
+    border-color: #10b981 !important;
+    animation: vs-success-pop 0.5s ease-out;
+}
+#btn-gdrive-push-data.vs-success {
+    background: rgba(59, 130, 246, 0.15) !important;
+    border-color: #3b82f6 !important;
+    animation: vs-success-pop-blue 0.5s ease-out;
+}
+#btn-gdrive-pull-data.vs-success {
+    background: rgba(16, 185, 129, 0.15) !important;
+    border-color: #10b981 !important;
+    animation: vs-success-pop 0.5s ease-out;
+}
+
+/* ── ERROR state: shake ── */
+#btn-gdrive-sync-now.vs-error,
+#btn-gdrive-push-data.vs-error,
+#btn-gdrive-pull-data.vs-error {
+    animation: vs-shake 0.45s ease;
+}
+
+/* ── LOCKED state: Push & Pull before verification ── */
+#btn-gdrive-push-data.vs-locked,
+#btn-gdrive-pull-data.vs-locked {
+    opacity: 0.35 !important;
+    pointer-events: none !important;
+    cursor: not-allowed !important;
+    filter: grayscale(0.4);
+    position: relative;
+}
+
+@keyframes vs-success-pop-blue {
+    0%   { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.45); }
+    40%  { box-shadow: 0 0 0 7px rgba(59, 130, 246, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+}
+
 /* ── @keyframes ── */
 @keyframes vs-spin {
     from { transform: rotate(0deg); }

@@ -309,20 +309,23 @@
             </div>
             <!-- Divider -->
             <div style="width:100%; height:1px; background:var(--border-color); opacity:0.5;"></div>
-            <!-- Sync Now -->
-            <button id="btn-gdrive-sync-now" class="btn btn-primary" style="width:100%; justify-content:center; padding:8px; font-size:12px; font-weight:700; display:none;">
-              <svg style="width:14px;height:14px;margin-right:6px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
-              Sync Now
+            <!-- Connect & Verify -->
+            <button id="btn-gdrive-sync-now" class="btn btn-outline" style="width:100%; justify-content:center; padding:8px; font-size:11px; font-weight:700; display:none; transition:all 0.25s ease; color:#94a3b8; border-color:var(--border-color);">
+              <svg style="width:13px;height:13px;margin-right:6px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+              Connect &amp; Verify
             </button>
-            <!-- Pull from Drive -->
-            <button id="btn-gdrive-pull-data" class="btn btn-outline" style="width:100%; justify-content:center; padding:6px; font-size:11px; display:none;">
-              <svg style="width:12px;height:12px;margin-right:5px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
-              Pull from Drive &#8595;
-            </button>
-            <!-- Force actions (mobile) -->
-            <div style="display:flex; gap:8px; width:100%;">
-              <button id="btn-gdrive-force-push" class="btn btn-outline" style="flex:1; justify-content:center; padding:6px; font-size:11px; display:none;">Force Push ↑</button>
-              <button id="btn-gdrive-force-pull" class="btn btn-outline" style="flex:1; justify-content:center; padding:6px; font-size:11px; display:none;">Force Pull ↓</button>
+            <!-- Verify status badge -->
+            <div id="drive-gdrive-verify-status" style="display:none; width:100%; padding:5px 10px; border-radius:6px; font-size:10px; font-weight:700; text-align:center; box-sizing:border-box;"></div>
+            <!-- Push ↑ / Pull ↓ (like Desktop) -->
+            <div id="drive-gdrive-pushpull-row" style="display:none; gap:8px; width:100%;">
+              <button id="btn-gdrive-push-data" class="btn btn-outline" style="flex:1; justify-content:center; padding:6px; font-size:11px; font-weight:700; color:#3b82f6; border-color:#93c5fd; transition:transform 0.12s ease, box-shadow 0.2s ease, background 0.2s ease;">
+                <svg style="width:12px;height:12px;margin-right:5px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+                Push ↑
+              </button>
+              <button id="btn-gdrive-pull-data" class="btn btn-outline" style="flex:1; justify-content:center; padding:6px; font-size:11px; font-weight:700; color:#10b981; border-color:#6ee7b7; transition:transform 0.12s ease, box-shadow 0.2s ease, background 0.2s ease;">
+                <svg style="width:12px;height:12px;margin-right:5px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+                Pull ↓
+              </button>
             </div>
 
             <!-- Reminders toggle (mobile) -->
@@ -332,6 +335,21 @@
             </div>
             <!-- Last sync -->
             <div id="drive-gdrive-last-sync" style="font-size:9px; color:var(--text-muted); text-align:center; width:100%; display:none;">Last Synced: Never</div>
+            <!-- Stay Active After Refresh (mobile) -->
+            <div style="width: 100%; height: 1px; background: var(--border-color); opacity: 0.5;"></div>
+            <div style="width:100%; display:flex; flex-direction:column; gap:6px;">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-size:10px; font-weight:800; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">Stay Active After Refresh</span>
+                <span id="drive-stay-active-label-mobile" style="font-size:10px; font-weight:700; color:var(--primary-color);"></span>
+              </div>
+              <div style="display:flex; gap:5px; align-items:center;">
+                <div style="flex:1; display:flex; align-items:center; height:30px;">
+                  <input type="text" id="drive-stay-active-input-mobile" placeholder="30m or 1h" style="width:100%; height:100%; padding:0 10px; font-size:12px; font-weight:800; border-radius:6px; border:1.5px solid var(--border-color); background:var(--bg-body); color:var(--text-main); outline:none; box-sizing:border-box;">
+                </div>
+                <button class="btn btn-primary" id="btn-drive-stay-active-set-mobile" style="height:30px; padding:0 12px; font-size:10px; border-radius:6px; font-weight:800; justify-content:center; flex-shrink:0;">Set</button>
+                <button class="btn btn-outline" id="btn-drive-stay-active-off-mobile" style="height:30px; padding:0 10px; font-size:10px; color:#ef4444; border-color:#fecaca; border-radius:6px; font-weight:800; justify-content:center; flex-shrink:0;">Off</button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
