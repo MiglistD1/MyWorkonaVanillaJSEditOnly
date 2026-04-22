@@ -209,8 +209,8 @@
             <div style="font-size: 10px; color: #dc2626; font-weight: 700;">⚠ Vault is newer than local data</div>
             <div style="font-size: 9px; color: var(--text-muted);">Vault updated: <span id="drive-conflict-vault-time">—</span></div>
             <div style="display: flex; gap: 6px;">
-              <button id="btn-drive-conflict-pull" class="btn btn-outline" style="flex: 1; justify-content: center; font-size: 10px; padding: 4px; color: #10b981; border-color: #6ee7b7;">Pull ↓</button>
-              <button id="btn-drive-conflict-force-push" class="btn btn-outline" style="flex: 1; justify-content: center; font-size: 10px; padding: 4px; color: #ef4444; border-color: #fecaca;">Force Push ↑</button>
+              <button id="btn-drive-conflict-pull" class="btn btn-outline" style="flex: 1; justify-content: center; font-size: 10px; padding: 4px; color: #10b981; border-color: #6ee7b7;">Pull</button>
+              <button id="btn-drive-conflict-force-push" class="btn btn-outline" style="flex: 1; justify-content: center; font-size: 10px; padding: 4px; color: #ef4444; border-color: #fecaca;">Force Push</button>
             </div>
           </div>
           <!-- Reminders toggle -->
@@ -239,8 +239,8 @@
           <div style="width: 100%; height: 1px; background: var(--border-color); opacity: 0.5;"></div>
           <!-- Push / Pull -->
           <div style="display: flex; gap: 8px; width: 100%;">
-            <button id="btn-drive-push" class="btn btn-outline vs-locked" title="Push local → vault" style="flex: 1; justify-content: center; padding: 6px; font-size: 11px; font-weight:700; color:#3b82f6; border-color:#93c5fd;"><svg style="width:12px;height:12px;margin-right:4px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg> Push ↑</button>
-            <button id="btn-drive-pull" class="btn btn-outline vs-locked" title="Pull vault → local" style="flex: 1; justify-content: center; padding: 6px; font-size: 11px; font-weight:700; color:#10b981; border-color:#6ee7b7;"><svg style="width:12px;height:12px;margin-right:4px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg> Pull ↓</button>
+            <button id="btn-drive-push" class="btn btn-outline vs-locked" title="Push local → vault" style="flex: 1; justify-content: center; padding: 6px; font-size: 11px; font-weight:700; color:#3b82f6; border-color:#93c5fd;"><svg style="width:12px;height:12px;margin-right:4px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg> Push</button>
+            <button id="btn-drive-pull" class="btn btn-outline vs-locked" title="Pull vault → local" style="flex: 1; justify-content: center; padding: 6px; font-size: 11px; font-weight:700; color:#10b981; border-color:#6ee7b7;"><svg style="width:12px;height:12px;margin-right:4px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg> Pull</button>
           </div>
           <!-- Divider -->
           <div style="width: 100%; height: 1px; background: var(--border-color); opacity: 0.5;"></div>
@@ -248,15 +248,15 @@
           <div style="width:100%; display:flex; flex-direction:column; gap:5px;">
             <span style="font-size:10px; font-weight:700; color:#ef4444; opacity:0.85; text-transform:uppercase; letter-spacing:0.3px;">⚠️ Force Sync</span>
             <div style="display:flex; gap:6px; width:100%;">
-              <button id="btn-drive-force-push" class="btn btn-outline" title="Force Push — write local to vault, no merge" style="flex:1; justify-content:center; padding:5px; font-size:10px; font-weight:700; color:#3b82f6; border-color:#93c5fd;"><svg style="width:12px;height:12px;margin-right:4px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg> Force Push ↑</button>
-              <button id="btn-drive-force-pull" class="btn btn-outline" title="Force Pull — load vault to local, no merge" style="flex:1; justify-content:center; padding:5px; font-size:10px; font-weight:700; color:#10b981; border-color:#6ee7b7;"><svg style="width:12px;height:12px;margin-right:4px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg> Force Pull ↓</button>
+              <button id="btn-drive-force-push" class="btn btn-outline" title="Force Push — write local to vault, no merge" style="flex:1; justify-content:center; padding:5px; font-size:10px; font-weight:700; color:#3b82f6; border-color:#93c5fd;"><svg style="width:12px;height:12px;margin-right:4px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg> Force Push</button>
+              <button id="btn-drive-force-pull" class="btn btn-outline" title="Force Pull — load vault to local, no merge" style="flex:1; justify-content:center; padding:5px; font-size:10px; font-weight:700; color:#10b981; border-color:#6ee7b7;"><svg style="width:12px;height:12px;margin-right:4px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg> Force Pull</button>
             </div>
           </div>
           <div style="width:100%; display:flex; flex-direction:column; gap:5px;">
             <span style="font-size:10px; font-weight:700; color:#7c3aed; opacity:0.9; text-transform:uppercase; letter-spacing:0.3px;">รีเซ็ตปลายทาง</span>
             <div style="display:flex; gap:6px; width:100%;">
-              <button id="btn-drive-reset-push" class="btn btn-outline vs-locked" title="ล้างไฟล์ Vault ของแอป แล้วเอาข้อมูลจาก Webapp ปัจจุบันทับลงใหม่ทั้งหมด" style="flex:1; justify-content:center; padding:5px; font-size:10px; font-weight:800; color:#2563eb; border-color:#93c5fd; line-height:1.25;"><svg style="width:12px;height:12px;margin-right:4px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg> Force Push <br> ล้างของเก่า ↑</button>
-              <button id="btn-drive-reset-pull" class="btn btn-outline vs-locked" title="ล้างข้อมูลใน Webapp เครื่องนี้ แล้วดึงข้อมูลจาก Vault มาทับใหม่ทั้งหมด" style="flex:1; justify-content:center; padding:5px; font-size:10px; font-weight:800; color:#059669; border-color:#6ee7b7; line-height:1.25;"><svg style="width:12px;height:12px;margin-right:4px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg> Force Pull <br> ล้างของเก่า ↓</button>
+              <button id="btn-drive-reset-push" class="btn btn-outline vs-locked" title="ล้างไฟล์ Vault ของแอป แล้วเอาข้อมูลจาก Webapp ปัจจุบันทับลงใหม่ทั้งหมด" style="flex:1; justify-content:center; padding:5px; font-size:10px; font-weight:800; color:#2563eb; border-color:#93c5fd; line-height:1.25;"><svg style="width:12px;height:12px;margin-right:4px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg> Force Push <br> ล้างของเก่า</button>
+              <button id="btn-drive-reset-pull" class="btn btn-outline vs-locked" title="ล้างข้อมูลใน Webapp เครื่องนี้ แล้วดึงข้อมูลจาก Vault มาทับใหม่ทั้งหมด" style="flex:1; justify-content:center; padding:5px; font-size:10px; font-weight:800; color:#059669; border-color:#6ee7b7; line-height:1.25;"><svg style="width:12px;height:12px;margin-right:4px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg> Force Pull <br> ล้างของเก่า</button>
             </div>
           </div>
           <!-- ── Stay Active After Refresh ─────────────────────────────── -->
@@ -336,22 +336,22 @@
               </button>
               <button id="btn-gdrive-pull-data" class="btn btn-outline" style="flex:1; justify-content:center; padding:6px; font-size:11px; font-weight:700; color:#10b981; border-color:#6ee7b7; transition:transform 0.12s ease, box-shadow 0.2s ease, background 0.2s ease;">
                 <svg style="width:12px;height:12px;margin-right:4px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
-                Pull ↓
+                Pull 
               </button>
             </div>
             <!-- ⚠️ Force Sync (mobile) -->
             <div style="width:100%; display:flex; flex-direction:column; gap:5px;">
               <span style="font-size:10px; font-weight:700; color:#ef4444; opacity:0.85; text-transform:uppercase; letter-spacing:0.3px;">⚠️ Force Sync</span>
               <div style="display:flex; gap:6px; width:100%;">
-                <button id="btn-gdrive-force-push" class="btn btn-outline" title="Force Push — overwrite Drive with local, no merge" style="flex:1; justify-content:center; padding:5px; font-size:10px; font-weight:700; color:#3b82f6; border-color:#93c5fd;"><svg style="width:12px;height:12px;margin-right:4px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg> Force Push ↑</button>
-                <button id="btn-gdrive-force-pull" class="btn btn-outline" title="Force Pull — overwrite local with Drive, no merge" style="flex:1; justify-content:center; padding:5px; font-size:10px; font-weight:700; color:#10b981; border-color:#6ee7b7;"><svg style="width:12px;height:12px;margin-right:4px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg> Force Pull ↓</button>
+                <button id="btn-gdrive-force-push" class="btn btn-outline" title="Force Push — overwrite Drive with local, no merge" style="flex:1; justify-content:center; padding:5px; font-size:10px; font-weight:700; color:#3b82f6; border-color:#93c5fd;"><svg style="width:12px;height:12px;margin-right:4px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg> Force Push</button>
+                <button id="btn-gdrive-force-pull" class="btn btn-outline" title="Force Pull — overwrite local with Drive, no merge" style="flex:1; justify-content:center; padding:5px; font-size:10px; font-weight:700; color:#10b981; border-color:#6ee7b7;"><svg style="width:12px;height:12px;margin-right:4px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg> Force Pull</button>
               </div>
             </div>
             <div style="width:100%; display:flex; flex-direction:column; gap:5px;">
               <span style="font-size:10px; font-weight:700; color:#7c3aed; opacity:0.9; text-transform:uppercase; letter-spacing:0.3px;">รีเซ็ตปลายทาง</span>
               <div style="display:flex; gap:6px; width:100%;">
-                <button id="btn-gdrive-reset-push" class="btn btn-outline vs-locked" title="ล้างไฟล์ Vault ของแอปใน Google Drive แล้วเอาข้อมูลจาก Webapp ปัจจุบันทับลงใหม่ทั้งหมด" style="flex:1; justify-content:center; padding:5px; font-size:10px; font-weight:800; color:#2563eb; border-color:#93c5fd; line-height:1.25;"><svg style="width:12px;height:12px;margin-right:4px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg> ล้าง Vault เอา Webapp ทับ<br>Force Push ล้างของเก่า ↑</button>
-                <button id="btn-gdrive-reset-pull" class="btn btn-outline vs-locked" title="ล้างข้อมูลใน Webapp เครื่องนี้ แล้วดึงข้อมูลจาก Google Drive มาทับใหม่ทั้งหมด" style="flex:1; justify-content:center; padding:5px; font-size:10px; font-weight:800; color:#059669; border-color:#6ee7b7; line-height:1.25;"><svg style="width:12px;height:12px;margin-right:4px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg> ล้าง Webapp เอา Vault ทับ<br>Force Pull ล้างของเก่า ↓</button>
+                <button id="btn-gdrive-reset-push" class="btn btn-outline vs-locked" title="ล้างไฟล์ Vault ของแอปใน Google Drive แล้วเอาข้อมูลจาก Webapp ปัจจุบันทับลงใหม่ทั้งหมด" style="flex:1; justify-content:center; padding:5px; font-size:10px; font-weight:800; color:#2563eb; border-color:#93c5fd; line-height:1.25;"><svg style="width:12px;height:12px;margin-right:4px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg> Force Push <br>ล้างของเก่า</button>
+                <button id="btn-gdrive-reset-pull" class="btn btn-outline vs-locked" title="ล้างข้อมูลใน Webapp เครื่องนี้ แล้วดึงข้อมูลจาก Google Drive มาทับใหม่ทั้งหมด" style="flex:1; justify-content:center; padding:5px; font-size:10px; font-weight:800; color:#059669; border-color:#6ee7b7; line-height:1.25;"><svg style="width:12px;height:12px;margin-right:4px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg> Force Pull <br>ล้างของเก่า </button>
               </div>
             </div>
 
@@ -465,10 +465,10 @@
                 </div>
                 <div style="display:flex; gap:6px; width:100%;">
                   <button id="btn-force-push" class="btn btn-outline" title="Force Push — เขียน Local ทับ Cloud (ไม่มี merge)" style="flex:1; justify-content:center; padding:5px; font-size:10px; font-weight:700; color:#3b82f6; border-color:#93c5fd;">
-                    <svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg> Force Push ↑
+                    <svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg> Force Push
                   </button>
                   <button id="btn-force-pull" class="btn btn-outline" title="Force Pull — ดึง Cloud มาทับ Local (ไม่มี merge)" style="flex:1; justify-content:center; padding:5px; font-size:10px; font-weight:700; color:#10b981; border-color:#6ee7b7;">
-                    <svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg> Force Pull ↓
+                    <svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg> Force Pull
                   </button>
                 </div>
               </div>
