@@ -2134,6 +2134,41 @@ label[for="drive-merge-mode"],
     animation: vs-shake 0.45s ease;
 }
 
+/* ── Force Sync buttons — Desktop & Mobile ── */
+#btn-drive-push.vs-syncing svg,
+#btn-drive-pull.vs-syncing svg,
+#btn-drive-force-push.vs-syncing svg,
+#btn-drive-force-pull.vs-syncing svg,
+#btn-gdrive-force-push.vs-syncing svg,
+#btn-gdrive-force-pull.vs-syncing svg {
+    animation: vs-spin 0.9s linear infinite;
+}
+
+#btn-drive-push.vs-success,
+#btn-drive-force-push.vs-success,
+#btn-gdrive-force-push.vs-success {
+    background: rgba(59, 130, 246, 0.15) !important;
+    border-color: #3b82f6 !important;
+    animation: vs-success-pop-blue 0.5s ease-out;
+}
+
+#btn-drive-pull.vs-success,
+#btn-drive-force-pull.vs-success,
+#btn-gdrive-force-pull.vs-success {
+    background: rgba(16, 185, 129, 0.15) !important;
+    border-color: #10b981 !important;
+    animation: vs-success-pop 0.5s ease-out;
+}
+
+#btn-drive-push.vs-error,
+#btn-drive-pull.vs-error,
+#btn-drive-force-push.vs-error,
+#btn-drive-force-pull.vs-error,
+#btn-gdrive-force-push.vs-error,
+#btn-gdrive-force-pull.vs-error {
+    animation: vs-shake 0.45s ease;
+}
+
 /* ── LOCKED state: Push & Pull before verification ── */
 #btn-drive-push.vs-locked,
 #btn-drive-pull.vs-locked,

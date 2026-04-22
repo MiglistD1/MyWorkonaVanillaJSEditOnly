@@ -1051,8 +1051,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
 
-            // Mobile GDrive auto-sync interval (every 5 minutes when connected)
-            setInterval(async () => {
+            // Mobile GDrive auto-sync — dynamic interval from user preference
+            const LS_MOBILE_INTERVAL = 'gdrive-mobile-interval-ms';
+            const DEFAULT_MOBILE_INTERVAL = 5 * 60 * 1000;
+            let _mobileIntervalId = null;
+
+            const _mobileAutoSyncTick = async () => {
                 if (localStorage.getItem('drive-device-mode') !== 'mobile') return;
                 if (localStorage.getItem('drive-sync-enabled') === 'false') return;
                 if (!isGDriveConnected() || !getGDriveFolderId()) return;
@@ -1061,7 +1065,27 @@ document.addEventListener('DOMContentLoaded', () => {
                     await pushToGDrive(data);
                     _updateGDriveMobileUI();
                 } catch (e) { console.warn('[GDrive] Auto sync failed:', e); }
-            }, 5 * 60 * 1000);
+            };
+
+            const _startMobileInterval = () => {
+                if (_mobileIntervalId) clearInterval(_mobileIntervalId);
+                const ms = parseInt(localStorage.getItem(LS_MOBILE_INTERVAL) || String(DEFAULT_MOBILE_INTERVAL), 10);
+                _mobileIntervalId = setInterval(_mobileAutoSyncTick, ms);
+            };
+
+            // Init select value from saved preference
+            const mobileIntervalSelect = document.getElementById('gdrive-mobile-interval-select');
+            if (mobileIntervalSelect) {
+                const saved = localStorage.getItem(LS_MOBILE_INTERVAL) || String(DEFAULT_MOBILE_INTERVAL);
+                mobileIntervalSelect.value = saved;
+                mobileIntervalSelect.addEventListener('change', (e) => {
+                    e.stopPropagation();
+                    localStorage.setItem(LS_MOBILE_INTERVAL, mobileIntervalSelect.value);
+                    _startMobileInterval();
+                });
+            }
+
+            _startMobileInterval();
 
             // ─ Stay Active After Refresh (timed)
 

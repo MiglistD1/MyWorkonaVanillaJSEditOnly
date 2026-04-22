@@ -177,6 +177,7 @@ async function _deleteFile(fileId) {
 async function _api(path, opts = {}) {
     const token = await _ensureToken();
     const res = await fetch(`${GDRIVE_API}${path}`, {
+        cache: 'no-store',
         ...opts,
         headers: {
             'Authorization': `Bearer ${token}`,
@@ -221,6 +222,7 @@ async function _upload(metadata, jsonBody, existingFileId = null) {
 async function _readFile(fileId) {
     const token = await _ensureToken();
     const res   = await fetch(`${GDRIVE_API}/files/${fileId}?alt=media`, {
+        cache: 'no-store',
         headers: { 'Authorization': `Bearer ${token}` },
     });
     if (!res.ok) throw new Error(`Drive read ${res.status}`);
@@ -336,6 +338,10 @@ export async function pullFromGDrive() {
     const list = await _api(`/files?q=${encodeURIComponent(q)}&fields=files(id,name)&pageSize=100`);
     const files = list.files || [];
 
+    if (files.length === 0) {
+        throw new Error('No files found in Drive folder — folder may be empty or not yet synced');
+    }
+
     const result = {
         appSettings:    {},
         globalLaunchers: [],
@@ -345,16 +351,20 @@ export async function pullFromGDrive() {
     };
 
     for (const f of files) {
-        if (f.name === 'settings.json') {
-            result.appSettings = await _readFile(f.id);
-        } else if (f.name === 'global.json') {
-            const g = await _readFile(f.id);
-            result.globalLaunchers = g.globalLaunchers || [];
-            result.launcherTags    = g.launcherTags    || [];
-            result.lastSpaceId     = g.lastSpaceId     ?? null;
-        } else if (f.name.startsWith('space_') && f.name.endsWith('.json')) {
-            const space = await _readFile(f.id);
-            if (space) result.mySpacesData.push(space);
+        try {
+            if (f.name === 'settings.json') {
+                result.appSettings = await _readFile(f.id);
+            } else if (f.name === 'global.json') {
+                const g = await _readFile(f.id);
+                result.globalLaunchers = g.globalLaunchers || [];
+                result.launcherTags    = g.launcherTags    || [];
+                result.lastSpaceId     = g.lastSpaceId     ?? null;
+            } else if (f.name.startsWith('space_') && f.name.endsWith('.json')) {
+                const space = await _readFile(f.id);
+                if (space) result.mySpacesData.push(space);
+            }
+        } catch (e) {
+            console.warn(`[GDrive] Skipping unreadable file "${f.name}" (${f.id}):`, e.message);
         }
     }
 
