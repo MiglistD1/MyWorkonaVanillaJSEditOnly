@@ -2051,8 +2051,14 @@ label[for="drive-merge-mode"],
     transition: transform 0.12s ease, box-shadow 0.2s ease, background 0.2s ease !important;
     opacity: 1 !important;
 }
+#btn-drive-open-guide {
+    transition: transform 0.12s ease, box-shadow 0.2s ease, background 0.2s ease !important;
+}
 #btn-drive-sync-now-topbar:active {
     transform: scale(0.86) !important;
+}
+#btn-drive-open-guide:active {
+    transform: scale(0.9) !important;
 }
 
 /* ── SYNCING state: spin the SVG arrow ── */
@@ -2139,14 +2145,20 @@ label[for="drive-merge-mode"],
 #btn-drive-pull.vs-syncing svg,
 #btn-drive-force-push.vs-syncing svg,
 #btn-drive-force-pull.vs-syncing svg,
+#btn-drive-reset-push.vs-syncing svg,
+#btn-drive-reset-pull.vs-syncing svg,
 #btn-gdrive-force-push.vs-syncing svg,
-#btn-gdrive-force-pull.vs-syncing svg {
+#btn-gdrive-force-pull.vs-syncing svg,
+#btn-gdrive-reset-push.vs-syncing svg,
+#btn-gdrive-reset-pull.vs-syncing svg {
     animation: vs-spin 0.9s linear infinite;
 }
 
 #btn-drive-push.vs-success,
 #btn-drive-force-push.vs-success,
-#btn-gdrive-force-push.vs-success {
+#btn-drive-reset-push.vs-success,
+#btn-gdrive-force-push.vs-success,
+#btn-gdrive-reset-push.vs-success {
     background: rgba(59, 130, 246, 0.15) !important;
     border-color: #3b82f6 !important;
     animation: vs-success-pop-blue 0.5s ease-out;
@@ -2154,7 +2166,9 @@ label[for="drive-merge-mode"],
 
 #btn-drive-pull.vs-success,
 #btn-drive-force-pull.vs-success,
-#btn-gdrive-force-pull.vs-success {
+#btn-drive-reset-pull.vs-success,
+#btn-gdrive-force-pull.vs-success,
+#btn-gdrive-reset-pull.vs-success {
     background: rgba(16, 185, 129, 0.15) !important;
     border-color: #10b981 !important;
     animation: vs-success-pop 0.5s ease-out;
@@ -2164,16 +2178,28 @@ label[for="drive-merge-mode"],
 #btn-drive-pull.vs-error,
 #btn-drive-force-push.vs-error,
 #btn-drive-force-pull.vs-error,
+#btn-drive-reset-push.vs-error,
+#btn-drive-reset-pull.vs-error,
 #btn-gdrive-force-push.vs-error,
-#btn-gdrive-force-pull.vs-error {
+#btn-gdrive-force-pull.vs-error,
+#btn-gdrive-reset-push.vs-error,
+#btn-gdrive-reset-pull.vs-error {
     animation: vs-shake 0.45s ease;
 }
 
 /* ── LOCKED state: Push & Pull before verification ── */
 #btn-drive-push.vs-locked,
 #btn-drive-pull.vs-locked,
+#btn-drive-force-push.vs-locked,
+#btn-drive-force-pull.vs-locked,
+#btn-drive-reset-push.vs-locked,
+#btn-drive-reset-pull.vs-locked,
 #btn-gdrive-push-data.vs-locked,
-#btn-gdrive-pull-data.vs-locked {
+#btn-gdrive-pull-data.vs-locked,
+#btn-gdrive-force-push.vs-locked,
+#btn-gdrive-force-pull.vs-locked,
+#btn-gdrive-reset-push.vs-locked,
+#btn-gdrive-reset-pull.vs-locked {
     opacity: 0.35 !important;
     pointer-events: none !important;
     cursor: not-allowed !important;

@@ -25,6 +25,7 @@ const IDB_DB_NAME    = 'myworkona-vault';
 const IDB_STORE_NAME = 'vaultHandle';
 const IDB_KEY        = 'handle';
 const APP_VERSION    = '1.0';
+const OWNED_ROOT_FILES = ['index.json', 'settings.json', 'global.json', 'smartflow.json', 'rewards.json'];
 
 // ── Internal State ────────────────────────────────────────────────────────────
 let _dirHandle    = null;   // FileSystemDirectoryHandle (user-picked folder)
@@ -108,6 +109,61 @@ async function _deleteStaleSpaceFiles(spacesDir, currentSpaceIds) {
             }
         }
     }
+}
+
+async function _clearSpacesDir(spacesDir) {
+    for await (const [name] of spacesDir.entries()) {
+        try {
+            await spacesDir.removeEntry(name, { recursive: true });
+        } catch (err) {
+            console.warn('[DriveSync] Failed to clear spaces entry:', name, err);
+        }
+    }
+}
+
+async function _clearOwnedVaultContents(dirHandle) {
+    for (const filename of OWNED_ROOT_FILES) {
+        try {
+            await dirHandle.removeEntry(filename);
+        } catch {
+            // File may not exist yet.
+        }
+    }
+    try {
+        const spacesDir = await dirHandle.getDirectoryHandle('spaces');
+        await _clearSpacesDir(spacesDir);
+    } catch {
+        // spaces/ may not exist yet.
+    }
+}
+
+async function _writeVaultSnapshot(dirHandle, data, { clearSpacesFirst = false } = {}) {
+    await _writeJSON(dirHandle, 'index.json', { version: APP_VERSION, lastUpdated: new Date().toISOString() });
+    if (data.appSettings) {
+        await _writeJSON(dirHandle, 'settings.json', { appSettings: data.appSettings });
+    }
+    await _writeJSON(dirHandle, 'global.json', {
+        lastSpaceId:     data.lastSpaceId,
+        globalLaunchers: data.globalLaunchers ?? [],
+        launcherTags:    data.launcherTags    ?? [],
+    });
+    await _writeJSON(dirHandle, 'smartflow.json', data.smartFlowData ?? {
+        smartFlowItems: [],
+        smartFlowTags: [],
+        smartFlowFocusTimer: null,
+    });
+    await _writeJSON(dirHandle, 'rewards.json', data.rewardData ?? {});
+    const spacesDir = await _getOrCreateSubdir(dirHandle, 'spaces');
+    if (clearSpacesFirst) {
+        await _clearSpacesDir(spacesDir);
+    }
+    const currentSpaceIds = new Set();
+    for (const space of (data.mySpacesData ?? [])) {
+        if (!space?.id) continue;
+        currentSpaceIds.add(String(space.id));
+        await _writeJSON(spacesDir, `${space.id}.json`, space);
+    }
+    await _deleteStaleSpaceFiles(spacesDir, currentSpaceIds);
 }
 
 // ── Permission Helper ─────────────────────────────────────────────────────────
@@ -254,29 +310,7 @@ export async function pushToDrive(data, { fromUserGesture = false } = {}) {
     _setBtnState('syncing');
     _setBadge('Saving…', '#3b82f6');
     try {
-        await _writeJSON(_dirHandle, 'index.json', { version: APP_VERSION, lastUpdated: new Date().toISOString() });
-        if (data.appSettings) {
-            await _writeJSON(_dirHandle, 'settings.json', { appSettings: data.appSettings });
-        }
-        await _writeJSON(_dirHandle, 'global.json', {
-            lastSpaceId:     data.lastSpaceId,
-            globalLaunchers: data.globalLaunchers ?? [],
-            launcherTags:    data.launcherTags    ?? [],
-        });
-        await _writeJSON(_dirHandle, 'smartflow.json', data.smartFlowData ?? {
-            smartFlowItems: [],
-            smartFlowTags: [],
-            smartFlowFocusTimer: null,
-        });
-        await _writeJSON(_dirHandle, 'rewards.json', data.rewardData ?? {});
-        const spacesDir = await _getOrCreateSubdir(_dirHandle, 'spaces');
-        const currentSpaceIds = new Set();
-        for (const space of (data.mySpacesData ?? [])) {
-            if (!space?.id) continue;
-            currentSpaceIds.add(String(space.id));
-            await _writeJSON(spacesDir, `${space.id}.json`, space);
-        }
-        await _deleteStaleSpaceFiles(spacesDir, currentSpaceIds);
+        await _writeVaultSnapshot(_dirHandle, data);
         _dirtyFlag    = false;
         _lastSyncedAt = Date.now();
         _setBtnState('success');
@@ -312,29 +346,7 @@ export async function forcePush(data, { fromUserGesture = true } = {}) {
     _setBtnState('syncing');
     _setBadge('Force saving…', '#3b82f6');
     try {
-        await _writeJSON(_dirHandle, 'index.json', { version: APP_VERSION, lastUpdated: new Date().toISOString() });
-        if (data.appSettings) {
-            await _writeJSON(_dirHandle, 'settings.json', { appSettings: data.appSettings });
-        }
-        await _writeJSON(_dirHandle, 'global.json', {
-            lastSpaceId:     data.lastSpaceId,
-            globalLaunchers: data.globalLaunchers ?? [],
-            launcherTags:    data.launcherTags    ?? [],
-        });
-        await _writeJSON(_dirHandle, 'smartflow.json', data.smartFlowData ?? {
-            smartFlowItems: [],
-            smartFlowTags: [],
-            smartFlowFocusTimer: null,
-        });
-        await _writeJSON(_dirHandle, 'rewards.json', data.rewardData ?? {});
-        const spacesDir = await _getOrCreateSubdir(_dirHandle, 'spaces');
-        const currentSpaceIds = new Set();
-        for (const space of (data.mySpacesData ?? [])) {
-            if (!space?.id) continue;
-            currentSpaceIds.add(String(space.id));
-            await _writeJSON(spacesDir, `${space.id}.json`, space);
-        }
-        await _deleteStaleSpaceFiles(spacesDir, currentSpaceIds);
+        await _writeVaultSnapshot(_dirHandle, data);
         _dirtyFlag    = false;
         _hasConflict  = false;
         _lastSyncedAt = Date.now();
@@ -349,6 +361,44 @@ export async function forcePush(data, { fromUserGesture = true } = {}) {
         _setBtnState('error');
         _setBadge('⚠ Force Push failed', '#ef4444');
         _logHistory('forcePush', 'error');
+        return false;
+    } finally {
+        _isSyncing = false;
+    }
+}
+
+/**
+ * Clear app-owned vault files first, then rebuild the vault from the current webapp snapshot.
+ */
+export async function resetVaultAndPush(data, { fromUserGesture = true } = {}) {
+    if (!_dirHandle) { return false; }
+    if (_isSyncing) return false;
+
+    if (!(await _ensurePermission(fromUserGesture))) {
+        _setBtnState('error');
+        return false;
+    }
+
+    _isSyncing = true;
+    _setBtnState('syncing');
+    _setBadge('Resetting vault…', '#7c3aed');
+    try {
+        await _clearOwnedVaultContents(_dirHandle);
+        await _writeVaultSnapshot(_dirHandle, data, { clearSpacesFirst: true });
+        _dirtyFlag = false;
+        _hasConflict = false;
+        _lastSyncedAt = Date.now();
+        _setBtnState('success');
+        _setBadge(`✓ Reset & saved ${new Date(_lastSyncedAt).toLocaleTimeString()}`, '#10b981');
+        _updatePermBanner(false);
+        _updateConflictBanner(false);
+        _logHistory('resetPush', 'success');
+        return true;
+    } catch (err) {
+        console.error('[DriveSync] Reset Push error:', err);
+        _setBtnState('error');
+        _setBadge('⚠ Reset Push failed', '#ef4444');
+        _logHistory('resetPush', 'error');
         return false;
     } finally {
         _isSyncing = false;

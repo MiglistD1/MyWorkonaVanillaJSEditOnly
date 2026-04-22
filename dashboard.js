@@ -1,7 +1,7 @@
 import { initFocusTimer } from './features/focusTimer.js';
 import { initFirebaseSync, forcePushNote, forcePullNote, updateSyncStatusUI, handleAutoSyncActivation, switchSpaceContext, cleanupFirebaseSync, subscribeToMetadata, subscribeToSpace, forcePushToCloud, forcePullFromCloud } from "./core/firebaseSync.js";
-import { initDriveSync, markDirty as driveDirty, pushToDrive, pullFromDrive, forcePush, setupVault, startAutoSync as driveStartAutoSync, stopAutoSync as driveStopAutoSync, isDirty, getLastSyncedAt, getVaultFolderName, getHasConflict, clearConflict, getSyncHistory, clearSyncHistory } from './core/driveSync.js';
-import { initGDriveOAuth, connectGDrive, disconnectGDrive, isGDriveConnected, getGDriveFolderName, getGDriveFolderId, getGDriveLastSyncAt, listDriveFolders, selectDriveFolder, createDriveFolder, pushToGDrive, pullFromGDrive, GDRIVE_CLIENT_ID } from './core/driveSyncOAuth.js';
+import { initDriveSync, markDirty as driveDirty, pushToDrive, pullFromDrive, forcePush, resetVaultAndPush, setupVault, startAutoSync as driveStartAutoSync, stopAutoSync as driveStopAutoSync, isDirty, getLastSyncedAt, getVaultFolderName, getHasConflict, clearConflict, getSyncHistory, clearSyncHistory } from './core/driveSync.js';
+import { initGDriveOAuth, connectGDrive, disconnectGDrive, isGDriveConnected, getGDriveFolderName, getGDriveFolderId, getGDriveLastSyncAt, listDriveFolders, selectDriveFolder, createDriveFolder, pushToGDrive, resetGDriveAndPush, pullFromGDrive, GDRIVE_CLIENT_ID } from './core/driveSyncOAuth.js';
 import { setOnSaveDriveHook } from './core/storage.js';
 
 import { initScheduleMode } from './features/scheduleMode.js';
@@ -360,6 +360,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const pullBtn   = document.getElementById('btn-gdrive-pull-data');
                 const forcePushBtn = document.getElementById('btn-gdrive-force-push');
                 const forcePullBtn = document.getElementById('btn-gdrive-force-pull');
+                const resetPushBtn = document.getElementById('btn-gdrive-reset-push');
+                const resetPullBtn = document.getElementById('btn-gdrive-reset-pull');
 
                 if (verified) {
                     // Button → green "Verified" state
@@ -375,6 +377,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (pullBtn) { pullBtn.disabled = false; pullBtn.classList.remove('vs-locked'); }
                     if (forcePushBtn) { forcePushBtn.disabled = false; forcePushBtn.classList.remove('vs-locked'); }
                     if (forcePullBtn) { forcePullBtn.disabled = false; forcePullBtn.classList.remove('vs-locked'); }
+                    if (resetPushBtn) { resetPushBtn.disabled = false; resetPushBtn.classList.remove('vs-locked'); }
+                    if (resetPullBtn) { resetPullBtn.disabled = false; resetPullBtn.classList.remove('vs-locked'); }
                     // Auto-enable Sync Enabled (only on first successful verify, not on page-load restore)
                     if (!silent) {
                         const chk = document.getElementById('chk-drive-sync-enabled');
@@ -398,6 +402,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (pullBtn) { pullBtn.disabled = true; pullBtn.classList.add('vs-locked'); }
                     if (forcePushBtn) { forcePushBtn.disabled = true; forcePushBtn.classList.add('vs-locked'); }
                     if (forcePullBtn) { forcePullBtn.disabled = true; forcePullBtn.classList.add('vs-locked'); }
+                    if (resetPushBtn) { resetPushBtn.disabled = true; resetPushBtn.classList.add('vs-locked'); }
+                    if (resetPullBtn) { resetPullBtn.disabled = true; resetPullBtn.classList.add('vs-locked'); }
                 }
             };
 
@@ -498,6 +504,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const statusEl = document.getElementById('drive-desktop-verify-status');
                 const pushBtn  = document.getElementById('btn-drive-push');
                 const pullBtn  = document.getElementById('btn-drive-pull');
+                const forcePushBtn = document.getElementById('btn-drive-force-push');
+                const forcePullBtn = document.getElementById('btn-drive-force-pull');
+                const resetPushBtn = document.getElementById('btn-drive-reset-push');
+                const resetPullBtn = document.getElementById('btn-drive-reset-pull');
                 if (verified) {
                     if (syncBtn) {
                         syncBtn.style.color       = '#10b981';
@@ -508,6 +518,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (statusEl) statusEl.style.display = 'none';
                     if (pushBtn) { pushBtn.disabled = false; pushBtn.classList.remove('vs-locked'); }
                     if (pullBtn) { pullBtn.disabled = false; pullBtn.classList.remove('vs-locked'); }
+                    if (forcePushBtn) { forcePushBtn.disabled = false; forcePushBtn.classList.remove('vs-locked'); }
+                    if (forcePullBtn) { forcePullBtn.disabled = false; forcePullBtn.classList.remove('vs-locked'); }
+                    if (resetPushBtn) { resetPushBtn.disabled = false; resetPushBtn.classList.remove('vs-locked'); }
+                    if (resetPullBtn) { resetPullBtn.disabled = false; resetPullBtn.classList.remove('vs-locked'); }
                     if (!silent) _autoEnableSyncEnabled();
                 } else {
                     if (syncBtn) {
@@ -518,6 +532,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     if (pushBtn) { pushBtn.disabled = true; pushBtn.classList.add('vs-locked'); }
                     if (pullBtn) { pullBtn.disabled = true; pullBtn.classList.add('vs-locked'); }
+                    if (forcePushBtn) { forcePushBtn.disabled = true; forcePushBtn.classList.add('vs-locked'); }
+                    if (forcePullBtn) { forcePullBtn.disabled = true; forcePullBtn.classList.add('vs-locked'); }
+                    if (resetPushBtn) { resetPushBtn.disabled = true; resetPushBtn.classList.add('vs-locked'); }
+                    if (resetPullBtn) { resetPullBtn.disabled = true; resetPullBtn.classList.add('vs-locked'); }
                 }
             };
 
@@ -602,9 +620,30 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
             };
 
-            const _applyPulledData = async (data) => {
+            const _resetLocalWorkspaceStorage = async () => {
+                const keysToClear = [
+                    'mySpacesData',
+                    'lastSpaceId',
+                    'appSettings',
+                    'globalLaunchers',
+                    'launcherTags',
+                    'smartFlowItems',
+                    'smartFlowTags',
+                    'smartFlowFocusTimer',
+                    'questRewardData'
+                ];
+                keysToClear.forEach((key) => localStorage.removeItem(key));
+                if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+                    await new Promise((resolve) => chrome.storage.local.remove(keysToClear, resolve));
+                }
+            };
+
+            const _applyPulledData = async (data, { resetFirst = false } = {}) => {
                 try {
                     const { setSpaces, setCurrentSpaceId, setAppSettings, setGlobalLaunchers, setLauncherTags, saveData, saveDataItem } = await import('./core/storage.js');
+                    if (resetFirst) {
+                        await _resetLocalWorkspaceStorage();
+                    }
                     if (Array.isArray(data.mySpacesData)) setSpaces(data.mySpacesData);
                     if ('appSettings' in data) setAppSettings(data.appSettings || {});
                     if (Array.isArray(data.globalLaunchers)) setGlobalLaunchers(data.globalLaunchers);
@@ -616,8 +655,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             smartFlowFocusTimer: data.smartFlowData.smartFlowFocusTimer || null,
                         });
                     }
-                    if (data.rewardData) {
-                        await saveDataItem('questRewardData', data.rewardData);
+                    if ('rewardData' in data) {
+                        await saveDataItem('questRewardData', data.rewardData ?? null);
+                    } else if (resetFirst) {
+                        await saveDataItem('questRewardData', null);
                     }
                     const nextSpaceId = data.lastSpaceId ?? data.mySpacesData?.[0]?.id ?? 1;
                     setCurrentSpaceId(nextSpaceId);
@@ -637,6 +678,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 const isHidden = driveSyncPopup.style.display === 'none';
                 driveSyncPopup.style.display = isHidden ? 'flex' : 'none';
                 if (isHidden) { positionDrivePopup(); refreshDrivePopupUI(); }
+            });
+
+            const driveGuideModal = document.getElementById('drive-sync-guide-modal');
+            const _closeDriveGuideModal = () => {
+                if (driveGuideModal) driveGuideModal.style.display = 'none';
+            };
+
+            document.getElementById('btn-drive-open-guide')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (driveGuideModal) driveGuideModal.style.display = 'flex';
+            });
+
+            document.getElementById('btn-close-drive-guide')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                _closeDriveGuideModal();
+            });
+
+            driveGuideModal?.addEventListener('click', (e) => {
+                if (e.target === driveGuideModal) _closeDriveGuideModal();
             });
 
             window.addEventListener('resize', () => {
@@ -788,6 +848,52 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (typeof window.showToast === 'function') window.showToast('❌ Force Pull failed: ' + err.message);
                 } finally {
                     if (fpullBtn) fpullBtn.disabled = false;
+                }
+                if (driveSyncPopup) driveSyncPopup.style.display = 'none';
+            });
+
+            // ─ Reset Push (Desktop)
+            document.getElementById('btn-drive-reset-push')?.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (!confirm('⚠️ ล้าง Vault แล้วเอา Webapp ทับ?\n\nระบบจะล้างไฟล์ Vault ของแอปก่อน แล้วเขียนข้อมูลล่าสุดจาก Webapp ลงใหม่ทั้งหมด\nเหมาะตอนอยากรีเซ็ต Vault ให้สะอาดจริงๆ')) return;
+                const resetPushBtn = document.getElementById('btn-drive-reset-push');
+                try {
+                    if (resetPushBtn) { resetPushBtn.disabled = true; resetPushBtn.classList.add('vs-syncing'); }
+                    const data = await _getDriveData();
+                    await resetVaultAndPush(data, { fromUserGesture: true });
+                    clearConflict();
+                    if (resetPushBtn) { resetPushBtn.classList.remove('vs-syncing'); resetPushBtn.classList.add('vs-success'); setTimeout(() => resetPushBtn.classList.remove('vs-success'), 900); }
+                    if (typeof window.showToast === 'function') window.showToast('✅ ล้าง Vault แล้วเอา Webapp ทับเรียบร้อย');
+                    refreshDrivePopupUI();
+                } catch (err) {
+                    if (resetPushBtn) { resetPushBtn.classList.remove('vs-syncing'); resetPushBtn.classList.add('vs-error'); setTimeout(() => resetPushBtn.classList.remove('vs-error'), 600); }
+                    if (typeof window.showToast === 'function') window.showToast('❌ รีเซ็ต Vault ไม่สำเร็จ: ' + err.message);
+                } finally {
+                    if (resetPushBtn) resetPushBtn.disabled = false;
+                }
+                if (driveSyncPopup) driveSyncPopup.style.display = 'none';
+            });
+
+            // ─ Reset Pull (Desktop)
+            document.getElementById('btn-drive-reset-pull')?.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (!confirm('⚠️ ล้าง Webapp แล้วเอา Vault มาทับ?\n\nระบบจะเคลียร์ข้อมูลซิงก์ในเครื่องนี้ก่อน แล้วดึงข้อมูลจาก Vault มาลงใหม่ทั้งหมด\nหน้านี้จะรีโหลดหลังทำเสร็จ')) return;
+                const resetPullBtn = document.getElementById('btn-drive-reset-pull');
+                try {
+                    if (resetPullBtn) { resetPullBtn.disabled = true; resetPullBtn.classList.add('vs-syncing'); }
+                    const pulled = await pullFromDrive({ fromUserGesture: true });
+                    if (pulled) {
+                        if (resetPullBtn) { resetPullBtn.classList.remove('vs-syncing'); resetPullBtn.classList.add('vs-success'); }
+                        clearConflict();
+                        await _applyPulledData(pulled, { resetFirst: true });
+                    } else if (resetPullBtn) {
+                        resetPullBtn.classList.remove('vs-syncing');
+                    }
+                } catch (err) {
+                    if (resetPullBtn) { resetPullBtn.classList.remove('vs-syncing'); resetPullBtn.classList.add('vs-error'); setTimeout(() => resetPullBtn.classList.remove('vs-error'), 600); }
+                    if (typeof window.showToast === 'function') window.showToast('❌ รีเซ็ต Webapp ไม่สำเร็จ: ' + err.message);
+                } finally {
+                    if (resetPullBtn) resetPullBtn.disabled = false;
                 }
                 if (driveSyncPopup) driveSyncPopup.style.display = 'none';
             });
@@ -1073,6 +1179,50 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (typeof window.showToast === 'function') window.showToast('❌ Force Pull failed: ' + err.message);
                 } finally {
                     if (gfpullBtn) gfpullBtn.disabled = false;
+                }
+            });
+
+            // ─ Mobile Reset Push
+            document.getElementById('btn-gdrive-reset-push')?.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (!confirm('⚠️ ล้าง Drive แล้วเอา Webapp ทับ?\n\nระบบจะล้างไฟล์ซิงก์ของแอปในโฟลเดอร์ Drive นี้ก่อน แล้วเขียนข้อมูลล่าสุดจาก Webapp ลงใหม่ทั้งหมด')) return;
+                const resetPushBtn = document.getElementById('btn-gdrive-reset-push');
+                try {
+                    if (resetPushBtn) { resetPushBtn.disabled = true; resetPushBtn.classList.add('vs-syncing'); }
+                    const data = await _getDriveData();
+                    const ok = await resetGDriveAndPush(data);
+                    if (ok) _mobileDriveDirty = false;
+                    if (resetPushBtn) { resetPushBtn.classList.remove('vs-syncing'); resetPushBtn.classList.add('vs-success'); setTimeout(() => resetPushBtn.classList.remove('vs-success'), 900); }
+                    if (ok && typeof window.showToast === 'function') window.showToast('✅ ล้าง Drive แล้วเอา Webapp ทับเรียบร้อย');
+                    _updateGDriveMobileUI();
+                } catch (err) {
+                    if (resetPushBtn) { resetPushBtn.classList.remove('vs-syncing'); resetPushBtn.classList.add('vs-error'); setTimeout(() => resetPushBtn.classList.remove('vs-error'), 600); }
+                    if (typeof window.showToast === 'function') window.showToast('❌ รีเซ็ต Drive ไม่สำเร็จ: ' + err.message);
+                } finally {
+                    if (resetPushBtn) resetPushBtn.disabled = false;
+                }
+            });
+
+            // ─ Mobile Reset Pull
+            document.getElementById('btn-gdrive-reset-pull')?.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (!confirm('⚠️ ล้าง Webapp แล้วเอา Drive มาทับ?\n\nระบบจะเคลียร์ข้อมูลซิงก์ในเครื่องนี้ก่อน แล้วดึงข้อมูลจาก Drive มาลงใหม่ทั้งหมด\nหน้านี้จะรีโหลดหลังทำเสร็จ')) return;
+                const resetPullBtn = document.getElementById('btn-gdrive-reset-pull');
+                try {
+                    if (resetPullBtn) { resetPullBtn.disabled = true; resetPullBtn.classList.add('vs-syncing'); }
+                    const pulled = await pullFromGDrive();
+                    if (pulled) {
+                        if (resetPullBtn) { resetPullBtn.classList.remove('vs-syncing'); resetPullBtn.classList.add('vs-success'); }
+                        if (typeof window.showToast === 'function') window.showToast('✅ ล้าง Webapp แล้วเอา Drive มาทับเรียบร้อย');
+                        await _applyPulledData(pulled, { resetFirst: true });
+                    } else if (resetPullBtn) {
+                        resetPullBtn.classList.remove('vs-syncing');
+                    }
+                } catch (err) {
+                    if (resetPullBtn) { resetPullBtn.classList.remove('vs-syncing'); resetPullBtn.classList.add('vs-error'); setTimeout(() => resetPullBtn.classList.remove('vs-error'), 600); }
+                    if (typeof window.showToast === 'function') window.showToast('❌ รีเซ็ต Webapp ไม่สำเร็จ: ' + err.message);
+                } finally {
+                    if (resetPullBtn) resetPullBtn.disabled = false;
                 }
             });
 

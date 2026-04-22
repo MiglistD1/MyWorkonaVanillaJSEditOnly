@@ -6,6 +6,7 @@ const GDRIVE_UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3';
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
 const APP_VERSION = '1.0';
 const SPACES_DIR_NAME = 'spaces';
+const OWNED_ROOT_FILES = new Set(['index.json', 'settings.json', 'global.json', 'smartflow.json', 'rewards.json']);
 
 const LS_TOKEN = 'gdrive-oauth-token';
 const LS_TOKEN_EXPIRY = 'gdrive-oauth-expiry';
@@ -262,6 +263,83 @@ async function _upsertJsonFile(parentId, name, payload) {
     return saved;
 }
 
+async function _deleteFolderTree(folderId) {
+    const files = await _listFiles(folderId);
+    for (const file of files) {
+        if (file.mimeType === FOLDER_MIME) {
+            await _deleteFolderTree(file.id);
+        } else {
+            await _deleteFile(file.id);
+        }
+    }
+    await _deleteFile(folderId);
+}
+
+async function _clearOwnedVaultContents() {
+    if (!_folderId) throw new Error('No vault folder selected');
+
+    const rootFiles = await _listFiles(_folderId);
+    for (const file of rootFiles) {
+        if (file.mimeType === FOLDER_MIME && file.name === SPACES_DIR_NAME) {
+            await _deleteFolderTree(file.id);
+            continue;
+        }
+        if (OWNED_ROOT_FILES.has(file.name)) {
+            await _deleteFile(file.id);
+            continue;
+        }
+        if (file.name.startsWith('space_') && file.name.endsWith('.json')) {
+            await _deleteFile(file.id);
+        }
+    }
+}
+
+async function _writeSnapshotToGDrive(data) {
+    const spacesDir = await _ensureChildFolder(SPACES_DIR_NAME, _folderId);
+
+    await _upsertJsonFile(_folderId, 'index.json', {
+        version: APP_VERSION,
+        lastUpdated: new Date().toISOString(),
+    });
+    await _upsertJsonFile(_folderId, 'settings.json', {
+        appSettings: data.appSettings || {},
+    });
+    await _upsertJsonFile(_folderId, 'global.json', {
+        globalLaunchers: data.globalLaunchers || [],
+        launcherTags: data.launcherTags || [],
+        lastSpaceId: data.lastSpaceId ?? null,
+    });
+    await _upsertJsonFile(_folderId, 'smartflow.json', data.smartFlowData || {
+        smartFlowItems: [],
+        smartFlowTags: [],
+        smartFlowFocusTimer: null,
+    });
+    await _upsertJsonFile(_folderId, 'rewards.json', data.rewardData || {});
+
+    const currentSpaceIds = new Set();
+    for (const space of (data.mySpacesData || [])) {
+        if (!space?.id) continue;
+        currentSpaceIds.add(String(space.id));
+        await _upsertJsonFile(spacesDir.id, `${space.id}.json`, space);
+    }
+
+    const currentSpaceFiles = await _listFiles(spacesDir.id);
+    for (const file of currentSpaceFiles) {
+        if (!file.name.endsWith('.json')) continue;
+        const spaceId = file.name.slice(0, -5);
+        if (!currentSpaceIds.has(spaceId)) {
+            await _deleteFile(file.id);
+        }
+    }
+
+    const rootFiles = await _listFiles(_folderId);
+    for (const file of rootFiles) {
+        if (file.name.startsWith('space_') && file.name.endsWith('.json')) {
+            await _deleteFile(file.id);
+        }
+    }
+}
+
 export async function listDriveFolders() {
     const q = `mimeType='${FOLDER_MIME}' and trashed=false`;
     const data = await _api(`/files?q=${encodeURIComponent(q)}&fields=files(id,name)&orderBy=name&pageSize=50`);
@@ -319,51 +397,15 @@ export async function createDriveFolder(name) {
 
 async function _pushToGDriveImpl(data) {
     if (!_folderId) throw new Error('No vault folder selected');
+    await _writeSnapshotToGDrive(data);
+    localStorage.setItem(LS_LAST_SYNC, String(Date.now()));
+    return true;
+}
 
-    const spacesDir = await _ensureChildFolder(SPACES_DIR_NAME, _folderId);
-
-    await _upsertJsonFile(_folderId, 'index.json', {
-        version: APP_VERSION,
-        lastUpdated: new Date().toISOString(),
-    });
-    await _upsertJsonFile(_folderId, 'settings.json', {
-        appSettings: data.appSettings || {},
-    });
-    await _upsertJsonFile(_folderId, 'global.json', {
-        globalLaunchers: data.globalLaunchers || [],
-        launcherTags: data.launcherTags || [],
-        lastSpaceId: data.lastSpaceId ?? null,
-    });
-    await _upsertJsonFile(_folderId, 'smartflow.json', data.smartFlowData || {
-        smartFlowItems: [],
-        smartFlowTags: [],
-        smartFlowFocusTimer: null,
-    });
-    await _upsertJsonFile(_folderId, 'rewards.json', data.rewardData || {});
-
-    const currentSpaceIds = new Set();
-    for (const space of (data.mySpacesData || [])) {
-        if (!space?.id) continue;
-        currentSpaceIds.add(String(space.id));
-        await _upsertJsonFile(spacesDir.id, `${space.id}.json`, space);
-    }
-
-    const currentSpaceFiles = await _listFiles(spacesDir.id);
-    for (const file of currentSpaceFiles) {
-        if (!file.name.endsWith('.json')) continue;
-        const spaceId = file.name.slice(0, -5);
-        if (!currentSpaceIds.has(spaceId)) {
-            await _deleteFile(file.id);
-        }
-    }
-
-    const rootFiles = await _listFiles(_folderId);
-    for (const file of rootFiles) {
-        if (file.name.startsWith('space_') && file.name.endsWith('.json')) {
-            await _deleteFile(file.id);
-        }
-    }
-
+async function _resetGDriveAndPushImpl(data) {
+    if (!_folderId) throw new Error('No vault folder selected');
+    await _clearOwnedVaultContents();
+    await _writeSnapshotToGDrive(data);
     localStorage.setItem(LS_LAST_SYNC, String(Date.now()));
     return true;
 }
@@ -371,6 +413,14 @@ async function _pushToGDriveImpl(data) {
 export async function pushToGDrive(data) {
     if (_pushInFlight) return _pushInFlight;
     _pushInFlight = _pushToGDriveImpl(data).finally(() => {
+        _pushInFlight = null;
+    });
+    return _pushInFlight;
+}
+
+export async function resetGDriveAndPush(data) {
+    if (_pushInFlight) return _pushInFlight;
+    _pushInFlight = _resetGDriveAndPushImpl(data).finally(() => {
         _pushInFlight = null;
     });
     return _pushInFlight;

@@ -168,7 +168,10 @@
         <!-- ── Vault Sync Popup ─────────────────────────────────────────────── -->
         <div id="drive-sync-popup" class="dropdown-menu" style="display: none; top: 115%; right: 0; min-width: 260px; padding: 12px; flex-direction: column; gap: 10px; align-items: center;">
           <!-- Header -->
-          <div style="font-size: 10px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; width: 100%; text-align: center; border-bottom: 1px solid var(--border-color); padding-bottom: 6px;">Vault Sync</div>
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; border-bottom:1px solid var(--border-color); padding-bottom:6px;">
+            <div style="font-size: 10px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; flex:1; text-align:center; margin-left:28px;">Vault Sync</div>
+            <button id="btn-drive-open-guide" class="btn btn-outline" title="อธิบายการทำงานของปุ่ม Sync" style="width:28px; height:28px; padding:0; border-radius:999px; flex-shrink:0; justify-content:center; font-size:13px; font-weight:900; color:var(--primary-color);">?</button>
+          </div>
           <!-- Sync Enabled toggle -->
           <div id="drive-sync-enabled-row" style="display:flex; align-items:center; justify-content:space-between; width:100%; padding:5px 10px; border-radius:7px; background:rgba(16,185,129,0.08); border:1.5px solid rgba(16,185,129,0.3); box-sizing:border-box;">
             <div style="display:flex; align-items:center; gap:6px;">
@@ -236,8 +239,8 @@
           <div style="width: 100%; height: 1px; background: var(--border-color); opacity: 0.5;"></div>
           <!-- Push / Pull -->
           <div style="display: flex; gap: 8px; width: 100%;">
-            <button id="btn-drive-push" class="btn btn-outline vs-locked" title="Push local → vault" style="flex: 1; justify-content: center; padding: 6px; font-size: 11px; font-weight:700; color:#3b82f6; border-color:#93c5fd;"><svg style="width:12px;height:12px;margin-right:4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg> Push ↑</button>
-            <button id="btn-drive-pull" class="btn btn-outline vs-locked" title="Pull vault → local" style="flex: 1; justify-content: center; padding: 6px; font-size: 11px; font-weight:700; color:#10b981; border-color:#6ee7b7;"><svg style="width:12px;height:12px;margin-right:4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg> Pull ↓</button>
+            <button id="btn-drive-push" class="btn btn-outline vs-locked" title="Push local → vault" style="flex: 1; justify-content: center; padding: 6px; font-size: 11px; font-weight:700; color:#3b82f6; border-color:#93c5fd;"><svg style="width:12px;height:12px;margin-right:4px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg> Push ↑</button>
+            <button id="btn-drive-pull" class="btn btn-outline vs-locked" title="Pull vault → local" style="flex: 1; justify-content: center; padding: 6px; font-size: 11px; font-weight:700; color:#10b981; border-color:#6ee7b7;"><svg style="width:12px;height:12px;margin-right:4px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg> Pull ↓</button>
           </div>
           <!-- Divider -->
           <div style="width: 100%; height: 1px; background: var(--border-color); opacity: 0.5;"></div>
@@ -245,8 +248,15 @@
           <div style="width:100%; display:flex; flex-direction:column; gap:5px;">
             <span style="font-size:10px; font-weight:700; color:#ef4444; opacity:0.85; text-transform:uppercase; letter-spacing:0.3px;">⚠️ Force Sync</span>
             <div style="display:flex; gap:6px; width:100%;">
-              <button id="btn-drive-force-push" class="btn btn-outline" title="Force Push — write local to vault, no merge" style="flex:1; justify-content:center; padding:5px; font-size:10px; font-weight:700; color:#3b82f6; border-color:#93c5fd;"><svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg> Force Push ↑</button>
-              <button id="btn-drive-force-pull" class="btn btn-outline" title="Force Pull — load vault to local, no merge" style="flex:1; justify-content:center; padding:5px; font-size:10px; font-weight:700; color:#10b981; border-color:#6ee7b7;"><svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg> Force Pull ↓</button>
+              <button id="btn-drive-force-push" class="btn btn-outline" title="Force Push — write local to vault, no merge" style="flex:1; justify-content:center; padding:5px; font-size:10px; font-weight:700; color:#3b82f6; border-color:#93c5fd;"><svg style="width:12px;height:12px;margin-right:4px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg> Force Push ↑</button>
+              <button id="btn-drive-force-pull" class="btn btn-outline" title="Force Pull — load vault to local, no merge" style="flex:1; justify-content:center; padding:5px; font-size:10px; font-weight:700; color:#10b981; border-color:#6ee7b7;"><svg style="width:12px;height:12px;margin-right:4px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg> Force Pull ↓</button>
+            </div>
+          </div>
+          <div style="width:100%; display:flex; flex-direction:column; gap:5px;">
+            <span style="font-size:10px; font-weight:700; color:#7c3aed; opacity:0.9; text-transform:uppercase; letter-spacing:0.3px;">รีเซ็ตปลายทาง</span>
+            <div style="display:flex; gap:6px; width:100%;">
+              <button id="btn-drive-reset-push" class="btn btn-outline vs-locked" title="ล้างไฟล์ Vault ของแอป แล้วเอาข้อมูลจาก Webapp ปัจจุบันทับลงใหม่ทั้งหมด" style="flex:1; justify-content:center; padding:5px; font-size:10px; font-weight:800; color:#2563eb; border-color:#93c5fd; line-height:1.25;"><svg style="width:12px;height:12px;margin-right:4px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg> Force Push <br> ล้างของเก่า ↑</button>
+              <button id="btn-drive-reset-pull" class="btn btn-outline vs-locked" title="ล้างข้อมูลใน Webapp เครื่องนี้ แล้วดึงข้อมูลจาก Vault มาทับใหม่ทั้งหมด" style="flex:1; justify-content:center; padding:5px; font-size:10px; font-weight:800; color:#059669; border-color:#6ee7b7; line-height:1.25;"><svg style="width:12px;height:12px;margin-right:4px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg> Force Pull <br> ล้างของเก่า ↓</button>
             </div>
           </div>
           <!-- ── Stay Active After Refresh ─────────────────────────────── -->
@@ -321,11 +331,11 @@
             <!-- Push ↑ / Pull ↓ (like Desktop) -->
             <div id="drive-gdrive-pushpull-row" style="display:none; gap:8px; width:100%;">
               <button id="btn-gdrive-push-data" class="btn btn-outline" style="flex:1; justify-content:center; padding:6px; font-size:11px; font-weight:700; color:#3b82f6; border-color:#93c5fd; transition:transform 0.12s ease, box-shadow 0.2s ease, background 0.2s ease;">
-                <svg style="width:12px;height:12px;margin-right:5px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+                <svg style="width:12px;height:12px;margin-right:4px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
                 Push ↑
               </button>
               <button id="btn-gdrive-pull-data" class="btn btn-outline" style="flex:1; justify-content:center; padding:6px; font-size:11px; font-weight:700; color:#10b981; border-color:#6ee7b7; transition:transform 0.12s ease, box-shadow 0.2s ease, background 0.2s ease;">
-                <svg style="width:12px;height:12px;margin-right:5px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+                <svg style="width:12px;height:12px;margin-right:4px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
                 Pull ↓
               </button>
             </div>
@@ -333,8 +343,15 @@
             <div style="width:100%; display:flex; flex-direction:column; gap:5px;">
               <span style="font-size:10px; font-weight:700; color:#ef4444; opacity:0.85; text-transform:uppercase; letter-spacing:0.3px;">⚠️ Force Sync</span>
               <div style="display:flex; gap:6px; width:100%;">
-                <button id="btn-gdrive-force-push" class="btn btn-outline" title="Force Push — overwrite Drive with local, no merge" style="flex:1; justify-content:center; padding:5px; font-size:10px; font-weight:700; color:#3b82f6; border-color:#93c5fd;"><svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg> Force Push ↑</button>
-                <button id="btn-gdrive-force-pull" class="btn btn-outline" title="Force Pull — overwrite local with Drive, no merge" style="flex:1; justify-content:center; padding:5px; font-size:10px; font-weight:700; color:#10b981; border-color:#6ee7b7;"><svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg> Force Pull ↓</button>
+                <button id="btn-gdrive-force-push" class="btn btn-outline" title="Force Push — overwrite Drive with local, no merge" style="flex:1; justify-content:center; padding:5px; font-size:10px; font-weight:700; color:#3b82f6; border-color:#93c5fd;"><svg style="width:12px;height:12px;margin-right:4px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg> Force Push ↑</button>
+                <button id="btn-gdrive-force-pull" class="btn btn-outline" title="Force Pull — overwrite local with Drive, no merge" style="flex:1; justify-content:center; padding:5px; font-size:10px; font-weight:700; color:#10b981; border-color:#6ee7b7;"><svg style="width:12px;height:12px;margin-right:4px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg> Force Pull ↓</button>
+              </div>
+            </div>
+            <div style="width:100%; display:flex; flex-direction:column; gap:5px;">
+              <span style="font-size:10px; font-weight:700; color:#7c3aed; opacity:0.9; text-transform:uppercase; letter-spacing:0.3px;">รีเซ็ตปลายทาง</span>
+              <div style="display:flex; gap:6px; width:100%;">
+                <button id="btn-gdrive-reset-push" class="btn btn-outline vs-locked" title="ล้างไฟล์ Vault ของแอปใน Google Drive แล้วเอาข้อมูลจาก Webapp ปัจจุบันทับลงใหม่ทั้งหมด" style="flex:1; justify-content:center; padding:5px; font-size:10px; font-weight:800; color:#2563eb; border-color:#93c5fd; line-height:1.25;"><svg style="width:12px;height:12px;margin-right:4px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg> ล้าง Vault เอา Webapp ทับ<br>Force Push ล้างของเก่า ↑</button>
+                <button id="btn-gdrive-reset-pull" class="btn btn-outline vs-locked" title="ล้างข้อมูลใน Webapp เครื่องนี้ แล้วดึงข้อมูลจาก Google Drive มาทับใหม่ทั้งหมด" style="flex:1; justify-content:center; padding:5px; font-size:10px; font-weight:800; color:#059669; border-color:#6ee7b7; line-height:1.25;"><svg style="width:12px;height:12px;margin-right:4px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg> ล้าง Webapp เอา Vault ทับ<br>Force Pull ล้างของเก่า ↓</button>
               </div>
             </div>
 
@@ -731,6 +748,61 @@
   </div>
 
   <!-- 🔴 New Customize Space Modal (Replaces old space modal) -->
+  <div class="modal-overlay" id="drive-sync-guide-modal" style="display:none; z-index:14000;">
+    <div class="modal-content" style="width:min(560px, calc(100vw - 24px)); max-height:min(84vh, calc(100vh - 32px)); overflow-y:auto; padding:22px; border-radius:16px; box-sizing:border-box;">
+      <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:14px;">
+        <div>
+          <h3 style="margin:0; font-size:18px;">คู่มือปุ่ม Vault Sync</h3>
+          <div style="margin-top:4px; font-size:12px; color:var(--text-muted);">อ่านสั้นๆ แล้วรู้เลยว่าควรกดปุ่มไหน</div>
+        </div>
+        <button id="btn-close-drive-guide" class="btn btn-outline" style="height:32px; padding:0 10px; justify-content:center; color:#ef4444; border-color:#fecaca;">ปิด</button>
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        <div style="padding:12px; border-radius:12px; background:rgba(59,130,246,0.08); border:1px solid rgba(59,130,246,0.18);">
+          <div style="font-size:13px; font-weight:800; color:#2563eb; margin-bottom:6px;">1. Push / Pull ปกติ</div>
+          <div style="font-size:12px; line-height:1.65; color:var(--text-main);">ใช้สำหรับการซิงก์ประจำวัน</div>
+          <div style="font-size:12px; line-height:1.65; color:var(--text-main);">Push ↑ คือเอาข้อมูลจากเครื่องนี้ไปอัปเดต Vault หรือ Drive</div>
+          <div style="font-size:12px; line-height:1.65; color:var(--text-main);">Pull ↓ คือดึงข้อมูลจาก Vault หรือ Drive กลับมาทับในเครื่องนี้</div>
+          <div style="font-size:11px; line-height:1.6; color:var(--text-muted); margin-top:6px;">ข้อดี: เหมาะกับการใช้งานทั่วไปและเสี่ยงน้อยที่สุด</div>
+          <div style="font-size:11px; line-height:1.6; color:var(--text-muted);">ข้อควรระวัง: ถ้าสองฝั่งเริ่มไม่ตรงกันมาก อาจต้องใช้ปุ่มที่แรงกว่า</div>
+        </div>
+
+        <div style="padding:12px; border-radius:12px; background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.18);">
+          <div style="font-size:13px; font-weight:800; color:#dc2626; margin-bottom:6px;">2. Force Push / Force Pull</div>
+          <div style="font-size:12px; line-height:1.65; color:var(--text-main);">ใช้ตอนที่คุณรู้แน่ๆ แล้วว่า “ฝั่งไหนคือข้อมูลที่ต้องเอาเป็นหลัก”</div>
+          <div style="font-size:12px; line-height:1.65; color:var(--text-main);">Force Push ↑ คือยืนยันว่าจะเอาข้อมูลในเครื่องนี้ไปทับปลายทาง</div>
+          <div style="font-size:12px; line-height:1.65; color:var(--text-main);">Force Pull ↓ คือยืนยันว่าจะดึงข้อมูลจากปลายทางมาทับในเครื่องนี้</div>
+          <div style="font-size:11px; line-height:1.6; color:var(--text-muted); margin-top:6px;">ข้อดี: แก้ปัญหาข้อมูลไม่ตรงกันได้เร็ว</div>
+          <div style="font-size:11px; line-height:1.6; color:var(--text-muted);">ข้อควรระวัง: อีกฝั่งอาจถูกทับทันที ถ้ากดผิดจะย้อนกลับยาก</div>
+        </div>
+
+        <div style="padding:12px; border-radius:12px; background:rgba(124,58,237,0.08); border:1px solid rgba(124,58,237,0.18);">
+          <div style="font-size:13px; font-weight:800; color:#7c3aed; margin-bottom:6px;">3. ปุ่มรีเซ็ตปลายทาง</div>
+          <div style="font-size:12px; line-height:1.65; color:var(--text-main);">ปุ่มชุดนี้แรงที่สุด</div>
+          <div style="font-size:12px; line-height:1.65; color:var(--text-main);">ล้าง Vault / Drive เอา Webapp ทับ ↑ คือเคลียร์ไฟล์ซิงก์ของแอปที่ปลายทางก่อน แล้วค่อยเอาข้อมูลล่าสุดจากเครื่องนี้เขียนลงใหม่ทั้งชุด</div>
+          <div style="font-size:12px; line-height:1.65; color:var(--text-main);">ล้าง Webapp เอา Vault / Drive มาทับ ↓ คือเคลียร์ข้อมูลซิงก์ในเครื่องนี้ก่อน แล้วค่อยดึงข้อมูลจากปลายทางมาลงใหม่ทั้งชุด</div>
+          <div style="font-size:11px; line-height:1.6; color:var(--text-muted); margin-top:6px;">ข้อดี: เหมาะตอนโครงสร้างไฟล์เพี้ยน มีไฟล์เก่าค้าง หรืออยากรีเซ็ตให้สะอาดจริงๆ</div>
+          <div style="font-size:11px; line-height:1.6; color:var(--text-muted);">ข้อควรระวัง: เป็นปุ่มที่แรงที่สุด ต้องมั่นใจก่อนกดว่าฝั่งไหนคือข้อมูลล่าสุดจริง</div>
+        </div>
+
+        <div style="padding:12px; border-radius:12px; background:var(--bg-body); border:1px dashed var(--border-color);">
+          <div style="font-size:13px; font-weight:800; color:var(--text-main); margin-bottom:6px;">Desktop กับ Mobile ต่างกันยังไง</div>
+          <div style="font-size:12px; line-height:1.65; color:var(--text-main);">Desktop ใช้สิทธิ์เข้าถึงโฟลเดอร์ในเครื่องโดยตรง จึงเร็วและตรงไปตรงมามากกว่า</div>
+          <div style="font-size:12px; line-height:1.65; color:var(--text-main);">Mobile ใช้ Google Drive จึงสะดวกเวลาใช้หลายเครื่อง แต่ต้องพึ่งอินเทอร์เน็ตและอาจช้ากว่า</div>
+          <div style="font-size:11px; line-height:1.6; color:var(--text-muted); margin-top:6px;">สรุปง่ายๆ: Desktop เน้นเร็วและตรงกับโฟลเดอร์ในเครื่อง ส่วน Mobile เน้นพกพาและใช้ข้ามอุปกรณ์</div>
+        </div>
+
+        <div style="padding:12px; border-radius:12px; background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.18);">
+          <div style="font-size:13px; font-weight:800; color:#059669; margin-bottom:6px;">ถ้ายังไม่แน่ใจ ให้เริ่มจากปุ่มไหน</div>
+          <div style="font-size:12px; line-height:1.65; color:var(--text-main);">ใช้งานปกติ: ใช้ Push / Pull</div>
+          <div style="font-size:12px; line-height:1.65; color:var(--text-main);">มั่นใจว่าต้องเอาฝั่งใดฝั่งหนึ่งทับอีกฝั่ง: ใช้ Force</div>
+          <div style="font-size:12px; line-height:1.65; color:var(--text-main);">มีไฟล์ค้างหรืออยากเริ่มใหม่แบบสะอาด: ใช้ปุ่มรีเซ็ตปลายทาง</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="customize-space-modal"><div class="modal-content" style="width: 400px; max-height: 90vh; overflow-y: auto;">
     <h3 style="margin-top:0; font-size:18px; display:flex; align-items:center; gap:8px;">🛠️ Customize Space</h3>
     
