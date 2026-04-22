@@ -16,6 +16,7 @@ const LS_LAST_SYNC = 'gdrive-last-sync-at';
 let _token = null;
 let _folderId = null;
 let _folderName = null;
+let _pushInFlight = null;
 
 export function initGDriveOAuth() {
     console.log('[GDrive] Initializing GDrive OAuth...');
@@ -316,7 +317,7 @@ export async function createDriveFolder(name) {
     return res;
 }
 
-export async function pushToGDrive(data) {
+async function _pushToGDriveImpl(data) {
     if (!_folderId) throw new Error('No vault folder selected');
 
     const spacesDir = await _ensureChildFolder(SPACES_DIR_NAME, _folderId);
@@ -359,6 +360,14 @@ export async function pushToGDrive(data) {
 
     localStorage.setItem(LS_LAST_SYNC, String(Date.now()));
     return true;
+}
+
+export async function pushToGDrive(data) {
+    if (_pushInFlight) return _pushInFlight;
+    _pushInFlight = _pushToGDriveImpl(data).finally(() => {
+        _pushInFlight = null;
+    });
+    return _pushInFlight;
 }
 
 export async function pullFromGDrive() {

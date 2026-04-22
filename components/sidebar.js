@@ -127,6 +127,24 @@ export function initSidebar(callbacks) {
             100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
         }
         .is-working .status-indicator { animation: glow-working 2s infinite; border-radius: 50%; }
+        .lock-folder-btn.active-lock {
+            color: #b45309 !important;
+            background: linear-gradient(180deg, rgba(251, 191, 36, 0.22), rgba(245, 158, 11, 0.16)) !important;
+            border: 1px solid rgba(245, 158, 11, 0.45);
+            box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.18) inset, 0 4px 10px rgba(245, 158, 11, 0.12);
+            opacity: 1;
+        }
+        .folder-header.is-lock-highlight {
+            background: linear-gradient(90deg, rgba(251, 191, 36, 0.14), rgba(245, 158, 11, 0.04) 55%, transparent);
+            border-radius: 10px;
+            box-shadow: inset 3px 0 0 rgba(245, 158, 11, 0.8);
+        }
+        .folder-popup-lock.is-locked {
+            color: #92400e;
+            background: rgba(251, 191, 36, 0.14);
+            border: 1px solid rgba(245, 158, 11, 0.28);
+            font-weight: 700;
+        }
     `;
     document.head.appendChild(style);
 
@@ -200,6 +218,30 @@ function toggleFolder(folderName) {
     }
     saveData();
     renderSidebar();
+}
+
+function toggleFolderLock(folderName) {
+    const settings = getAppSettings();
+    if (!settings.lockedFolders) settings.lockedFolders = [];
+    const idx = settings.lockedFolders.indexOf(folderName);
+    const isUnlocking = idx > -1;
+
+    if (isUnlocking) {
+        settings.lockedFolders.splice(idx, 1);
+    } else {
+        settings.lockedFolders.push(folderName);
+        if (settings.collapsedFolders) {
+            const cIdx = settings.collapsedFolders.indexOf(folderName);
+            if (cIdx > -1) settings.collapsedFolders.splice(cIdx, 1);
+        }
+    }
+
+    saveData();
+    renderSidebar();
+
+    if (typeof window.showToast === 'function') {
+        window.showToast(isUnlocking ? `Unlocked "${folderName}" expansion` : `Locked "${folderName}" expansion`);
+    }
 }
 
 
@@ -456,7 +498,7 @@ export function renderSidebar() {
         }
 
         const header = document.createElement('div');
-        header.className = 'folder-header';
+        header.className = `folder-header${isLocked ? ' is-lock-highlight' : ''}`;
         if (fTheme.color) header.style.color = fTheme.color;
         if (fTheme.fontSize) header.style.fontSize = fTheme.fontSize + 'px';
 
@@ -471,7 +513,7 @@ export function renderSidebar() {
             </div>
             <div class="folder-actions" style="display:none; gap:4px;">
                 <button class="btn-icon add-space-to-folder-btn" title="Add Space to this Folder" style="padding:4px; font-size:18px;">+</button>
-                <button class="btn-icon lock-folder-btn ${isLocked ? 'active-lock' : ''}" title="Lock/Unlock Expansion" style="padding:4px;"><svg class="svg-icon-sm" style="margin:0;"><use href="#icon-lock-minimal"></use></svg></button>
+                <button class="btn-icon lock-folder-btn ${isLocked ? 'active-lock' : ''}" title="${isLocked ? 'Unlock Expansion' : 'Lock Expansion'}" style="padding:4px;"><svg class="svg-icon-sm" style="margin:0;"><use href="#icon-lock-minimal"></use></svg></button>
                 <button class="btn-icon edit-folder-props-btn" title="Edit Folder Settings" style="padding:4px;"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin:0;"><circle cx="12" cy="12" r="9"></circle></svg></button>
             </div>
             <button class="folder-actions-trigger" title="More options">⋮</button>
@@ -497,6 +539,8 @@ export function renderSidebar() {
         if (lockBtn) {
             lockBtn.onclick = (e) => {
                 e.stopPropagation();
+                toggleFolderLock(folderName);
+                return;
                 if (!settings.lockedFolders) settings.lockedFolders = [];
                 const idx = settings.lockedFolders.indexOf(folderName);
                 if (idx > -1) {
@@ -805,9 +849,9 @@ function showFolderActionsPopup(e, folderName, isLocked, headerElement) {
         <button class="folder-popup-add-space" title="Add Space to this Folder" style="gap: 10px;">
             <span style="font-size: 18px;">+</span> Add Space
         </button>
-        <button class="folder-popup-lock" title="Lock/Unlock Expansion" style="gap: 10px;">
+        <button class="folder-popup-lock ${isLocked ? 'is-locked' : ''}" title="Lock/Unlock Expansion" style="gap: 10px;">
             <svg class="svg-icon-sm" style="margin:0;"><use href="#icon-lock-minimal"></use></svg>
-            ${isLocked ? 'Unlock Folder' : 'Lock Folder'}
+            ${isLocked ? 'Unlock Expansion' : 'Lock Expansion'}
         </button>
         <button class="folder-popup-edit" title="Edit Folder Settings" style="gap: 10px;">
             <svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin:0;"><circle cx="12" cy="12" r="9"></circle></svg>
@@ -838,19 +882,7 @@ function showFolderActionsPopup(e, folderName, isLocked, headerElement) {
     if (lockBtn) {
         lockBtn.onclick = () => {
             popup.remove();
-            if (!settings.lockedFolders) settings.lockedFolders = [];
-            const idx = settings.lockedFolders.indexOf(folderName);
-            if (idx > -1) {
-                settings.lockedFolders.splice(idx, 1);
-            } else {
-                settings.lockedFolders.push(folderName);
-                if (settings.collapsedFolders) {
-                    const cIdx = settings.collapsedFolders.indexOf(folderName);
-                    if (cIdx > -1) settings.collapsedFolders.splice(cIdx, 1);
-                }
-            }
-            saveData();
-            renderSidebar();
+            toggleFolderLock(folderName);
         };
     }
 

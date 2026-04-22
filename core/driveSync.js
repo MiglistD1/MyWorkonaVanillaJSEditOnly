@@ -96,6 +96,20 @@ async function _getOrCreateSubdir(dirHandle, name) {
     return dirHandle.getDirectoryHandle(name, { create: true });
 }
 
+async function _deleteStaleSpaceFiles(spacesDir, currentSpaceIds) {
+    for await (const [name, handle] of spacesDir.entries()) {
+        if (handle.kind !== 'file' || !name.endsWith('.json')) continue;
+        const spaceId = name.slice(0, -5);
+        if (!currentSpaceIds.has(spaceId)) {
+            try {
+                await spacesDir.removeEntry(name);
+            } catch (err) {
+                console.warn('[DriveSync] Failed to delete stale space file:', name, err);
+            }
+        }
+    }
+}
+
 // ── Permission Helper ─────────────────────────────────────────────────────────
 
 /**
@@ -250,9 +264,13 @@ export async function pushToDrive(data, { fromUserGesture = false } = {}) {
             launcherTags:    data.launcherTags    ?? [],
         });
         const spacesDir = await _getOrCreateSubdir(_dirHandle, 'spaces');
+        const currentSpaceIds = new Set();
         for (const space of (data.mySpacesData ?? [])) {
-            if (space?.id) await _writeJSON(spacesDir, `${space.id}.json`, space);
+            if (!space?.id) continue;
+            currentSpaceIds.add(String(space.id));
+            await _writeJSON(spacesDir, `${space.id}.json`, space);
         }
+        await _deleteStaleSpaceFiles(spacesDir, currentSpaceIds);
         _dirtyFlag    = false;
         _lastSyncedAt = Date.now();
         _setBtnState('success');
@@ -298,9 +316,13 @@ export async function forcePush(data, { fromUserGesture = true } = {}) {
             launcherTags:    data.launcherTags    ?? [],
         });
         const spacesDir = await _getOrCreateSubdir(_dirHandle, 'spaces');
+        const currentSpaceIds = new Set();
         for (const space of (data.mySpacesData ?? [])) {
-            if (space?.id) await _writeJSON(spacesDir, `${space.id}.json`, space);
+            if (!space?.id) continue;
+            currentSpaceIds.add(String(space.id));
+            await _writeJSON(spacesDir, `${space.id}.json`, space);
         }
+        await _deleteStaleSpaceFiles(spacesDir, currentSpaceIds);
         _dirtyFlag    = false;
         _hasConflict  = false;
         _lastSyncedAt = Date.now();

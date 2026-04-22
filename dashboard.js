@@ -266,14 +266,16 @@ document.addEventListener('DOMContentLoaded', () => {
         initDashboardQuickNote();
         initFirebaseSync();
 
-        // 🗂️ GDrive Sync: realtime push on every save (routes to desktop or mobile based on mode)
+        let _mobileDriveDirty = false;
+
+        // 🗂️ GDrive Sync: desktop pushes immediately; mobile only marks dirty and waits for interval/manual sync
         setOnSaveDriveHook(async (data) => {
             if (localStorage.getItem('drive-sync-enabled') === 'false') return;
             const mode = localStorage.getItem('drive-device-mode') || 'desktop';
             if (mode === 'desktop') {
                 pushToDrive(data);
             } else if (mode === 'mobile' && isGDriveConnected() && getGDriveFolderId()) {
-                pushToGDrive(data).catch(e => console.warn('[GDrive] Auto push failed:', e));
+                _mobileDriveDirty = true;
             }
         }); // fromUserGesture=false, auto-sync path
 
@@ -596,7 +598,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (Array.isArray(data.launcherTags)) setLauncherTags(data.launcherTags);
                     const nextSpaceId = data.lastSpaceId ?? data.mySpacesData?.[0]?.id ?? 1;
                     setCurrentSpaceId(nextSpaceId);
-                    saveData(true);
+                    _mobileDriveDirty = false;
+                    saveData(true, true);
                 } catch (err) {
                     console.error('[DriveSync] Apply pulled data error:', err);
                 }
@@ -994,6 +997,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (pushBtn) { pushBtn.disabled = true; pushBtn.classList.add('vs-syncing'); }
                     const data = await _getDriveData();
                     const ok = await pushToGDrive(data);
+                    if (ok) _mobileDriveDirty = false;
                     if (pushBtn) { pushBtn.classList.remove('vs-syncing'); pushBtn.classList.add('vs-success'); setTimeout(() => pushBtn.classList.remove('vs-success'), 900); }
                     if (ok && typeof window.showToast === 'function') window.showToast('✅ Pushed to Google Drive');
                     _updateGDriveMobileUI();
@@ -1014,6 +1018,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (gfpushBtn) { gfpushBtn.disabled = true; gfpushBtn.classList.add('vs-syncing'); }
                     const data = await _getDriveData();
                     const ok = await pushToGDrive(data);
+                    if (ok) _mobileDriveDirty = false;
                     if (gfpushBtn) { gfpushBtn.classList.remove('vs-syncing'); gfpushBtn.classList.add('vs-success'); setTimeout(() => gfpushBtn.classList.remove('vs-success'), 900); }
                     if (ok && typeof window.showToast === 'function') window.showToast('✅ Force Push to Google Drive completed');
                     _updateGDriveMobileUI();
@@ -1085,9 +1090,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (localStorage.getItem('drive-device-mode') !== 'mobile') return;
                 if (localStorage.getItem('drive-sync-enabled') === 'false') return;
                 if (!isGDriveConnected() || !getGDriveFolderId()) return;
+                if (!_mobileDriveDirty) return;
                 try {
                     const data = await _getDriveData();
-                    await pushToGDrive(data);
+                    const ok = await pushToGDrive(data);
+                    if (ok) _mobileDriveDirty = false;
                     _updateGDriveMobileUI();
                 } catch (e) { console.warn('[GDrive] Auto sync failed:', e); }
             };
@@ -1125,6 +1132,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 localStorage.removeItem('gdrive-connection-verified');
                 localStorage.removeItem('gdrive-last-sync-at');
                 localStorage.setItem('drive-sync-enabled', 'false');
+                _mobileDriveDirty = false;
 
                 _setMobileVerifiedState(false, /*silent=*/true);
                 _updateSyncEnabledRow();
