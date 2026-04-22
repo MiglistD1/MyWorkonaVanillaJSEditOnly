@@ -193,6 +193,12 @@ function _updateFolderLabel(name) {
  * Returns the FileSystemDirectoryHandle, or undefined if cancelled.
  */
 export async function setupVault() {
+    // Only allow folder picking when in desktop device mode.
+    const mode = localStorage.getItem('drive-device-mode') || ('showDirectoryPicker' in window ? 'desktop' : 'mobile');
+    if (mode !== 'desktop') {
+        if (typeof window.showToast === 'function') window.showToast('Local vault pick is Desktop-only. Switch to Desktop mode to pick a folder.');
+        return;
+    }
     if (!('showDirectoryPicker' in window)) {
         alert('Your browser does not support the File System Access API.\nPlease use Chrome 86+ or Edge 86+.');
         return;

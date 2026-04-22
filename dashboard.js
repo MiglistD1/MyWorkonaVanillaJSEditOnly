@@ -382,6 +382,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const showSync = connected && !!folderId;
                 if (syncNowBtn) syncNowBtn.style.display = showSync ? 'flex' : 'none';
                 if (pullBtn)    pullBtn.style.display    = showSync ? 'flex' : 'none';
+                const forcePushBtn = document.getElementById('btn-gdrive-force-push');
+                const forcePullBtn = document.getElementById('btn-gdrive-force-pull');
+                if (forcePushBtn) forcePushBtn.style.display = showSync ? 'flex' : 'none';
+                if (forcePullBtn) forcePullBtn.style.display = showSync ? 'flex' : 'none';
                 if (lastSyncEl) {
                     lastSyncEl.style.display = showSync ? 'block' : 'none';
                     if (lastSync) lastSyncEl.textContent = `Last Synced: ${new Date(lastSync).toLocaleTimeString()}`;
@@ -759,6 +763,39 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (syncBtn) { syncBtn.innerHTML = '<svg style="width:14px;height:14px;margin-right:6px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>Sync Now'; syncBtn.disabled = false; }
                 }
             });
+
+            // ─ Mobile Force Push/Pull
+            document.getElementById('btn-gdrive-force-push')?.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (!confirm('⚠️ Force Push — overwrite files in Drive with local data?\nThis will overwrite files in the selected Drive folder. Continue?')) return;
+                try {
+                    const data = await _getDriveData();
+                    const ok = await pushToGDrive(data);
+                    if (ok && typeof window.showToast === 'function') window.showToast('✅ Force push to Google Drive completed');
+                    _updateGDriveMobileUI();
+                } catch (err) {
+                    if (typeof window.showToast === 'function') window.showToast('❌ Force push failed: ' + err.message);
+                }
+            });
+
+            document.getElementById('btn-gdrive-force-pull')?.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (!confirm('⚠️ Force Pull — load Drive data into local storage WITHOUT merge?\nThis will overwrite local data and reload the page. Continue?')) return;
+                try {
+                    const pulled = await pullFromGDrive();
+                    if (pulled) { await _applyPulledData(pulled); if (typeof window.showToast === 'function') window.showToast('✅ Pulled from Google Drive'); }
+                } catch (err) {
+                    if (typeof window.showToast === 'function') window.showToast('❌ Force pull failed: ' + err.message);
+                }
+            });
+
+            // ─ Mobile reminders toggle (mirrors desktop reminders)
+            const driveRemMobile = document.getElementById('chk-drive-reminders-mobile');
+            if (driveRemMobile) {
+                // initialize from shared key
+                driveRemMobile.checked = localStorage.getItem('drive-reminders-enabled') === 'true';
+                driveRemMobile.onchange = (e) => { e.stopPropagation(); localStorage.setItem('drive-reminders-enabled', String(driveRemMobile.checked)); };
+            }
 
             document.getElementById('btn-gdrive-pull-data')?.addEventListener('click', async (e) => {
                 e.stopPropagation();

@@ -573,6 +573,9 @@ export function applyAppSettings() {
     `;
 }
 function _initDriveVaultUI() {
+    // If the GDrive Vault settings section was removed from markup,
+    // skip initializing Drive Vault UI to avoid errors.
+    if (!document.getElementById('gdrive-vault-section')) return;
     const ls = getLocalSettings();
 
     const chkEnabled  = document.getElementById('chk-drive-sync-enabled');

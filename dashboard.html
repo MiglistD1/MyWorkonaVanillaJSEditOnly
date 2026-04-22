@@ -319,6 +319,17 @@
               <svg style="width:12px;height:12px;margin-right:5px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
               Pull from Drive &#8595;
             </button>
+            <!-- Force actions (mobile) -->
+            <div style="display:flex; gap:8px; width:100%;">
+              <button id="btn-gdrive-force-push" class="btn btn-outline" style="flex:1; justify-content:center; padding:6px; font-size:11px; display:none;">Force Push ↑</button>
+              <button id="btn-gdrive-force-pull" class="btn btn-outline" style="flex:1; justify-content:center; padding:6px; font-size:11px; display:none;">Force Pull ↓</button>
+            </div>
+
+            <!-- Reminders toggle (mobile) -->
+            <div style="display:flex; align-items:center; justify-content:space-between; width:100%; margin-top:6px;">
+              <span style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Reminders</span>
+              <label class="switch"><input type="checkbox" id="chk-drive-reminders-mobile"><span class="slider"></span></label>
+            </div>
             <!-- Last sync -->
             <div id="drive-gdrive-last-sync" style="font-size:9px; color:var(--text-muted); text-align:center; width:100%; display:none;">Last Synced: Never</div>
           </div>
@@ -900,48 +911,7 @@
   <div class="modal-overlay" id="settings-modal"><div class="modal-content">
     <h3 style="font-size:16px; display:flex; align-items:center; gap:8px; margin-top:0;"><svg class="svg-icon-lg"><use href="#icon-settings"></use></svg> App Settings</h3>
 
-    <!-- ─── GDrive Vault ─────────────────────────────────────────── -->
-    <div class="settings-group" id="gdrive-vault-section" style="background: var(--hover-bg); padding: 12px; border-radius: 10px; border: 1px solid var(--border-color); margin-bottom: 12px;">
-      <label style="display:flex; align-items:center; gap:6px; font-weight: 800; color: var(--primary-color); margin-bottom: 12px;">
-        <svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-        Google Drive Sync
-      </label>
-      <div style="display:flex; flex-direction:column; gap:8px; padding:10px; background:var(--bg-card); border-radius:8px; border:1px solid var(--border-color);">
-        <!-- Enable toggle -->
-        <div class="customize-row" style="margin-bottom:0;">
-          <span style="font-size:12px; font-weight:600;">Enable Drive Sync</span>
-          <label class="google-task-checkbox">
-            <input type="checkbox" id="chk-drive-sync-enabled">
-            <div class="checkmark-circle"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg></div>
-          </label>
-        </div>
-        <!-- Vault folder (read-only label + pick button) -->
-        <div class="customize-row" style="margin-bottom:0;">
-          <span style="font-size:12px; font-weight:600;">Vault Folder</span>
-          <div style="display:flex; align-items:center; gap:6px;">
-            <span id="drive-vault-folder-name" style="font-size:10px; color:var(--text-muted); max-width:100px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Not selected</span>
-          </div>
-        </div>
-        <!-- Auto-sync interval -->
-        <div class="customize-row" style="margin-bottom:0;">
-          <span style="font-size:12px; font-weight:600;">Auto-sync every</span>
-          <select id="drive-sync-interval" class="settings-input" style="width:110px; font-size:11px; height:28px;">
-            <option value="1">1 minute</option>
-            <option value="5" selected>5 minutes</option>
-            <option value="15">15 minutes</option>
-            <option value="30">30 minutes</option>
-          </select>
-        </div>
-        <!-- Status badge -->
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-top:4px;">
-          <span id="drive-sync-badge" style="font-size:11px; font-weight:700; color:var(--text-muted);">Not configured</span>
-          <div style="display:flex; gap:6px;">
-            <button class="btn btn-outline" id="btn-drive-setup-vault" style="font-size:11px; height:28px; padding:0 10px;">Pick Folder</button>
-            <button class="btn btn-primary"  id="btn-drive-sync-now"   style="font-size:11px; height:28px; padding:0 10px;">Sync Now</button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <!-- GDrive Vault settings removed. Configure via Vault Sync popup. -->
 
     <div class="settings-group" style="background: var(--hover-bg); padding: 12px; border-radius: 10px; border: 1px solid var(--border-color);">
       <label style="display:flex; align-items:center; gap:6px; font-weight: 800; color: var(--primary-color); margin-bottom: 12px;">
