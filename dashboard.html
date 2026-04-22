@@ -225,17 +225,19 @@
           </div>
           <!-- Divider -->
           <div style="width: 100%; height: 1px; background: var(--border-color); opacity: 0.5;"></div>
-          <!-- Sync Now -->
-          <button id="btn-drive-sync-now-popup" class="btn btn-primary" style="width: 100%; justify-content: center; padding: 8px; font-size: 12px; font-weight: 700;">
-            <svg style="width:14px;height:14px;margin-right:6px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
-            Sync Now
+          <!-- Connect & Verify (Desktop) -->
+          <button id="btn-drive-sync-now-popup" class="btn btn-outline" style="width:100%; justify-content:center; padding:8px; font-size:11px; font-weight:700; transition:all 0.25s ease; color:#94a3b8; border-color:var(--border-color);">
+            <svg style="width:13px;height:13px;margin-right:6px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            Connect &amp; Verify
           </button>
+          <!-- Verify status badge (Desktop) -->
+          <div id="drive-desktop-verify-status" style="display:none; width:100%; padding:5px 10px; border-radius:6px; font-size:10px; font-weight:700; text-align:center; box-sizing:border-box;"></div>
           <!-- Divider -->
           <div style="width: 100%; height: 1px; background: var(--border-color); opacity: 0.5;"></div>
           <!-- Push / Pull -->
           <div style="display: flex; gap: 8px; width: 100%;">
-            <button id="btn-drive-push" class="btn btn-outline" title="Push local → vault" style="flex: 1; justify-content: center; padding: 6px; font-size: 11px;"><svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg> Push ↑</button>
-            <button id="btn-drive-pull" class="btn btn-outline" title="Pull vault → local" style="flex: 1; justify-content: center; padding: 6px; font-size: 11px;"><svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg> Pull ↓</button>
+            <button id="btn-drive-push" class="btn btn-outline vs-locked" title="Push local → vault" style="flex: 1; justify-content: center; padding: 6px; font-size: 11px; font-weight:700; color:#3b82f6; border-color:#93c5fd;"><svg style="width:12px;height:12px;margin-right:4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg> Push ↑</button>
+            <button id="btn-drive-pull" class="btn btn-outline vs-locked" title="Pull vault → local" style="flex: 1; justify-content: center; padding: 6px; font-size: 11px; font-weight:700; color:#10b981; border-color:#6ee7b7;"><svg style="width:12px;height:12px;margin-right:4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg> Pull ↓</button>
           </div>
           <!-- Divider -->
           <div style="width: 100%; height: 1px; background: var(--border-color); opacity: 0.5;"></div>

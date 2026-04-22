@@ -2135,6 +2135,8 @@ label[for="drive-merge-mode"],
 }
 
 /* ── LOCKED state: Push & Pull before verification ── */
+#btn-drive-push.vs-locked,
+#btn-drive-pull.vs-locked,
 #btn-gdrive-push-data.vs-locked,
 #btn-gdrive-pull-data.vs-locked {
     opacity: 0.35 !important;

@@ -397,6 +397,18 @@ export function getVaultFolderId()  { return _dirHandle?.name ?? null; }
 export function getVaultFolderName(){ return _dirHandle?.name ?? null; }
 export function getHasConflict()    { return _hasConflict; }
 export function clearConflict()     { _hasConflict = false; _updateConflictBanner(false); }
+
+/**
+ * Lightweight access test — requests readwrite permission (requires user gesture).
+ * Returns folder name on success, throws on failure.
+ */
+export async function verifyVaultAccess() {
+    if (!_dirHandle) throw new Error('No vault folder selected. Pick a folder first.');
+    const ok = await _ensurePermission(true);
+    if (!ok) throw new Error('Permission denied for vault folder.');
+    return _dirHandle.name;
+}
+
 export function getSyncHistory()    { return [..._syncHistory]; }
 export function clearSyncHistory()  {
     _syncHistory = [];

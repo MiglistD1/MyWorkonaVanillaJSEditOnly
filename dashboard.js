@@ -455,6 +455,46 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (mode === 'mobile') _updateGDriveMobileUI();
             };
 
+            // ── Auto-enable Sync Enabled after successful verify/sync ──
+            const _autoEnableSyncEnabled = () => {
+                const chk = document.getElementById('chk-drive-sync-enabled');
+                if (chk && !chk.checked) {
+                    chk.checked = true;
+                    localStorage.setItem('drive-sync-enabled', 'true');
+                    _updateSyncEnabledRow();
+                }
+            };
+
+            // ── Desktop verified gate ──
+            const _setDesktopVerifiedState = (verified, silent = false) => {
+                localStorage.setItem('drive-desktop-verified', String(verified));
+                const syncBtn  = document.getElementById('btn-drive-sync-now-popup');
+                const statusEl = document.getElementById('drive-desktop-verify-status');
+                const pushBtn  = document.getElementById('btn-drive-push');
+                const pullBtn  = document.getElementById('btn-drive-pull');
+                if (verified) {
+                    if (syncBtn) {
+                        syncBtn.style.color       = '#10b981';
+                        syncBtn.style.borderColor = '#6ee7b7';
+                        syncBtn.style.background  = 'rgba(16,185,129,0.08)';
+                        syncBtn.innerHTML = '<svg style="width:13px;height:13px;margin-right:6px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>Verified \u2014 Ready';
+                    }
+                    if (statusEl) statusEl.style.display = 'none';
+                    if (pushBtn) { pushBtn.disabled = false; pushBtn.classList.remove('vs-locked'); }
+                    if (pullBtn) { pullBtn.disabled = false; pullBtn.classList.remove('vs-locked'); }
+                    if (!silent) _autoEnableSyncEnabled();
+                } else {
+                    if (syncBtn) {
+                        syncBtn.style.color       = '#94a3b8';
+                        syncBtn.style.borderColor = 'var(--border-color)';
+                        syncBtn.style.background  = '';
+                        syncBtn.innerHTML = '<svg style="width:13px;height:13px;margin-right:6px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>Connect &amp; Verify';
+                    }
+                    if (pushBtn) { pushBtn.disabled = true; pushBtn.classList.add('vs-locked'); }
+                    if (pullBtn) { pullBtn.disabled = true; pullBtn.classList.add('vs-locked'); }
+                }
+            };
+
             const _updateSyncEnabledRow = () => {
                 const enabled = localStorage.getItem('drive-sync-enabled') !== 'false';
                 const row  = document.getElementById('drive-sync-enabled-row');
@@ -496,6 +536,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 _updateSyncEnabledRow();
                 _applyDeviceModeUI();
                 updateDriveStayActiveLabel();
+                // Auto-restore desktop verified state across refresh
+                const desktopVerified = localStorage.getItem('drive-desktop-verified') === 'true' && !!getVaultFolderName();
+                _setDesktopVerifiedState(desktopVerified, /*silent=*/true);
                 const histContent  = document.getElementById('drive-sync-history-content');
                 const clearHistBtn = document.getElementById('btn-drive-clear-history');
                 if (histContent) {
@@ -574,34 +617,82 @@ document.addEventListener('DOMContentLoaded', () => {
                 await setupVault();
             });
 
-            // ─ Sync Now (fromUserGesture: true — re-auth dialog allowed)
+            // ─ Connect & Verify (Desktop) — permission test only, no push/pull
             document.getElementById('btn-drive-sync-now-popup')?.addEventListener('click', async (e) => {
                 e.stopPropagation();
-                if (localStorage.getItem('drive-sync-enabled') === 'false') {
-                    if (typeof window.showToast === 'function') window.showToast('\u23F8 Vault Sync is paused — enable sync first');
-                    return;
+                const syncBtn  = document.getElementById('btn-drive-sync-now-popup');
+                const statusEl = document.getElementById('drive-desktop-verify-status');
+                try {
+                    if (syncBtn) {
+                        syncBtn.innerHTML = '<svg style="width:13px;height:13px;margin-right:6px;animation:vs-spin 0.9s linear infinite" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>Verifying…';
+                        syncBtn.style.color       = '#3b82f6';
+                        syncBtn.style.borderColor = '#93c5fd';
+                        syncBtn.style.background  = 'rgba(59,130,246,0.06)';
+                        syncBtn.disabled = true;
+                    }
+                    if (statusEl) statusEl.style.display = 'none';
+                    const { verifyVaultAccess } = await import('./core/driveSync.js');
+                    const folderName = await verifyVaultAccess();
+                    _setDesktopVerifiedState(true);
+                    if (statusEl) {
+                        statusEl.textContent = '\u2713 Access granted: ' + folderName;
+                        statusEl.style.cssText = 'display:block; width:100%; padding:5px 10px; border-radius:6px; font-size:10px; font-weight:700; text-align:center; box-sizing:border-box; background:rgba(16,185,129,0.1); color:#059669; border:1px solid #6ee7b7;';
+                    }
+                    if (typeof window.showToast === 'function') window.showToast('\u2705 Vault folder verified \u2014 Push & Pull unlocked');
+                } catch (err) {
+                    _setDesktopVerifiedState(false);
+                    if (syncBtn) { syncBtn.classList.add('vs-error'); setTimeout(() => syncBtn.classList.remove('vs-error'), 600); }
+                    if (statusEl) {
+                        statusEl.textContent = '\u26A0 ' + err.message;
+                        statusEl.style.cssText = 'display:block; width:100%; padding:5px 10px; border-radius:6px; font-size:10px; font-weight:700; text-align:center; box-sizing:border-box; background:rgba(239,68,68,0.08); color:#dc2626; border:1px solid #fecaca;';
+                    }
+                    if (typeof window.showToast === 'function') window.showToast('\u274C ' + err.message);
+                } finally {
+                    if (syncBtn) syncBtn.disabled = false;
                 }
-                const data = await _getDriveData();
-                await pushToDrive(data, { fromUserGesture: true });
-                refreshDrivePopupUI();
             });
 
-            // ─ Push
+            // ─ Push (Desktop)
             document.getElementById('btn-drive-push')?.addEventListener('click', async (e) => {
                 e.stopPropagation();
-                if (!confirm('Push local data → vault?\n\nThis will overwrite vault files with current local data.')) return;
-                const data = await _getDriveData();
-                await pushToDrive(data, { fromUserGesture: true });
-                refreshDrivePopupUI();
+                if (!confirm('Push local data \u2192 vault?\n\nThis will overwrite vault files with current local data.')) return;
+                const pushBtn = document.getElementById('btn-drive-push');
+                try {
+                    if (pushBtn) { pushBtn.disabled = true; pushBtn.classList.add('vs-syncing'); }
+                    const data = await _getDriveData();
+                    await pushToDrive(data, { fromUserGesture: true });
+                    _autoEnableSyncEnabled();
+                    if (pushBtn) { pushBtn.classList.remove('vs-syncing'); pushBtn.classList.add('vs-success'); setTimeout(() => pushBtn.classList.remove('vs-success'), 900); }
+                    refreshDrivePopupUI();
+                } catch (err) {
+                    if (pushBtn) { pushBtn.classList.remove('vs-syncing'); pushBtn.classList.add('vs-error'); setTimeout(() => pushBtn.classList.remove('vs-error'), 600); }
+                    if (typeof window.showToast === 'function') window.showToast('\u274C Push failed: ' + err.message);
+                } finally {
+                    if (pushBtn) pushBtn.disabled = false;
+                }
                 if (driveSyncPopup) driveSyncPopup.style.display = 'none';
             });
 
-            // ─ Pull
+            // ─ Pull (Desktop)
             document.getElementById('btn-drive-pull')?.addEventListener('click', async (e) => {
                 e.stopPropagation();
-                if (!confirm('Pull vault → local data?\n\nThis will overwrite local data with vault files. Page will reload.')) return;
-                const pulled = await pullFromDrive({ fromUserGesture: true });
-                if (pulled) { await _applyPulledData(pulled); clearConflict(); }
+                if (!confirm('Pull vault \u2192 local data?\n\nThis will overwrite local data with vault files. Page will reload.')) return;
+                const pullBtn = document.getElementById('btn-drive-pull');
+                try {
+                    if (pullBtn) { pullBtn.disabled = true; pullBtn.classList.add('vs-syncing'); }
+                    const pulled = await pullFromDrive({ fromUserGesture: true });
+                    if (pulled) {
+                        _autoEnableSyncEnabled();
+                        if (pullBtn) { pullBtn.classList.remove('vs-syncing'); pullBtn.classList.add('vs-success'); }
+                        await _applyPulledData(pulled);
+                        clearConflict();
+                    }
+                } catch (err) {
+                    if (pullBtn) { pullBtn.classList.remove('vs-syncing'); pullBtn.classList.add('vs-error'); setTimeout(() => pullBtn.classList.remove('vs-error'), 600); }
+                    if (typeof window.showToast === 'function') window.showToast('\u274C Pull failed: ' + err.message);
+                } finally {
+                    if (pullBtn) pullBtn.disabled = false;
+                }
                 if (driveSyncPopup) driveSyncPopup.style.display = 'none';
             });
 
@@ -906,6 +997,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const pulled = await pullFromGDrive();
                     if (pulled) {
                         if (pullBtn) { pullBtn.classList.remove('vs-syncing'); pullBtn.classList.add('vs-success'); }
+                        _autoEnableSyncEnabled();
                         await _applyPulledData(pulled);
                     }
                 } catch (err) {
