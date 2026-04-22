@@ -696,23 +696,48 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (driveSyncPopup) driveSyncPopup.style.display = 'none';
             });
 
-            // ─ Force Push
+            // ─ Force Push (Desktop)
             document.getElementById('btn-drive-force-push')?.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 if (!confirm('⚠️ Force Push — write local data to vault WITHOUT any merge.\n\nAll vault files will be completely overwritten. Are you sure?')) return;
-                const data = await _getDriveData();
-                await forcePush(data, { fromUserGesture: true });
-                clearConflict();
-                refreshDrivePopupUI();
+                const fpushBtn = document.getElementById('btn-drive-force-push');
+                try {
+                    if (fpushBtn) { fpushBtn.disabled = true; fpushBtn.classList.add('vs-syncing'); }
+                    const data = await _getDriveData();
+                    await forcePush(data, { fromUserGesture: true });
+                    clearConflict();
+                    if (fpushBtn) { fpushBtn.classList.remove('vs-syncing'); fpushBtn.classList.add('vs-success'); setTimeout(() => fpushBtn.classList.remove('vs-success'), 900); }
+                    refreshDrivePopupUI();
+                } catch (err) {
+                    if (fpushBtn) { fpushBtn.classList.remove('vs-syncing'); fpushBtn.classList.add('vs-error'); setTimeout(() => fpushBtn.classList.remove('vs-error'), 600); }
+                    if (typeof window.showToast === 'function') window.showToast('❌ Force Push failed: ' + err.message);
+                } finally {
+                    if (fpushBtn) fpushBtn.disabled = false;
+                }
                 if (driveSyncPopup) driveSyncPopup.style.display = 'none';
             });
 
-            // ─ Force Pull
+            // ─ Force Pull (Desktop)
             document.getElementById('btn-drive-force-pull')?.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 if (!confirm('⚠️ Force Pull — load vault into local data WITHOUT any merge.\n\nAll local data will be completely replaced. Page will reload. Are you sure?')) return;
-                const pulled = await pullFromDrive({ fromUserGesture: true });
-                if (pulled) { clearConflict(); await _applyPulledData(pulled); }
+                const fpullBtn = document.getElementById('btn-drive-force-pull');
+                try {
+                    if (fpullBtn) { fpullBtn.disabled = true; fpullBtn.classList.add('vs-syncing'); }
+                    const pulled = await pullFromDrive({ fromUserGesture: true });
+                    if (pulled) {
+                        if (fpullBtn) { fpullBtn.classList.remove('vs-syncing'); fpullBtn.classList.add('vs-success'); }
+                        clearConflict();
+                        await _applyPulledData(pulled);
+                    } else {
+                        if (fpullBtn) { fpullBtn.classList.remove('vs-syncing'); }
+                    }
+                } catch (err) {
+                    if (fpullBtn) { fpullBtn.classList.remove('vs-syncing'); fpullBtn.classList.add('vs-error'); setTimeout(() => fpullBtn.classList.remove('vs-error'), 600); }
+                    if (typeof window.showToast === 'function') window.showToast('❌ Force Pull failed: ' + err.message);
+                } finally {
+                    if (fpullBtn) fpullBtn.disabled = false;
+                }
                 if (driveSyncPopup) driveSyncPopup.style.display = 'none';
             });
 
@@ -955,28 +980,46 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
 
-            // ─ Mobile Force Push/Pull
+            // ─ Mobile Force Push
             document.getElementById('btn-gdrive-force-push')?.addEventListener('click', async (e) => {
                 e.stopPropagation();
-                if (!confirm('⚠️ Force Push — overwrite files in Drive with local data?\nThis will overwrite files in the selected Drive folder. Continue?')) return;
+                if (!confirm('⚠️ Force Push — overwrite files in Drive with local data?\nStale space files on Drive will also be deleted. Continue?')) return;
+                const gfpushBtn = document.getElementById('btn-gdrive-force-push');
                 try {
+                    if (gfpushBtn) { gfpushBtn.disabled = true; gfpushBtn.classList.add('vs-syncing'); }
                     const data = await _getDriveData();
                     const ok = await pushToGDrive(data);
-                    if (ok && typeof window.showToast === 'function') window.showToast('✅ Force push to Google Drive completed');
+                    if (gfpushBtn) { gfpushBtn.classList.remove('vs-syncing'); gfpushBtn.classList.add('vs-success'); setTimeout(() => gfpushBtn.classList.remove('vs-success'), 900); }
+                    if (ok && typeof window.showToast === 'function') window.showToast('✅ Force Push to Google Drive completed');
                     _updateGDriveMobileUI();
                 } catch (err) {
-                    if (typeof window.showToast === 'function') window.showToast('❌ Force push failed: ' + err.message);
+                    if (gfpushBtn) { gfpushBtn.classList.remove('vs-syncing'); gfpushBtn.classList.add('vs-error'); setTimeout(() => gfpushBtn.classList.remove('vs-error'), 600); }
+                    if (typeof window.showToast === 'function') window.showToast('❌ Force Push failed: ' + err.message);
+                } finally {
+                    if (gfpushBtn) gfpushBtn.disabled = false;
                 }
             });
 
+            // ─ Mobile Force Pull
             document.getElementById('btn-gdrive-force-pull')?.addEventListener('click', async (e) => {
                 e.stopPropagation();
-                if (!confirm('⚠️ Force Pull — load Drive data into local storage WITHOUT merge?\nThis will overwrite local data and reload the page. Continue?')) return;
+                if (!confirm('⚠️ Force Pull — load Drive data into local WITHOUT merge?\nThis will overwrite local data and reload the page. Continue?')) return;
+                const gfpullBtn = document.getElementById('btn-gdrive-force-pull');
                 try {
+                    if (gfpullBtn) { gfpullBtn.disabled = true; gfpullBtn.classList.add('vs-syncing'); }
                     const pulled = await pullFromGDrive();
-                    if (pulled) { await _applyPulledData(pulled); if (typeof window.showToast === 'function') window.showToast('✅ Pulled from Google Drive'); }
+                    if (pulled) {
+                        if (gfpullBtn) { gfpullBtn.classList.remove('vs-syncing'); gfpullBtn.classList.add('vs-success'); }
+                        if (typeof window.showToast === 'function') window.showToast('✅ Force Pulled from Google Drive');
+                        await _applyPulledData(pulled);
+                    } else {
+                        if (gfpullBtn) { gfpullBtn.classList.remove('vs-syncing'); }
+                    }
                 } catch (err) {
-                    if (typeof window.showToast === 'function') window.showToast('❌ Force pull failed: ' + err.message);
+                    if (gfpullBtn) { gfpullBtn.classList.remove('vs-syncing'); gfpullBtn.classList.add('vs-error'); setTimeout(() => gfpullBtn.classList.remove('vs-error'), 600); }
+                    if (typeof window.showToast === 'function') window.showToast('❌ Force Pull failed: ' + err.message);
+                } finally {
+                    if (gfpullBtn) gfpullBtn.disabled = false;
                 }
             });
 

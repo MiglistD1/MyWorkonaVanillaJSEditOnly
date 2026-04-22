@@ -162,6 +162,18 @@ async function _ensureToken() {
 
 // ── API Helpers ───────────────────────────────────────────────────────────────
 
+async function _deleteFile(fileId) {
+    const token = await _ensureToken();
+    const res = await fetch(`${GDRIVE_API}/files/${fileId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!res.ok && res.status !== 204 && res.status !== 404) {
+        const e = await res.json().catch(() => ({}));
+        throw new Error(e.error?.message || `Drive API delete ${res.status}`);
+    }
+}
+
 async function _api(path, opts = {}) {
     const token = await _ensureToken();
     const res = await fetch(`${GDRIVE_API}${path}`, {
@@ -298,6 +310,17 @@ export async function pushToGDrive(data) {
         const existing = await _findFile(name, _folderId);
         const metadata = existing ? {} : { name, parents: [_folderId] };
         await _upload(metadata, body, existing?.id);
+    }
+
+    // Delete stale space_*.json files in Drive that no longer exist locally
+    const currentSpaceIds = new Set((data.mySpacesData || []).map(s => String(s.id)));
+    const q    = `'${_folderId}' in parents and trashed=false`;
+    const list = await _api(`/files?q=${encodeURIComponent(q)}&fields=files(id,name)&pageSize=100`);
+    for (const f of (list.files || [])) {
+        if (f.name.startsWith('space_') && f.name.endsWith('.json')) {
+            const spaceId = f.name.slice(6, -5);
+            if (!currentSpaceIds.has(spaceId)) await _deleteFile(f.id);
+        }
     }
 
     localStorage.setItem(LS_LAST_SYNC, String(Date.now()));
