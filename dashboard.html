@@ -339,14 +339,18 @@
             </div>
 
             <!-- Auto-Sync interval (mobile) -->
-            <div style="display:flex; align-items:center; justify-content:space-between; width:100%; margin-top:4px;">
-              <span id="gdrive-mobile-interval-label" style="font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.3px;">Auto-Sync Interval</span>
-              <select id="gdrive-mobile-interval-select" style="font-size:10px; padding:2px 6px; border-radius:5px; border:1px solid var(--border-color); background:var(--bg-body); color:var(--text-main); cursor:pointer; font-weight:700;">
-                <option value="300000">5m</option>
-                <option value="900000">15m</option>
-                <option value="1800000">30m</option>
-                <option value="3600000">1h</option>
-              </select>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; margin-top:4px;">
+              <span id="gdrive-mobile-interval-label" style="font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.3px; flex:1;">Auto-Sync Interval</span>
+              <div style="display:flex; align-items:center; gap:6px;">
+                <select id="gdrive-mobile-interval-select" style="font-size:10px; padding:2px 6px; border-radius:5px; border:1px solid var(--border-color); background:var(--bg-body); color:var(--text-main); cursor:pointer; font-weight:700;">
+                  <option value="60000">1m</option>
+                  <option value="300000">5m</option>
+                  <option value="900000">15m</option>
+                  <option value="1800000">30m</option>
+                  <option value="3600000">1h</option>
+                </select>
+                <button id="btn-gdrive-reset-sync" class="btn btn-outline" title="Clear mobile sync session and verify again" style="height:24px; padding:0 8px; font-size:9px; font-weight:700; color:#f59e0b; border-color:#fcd34d; flex-shrink:0;">Reset</button>
+              </div>
             </div>
             <div id="gdrive-mobile-interval-status" style="width:100%; text-align:right; font-size:9px; color:var(--text-muted); margin-top:-2px;">Every 5 min</div>
 

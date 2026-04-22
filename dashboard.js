@@ -1114,6 +1114,27 @@ document.addEventListener('DOMContentLoaded', () => {
             _startMobileInterval();
             _updateMobileIntervalUI();
 
+            document.getElementById('btn-gdrive-reset-sync')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const shouldReset = confirm(
+                    'Reset mobile sync session?\n\nThis will clear cached Google Drive connection state on this device only.\nYour data in Google Drive will NOT be deleted.\nAfter reset, reconnect and verify, then use Force Pull.'
+                );
+                if (!shouldReset) return;
+
+                disconnectGDrive();
+                localStorage.removeItem('gdrive-connection-verified');
+                localStorage.removeItem('gdrive-last-sync-at');
+                localStorage.setItem('drive-sync-enabled', 'false');
+
+                _setMobileVerifiedState(false, /*silent=*/true);
+                _updateSyncEnabledRow();
+                _updateGDriveMobileUI();
+
+                if (typeof window.showToast === 'function') {
+                    window.showToast('Sync session reset. Reconnect, verify, then Force Pull.');
+                }
+            });
+
             // ─ Stay Active After Refresh (timed)
 
             document.getElementById('btn-drive-stay-active-set')?.addEventListener('click', (e) => {
