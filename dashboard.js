@@ -356,6 +356,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const statusEl  = document.getElementById('drive-gdrive-verify-status');
                 const pushBtn   = document.getElementById('btn-gdrive-push-data');
                 const pullBtn   = document.getElementById('btn-gdrive-pull-data');
+                const forcePushBtn = document.getElementById('btn-gdrive-force-push');
+                const forcePullBtn = document.getElementById('btn-gdrive-force-pull');
 
                 if (verified) {
                     // Button → green "Verified" state
@@ -369,6 +371,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Unlock Push/Pull
                     if (pushBtn) { pushBtn.disabled = false; pushBtn.classList.remove('vs-locked'); }
                     if (pullBtn) { pullBtn.disabled = false; pullBtn.classList.remove('vs-locked'); }
+                    if (forcePushBtn) { forcePushBtn.disabled = false; forcePushBtn.classList.remove('vs-locked'); }
+                    if (forcePullBtn) { forcePullBtn.disabled = false; forcePullBtn.classList.remove('vs-locked'); }
                     // Auto-enable Sync Enabled (only on first successful verify, not on page-load restore)
                     if (!silent) {
                         const chk = document.getElementById('chk-drive-sync-enabled');
@@ -390,7 +394,26 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Lock Push/Pull
                     if (pushBtn) { pushBtn.disabled = true; pushBtn.classList.add('vs-locked'); }
                     if (pullBtn) { pullBtn.disabled = true; pullBtn.classList.add('vs-locked'); }
+                    if (forcePushBtn) { forcePushBtn.disabled = true; forcePushBtn.classList.add('vs-locked'); }
+                    if (forcePullBtn) { forcePullBtn.disabled = true; forcePullBtn.classList.add('vs-locked'); }
                 }
+            };
+
+            const _formatMobileIntervalLabel = (ms) => {
+                const minutes = Math.round(ms / 60000);
+                if (minutes < 60) return `Every ${minutes} min`;
+                const hours = minutes / 60;
+                return Number.isInteger(hours) ? `Every ${hours} hr` : `Every ${hours.toFixed(1)} hr`;
+            };
+
+            const _updateMobileIntervalUI = () => {
+                const select = document.getElementById('gdrive-mobile-interval-select');
+                const labelEl = document.getElementById('gdrive-mobile-interval-label');
+                const statusEl = document.getElementById('gdrive-mobile-interval-status');
+                const raw = parseInt(localStorage.getItem(LS_MOBILE_INTERVAL) || String(DEFAULT_MOBILE_INTERVAL), 10);
+                if (select) select.value = String(raw);
+                if (labelEl) labelEl.textContent = 'Auto-Sync Interval';
+                if (statusEl) statusEl.textContent = _formatMobileIntervalLabel(raw);
             };
 
             const _updateGDriveMobileUI = () => {
@@ -429,8 +452,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (pushPullRow) pushPullRow.style.display = showSync ? 'flex' : 'none';
                 if (lastSyncEl) {
                     lastSyncEl.style.display = showSync ? 'block' : 'none';
-                    if (lastSync) lastSyncEl.textContent = `Last Synced: ${new Date(lastSync).toLocaleTimeString()}`;
+                    lastSyncEl.textContent = lastSync ? `Last Synced: ${new Date(lastSync).toLocaleTimeString()}` : 'Last Synced: Never';
                 }
+                _updateMobileIntervalUI();
                 // Auto-restore verified state if token + folder still valid across refresh
                 const autoVerified = showSync && localStorage.getItem('gdrive-connection-verified') === 'true';
                 _setMobileVerifiedState(autoVerified, /*silent=*/true);
@@ -566,11 +590,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const _applyPulledData = async (data) => {
                 try {
                     const { setSpaces, setCurrentSpaceId, setAppSettings, setGlobalLaunchers, setLauncherTags, saveData } = await import('./core/storage.js');
-                    if (data.mySpacesData)    setSpaces(data.mySpacesData);
-                    if (data.lastSpaceId)     setCurrentSpaceId(data.lastSpaceId);
-                    if (data.appSettings)     setAppSettings(data.appSettings);
-                    if (data.globalLaunchers) setGlobalLaunchers(data.globalLaunchers);
-                    if (data.launcherTags)    setLauncherTags(data.launcherTags);
+                    if (Array.isArray(data.mySpacesData)) setSpaces(data.mySpacesData);
+                    if ('appSettings' in data) setAppSettings(data.appSettings || {});
+                    if (Array.isArray(data.globalLaunchers)) setGlobalLaunchers(data.globalLaunchers);
+                    if (Array.isArray(data.launcherTags)) setLauncherTags(data.launcherTags);
+                    const nextSpaceId = data.lastSpaceId ?? data.mySpacesData?.[0]?.id ?? 1;
+                    setCurrentSpaceId(nextSpaceId);
                     saveData(true);
                 } catch (err) {
                     console.error('[DriveSync] Apply pulled data error:', err);
@@ -1082,10 +1107,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     e.stopPropagation();
                     localStorage.setItem(LS_MOBILE_INTERVAL, mobileIntervalSelect.value);
                     _startMobileInterval();
+                    _updateMobileIntervalUI();
                 });
             }
 
             _startMobileInterval();
+            _updateMobileIntervalUI();
 
             // ─ Stay Active After Refresh (timed)
 
