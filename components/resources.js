@@ -4,7 +4,13 @@ import Sortable from '../sortable.esm.js';
 import { getSpaces, getCurrentSpaceId, saveData, getCurrentSpace, getAppSettings } from '../core/storage.js';
 import { mergeArrays } from '../core/firebaseSync.js';
 import { svgEdit, svgTrashRed, dragHandleSvg, svgSideView, svgArchive, svgUnarchive, svgRestore } from '../core/icons.js';
-import { openOrFocusTab, generateMiniTagsBtn, getFaviconUrl, getTrashCountdownText } from '../core/ui-helpers.js';
+import { openOrFocusTab, openResourceItem, generateMiniTagsBtn, getFaviconUrl, getTrashCountdownText } from '../core/ui-helpers.js';
+import { showCreateBlockModal } from './modals.js';
+import {
+    createResourceBlock,
+    generateResourceBlockSectionHTML,
+    attachResourceBlockActionListeners,
+} from './resourceBlockManager.js';
 
 // SVG icons
 const svgMenu = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>`;
@@ -73,7 +79,15 @@ export function initResources(callbacks) {
 
                 resChecked.forEach(cb => {
                     const idx = parseInt(cb.getAttribute("data-index"));
-                    urlsToOpen.push(space.resources[idx].url);
+                    const rItem = space.resources[idx];
+                    if (
+                        rItem &&
+                        !rItem.isResourceBlockHeader &&
+                        rItem.url &&
+                        !String(rItem.url).startsWith('resblock://')
+                    ) {
+                        urlsToOpen.push(rItem.url);
+                    }
                 });
                 driveChecked.forEach(cb => {
                     const idx = parseInt(cb.getAttribute("data-index"));
@@ -207,6 +221,19 @@ export function initResources(callbacks) {
         });
     }
 
+    const btnCreateResBlock = document.getElementById('btn-create-resource-block');
+    if (btnCreateResBlock) {
+        btnCreateResBlock.addEventListener('click', () => {
+            const space = getCurrentSpace();
+            showCreateBlockModal({
+                onConfirm: (name, color) => {
+                    createResourceBlock(space, name, color);
+                    onRender();
+                },
+            });
+        });
+    }
+
     // 3. Delegation for Edit/Delete Buttons in the list
     const mainGrid = document.getElementById('main-grid');
     if (mainGrid) {
@@ -310,7 +337,7 @@ export function initResources(callbacks) {
                 if (window.editResource) window.editResource(type, idx);
             }
 
-            // Handle smart tab opening for resource links
+            // Handle smart tab opening for resource links (รวมศูนย์ที่ openResourceItem)
             if (e.target.tagName === 'A' && e.target.href) {
                 e.preventDefault();
                 const li = e.target.closest('li');
@@ -320,37 +347,7 @@ export function initResources(callbacks) {
                     const arr = type === 'resource' ? space.resources : space.driveFiles;
                     const item = arr[index];
                     if (!item) return;
-
-                    // 1. ตรวจสอบว่าเป็น Local Program หรือไม่ (เช็คว่าไม่ได้ขึ้นต้นด้วย http)
-                    const isLocalProgram = item.url && !item.url.startsWith('http') && !item.url.startsWith('chrome');
-                    // 2. ตรวจสอบว่าต้องการโหมด Half Screen หรือไม่ (เช็คจาก Tag)
-                    const isHalfScreenTag = item.tags && item.tags.some(t => t.toUpperCase() === 'HALF SCREEN');
-
-                    if (isLocalProgram) {
-                        // --- 🟢 จัดการเปิดโปรแกรมในเครื่องผ่าน Native Messaging ---
-                        const useSplit = item.isSideView && isHalfScreenTag;
-
-                        if (useSplit) {
-                            // ถ้าเปิด Sideview และมีป้าย Half screen -> ย่อ Browser ลงครึ่งจอ
-                            chrome.windows.getCurrent({}, (win) => {
-                                const width = Math.floor(window.screen.availWidth / 2);
-                                const height = window.screen.availHeight;
-                                chrome.windows.update(win.id, { left: 0, top: 0, width: width, height: height, state: 'normal' });
-                            });
-                        }
-
-                        chrome.runtime.sendNativeMessage('com.myworkona.launcher', { 
-                            path: item.url, 
-                            name: item.title, 
-                            splitView: useSplit 
-                        });
-                    } else if (item.isSideView && chrome.sidePanel) {
-                        // --- การทำงานปกติสำหรับ Web Link: เปิดใน Side Panel ---
-                        chrome.sidePanel.setOptions({ path: item.url, enabled: true });
-                        chrome.sidePanel.open({ windowId: chrome.windows.WINDOW_ID_CURRENT });
-                    } else {
-                        openOrFocusTab(e.target.href);
-                    }
+                    openResourceItem(item);
                 }
             }
 
@@ -417,6 +414,153 @@ function initSortable(el, sourceArray, onRender) {
     });
 }
 
+// ─── Resource row HTML (รวมปุ่มลบออกจาก block) ─────────────────────────────────
+const svgRemoveFromBlock = `<svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>`;
+
+function isAiTaggedResource(res) {
+    return (
+        res.tags &&
+        res.tags.some(tag => {
+            const t = String(tag).toLowerCase().trim();
+            return t === 'ai' || t === 'default ai';
+        })
+    );
+}
+
+function resourceMatchesFilters(res, filterTags, currentFilterMode, currentSearchQuery) {
+    if (filterTags.length > 0) {
+        const itemTags = res.tags || [];
+        const itemTagsUpper = itemTags.map(t => t.toUpperCase());
+        const checkTag = tag => {
+            if (tag === 'UNTAGGED') return itemTags.length === 0;
+            return itemTagsUpper.includes(tag.toUpperCase());
+        };
+        if (currentFilterMode === 'AND') {
+            if (!filterTags.every(checkTag)) return false;
+        } else {
+            if (!filterTags.some(checkTag)) return false;
+        }
+    }
+    if (currentSearchQuery && !String(res.title || '').toLowerCase().includes(currentSearchQuery)) {
+        return false;
+    }
+    return true;
+}
+
+/**
+ * ลากลิงก์ระหว่าง AI / General / block drop zones (ใช้ data-index ชี้ space.resources)
+ */
+function initResourceFolderSortables(space, onRender) {
+    const aiList = document.getElementById('resource-ai-list');
+    const resList = document.getElementById('resource-list');
+    const trashResListUI = document.getElementById('trash-resource-list');
+    if (!aiList || !resList) return;
+
+    [aiList, resList].forEach(el => {
+        if (el.sortable) {
+            el.sortable.destroy();
+            el.sortable = null;
+        }
+    });
+    document.querySelectorAll('.resource-block-drop-zone').forEach(zone => {
+        if (zone.sortable) {
+            zone.sortable.destroy();
+            zone.sortable = null;
+        }
+    });
+
+    const onEnd = evt => {
+        if (space.isArchived) return;
+        const item = evt.item;
+        const from = evt.from;
+        const to = evt.to;
+        if (from === to && evt.oldIndex === evt.newIndex) return;
+
+        const oldIdx = parseInt(item.getAttribute('data-index'), 10);
+        if (Number.isNaN(oldIdx)) return;
+
+        const moved = space.resources.splice(oldIdx, 1)[0];
+        if (!moved) return;
+
+        // ลากหัว block — เฉพาะ header
+        if (item.classList.contains('resource-block-container')) {
+            if (!moved.isResourceBlockHeader) {
+                space.resources.splice(oldIdx, 0, moved);
+                saveData(true);
+                onRender();
+                return;
+            }
+            let nextEl = item.nextElementSibling;
+            while (nextEl && !nextEl.hasAttribute('data-index')) {
+                nextEl = nextEl.nextElementSibling;
+            }
+            let finalIdx = nextEl ? parseInt(nextEl.getAttribute('data-index'), 10) : space.resources.length;
+            if (finalIdx > oldIdx) finalIdx--;
+            space.resources.splice(finalIdx, 0, moved);
+            saveData(true);
+            onRender();
+            return;
+        }
+
+        if (from.classList.contains('resource-block-drop-zone')) {
+            delete moved.blockId;
+            delete moved.blockName;
+            delete moved.blockColor;
+        }
+
+        if (to.classList.contains('resource-block-drop-zone')) {
+            moved.blockId = to.dataset.blockId || null;
+            moved.blockName = to.dataset.blockName || '';
+            moved.blockColor = to.dataset.blockColor || '';
+        }
+
+        let nextEl = item.nextElementSibling;
+        while (nextEl && !nextEl.hasAttribute('data-index')) {
+            nextEl = nextEl.nextElementSibling;
+        }
+        let finalIdx = nextEl ? parseInt(nextEl.getAttribute('data-index'), 10) : space.resources.length;
+        if (finalIdx > oldIdx) finalIdx--;
+
+        space.resources.splice(finalIdx, 0, moved);
+        saveData(true);
+        onRender();
+    };
+
+    // ห้ามใช้ prefix "> ... , > ..." — sortable.esm.js จะตัด ">" แค่ตัวแรก ทำให้ selector ผิดและลากไม่ได้
+    const sortOpts = {
+        animation: 150,
+        group: { name: 'resources-folder', pull: true, put: true },
+        ghostClass: 'sortable-ghost',
+        filter: '.block-empty-hint',
+        draggable: 'li.draggable-item, li.resource-block-container',
+        handle: '.drag-handle, .block-drag-handle',
+        disabled: space.isArchived,
+        onEnd,
+    };
+
+    aiList.sortable = Sortable.create(aiList, { ...sortOpts });
+    resList.sortable = Sortable.create(resList, { ...sortOpts });
+    document.querySelectorAll('.resource-block-drop-zone').forEach(zone => {
+        zone.sortable = Sortable.create(zone, { ...sortOpts });
+    });
+
+    if (trashResListUI && onRender) {
+        if (trashResListUI.sortable) trashResListUI.sortable.destroy();
+        trashResListUI.sortable = Sortable.create(trashResListUI, {
+            group: 'resources-folder',
+            animation: 150,
+            onAdd: evt => {
+                const idx = parseInt(evt.item.dataset.index, 10);
+                if (!Number.isNaN(idx) && space.resources[idx]) {
+                    space.resources[idx].isDeleted = true;
+                    saveData();
+                    onRender();
+                }
+            },
+        });
+    }
+}
+
 //Rendering Functions
 export function renderResources(space, currentFilterTags, currentFilterMode, currentSearchQuery, onRender) {
     const resListUI = document.getElementById('resource-list');
@@ -474,31 +618,79 @@ export function renderResources(space, currentFilterTags, currentFilterMode, cur
     if (!space.resources) space.resources = [];
     
     const filterTags = Array.isArray(currentFilterTags) ? currentFilterTags : [];
-    const isFiltered = filterTags.length > 0 || currentSearchQuery !== "";
+    const isFiltered = filterTags.length > 0 || currentSearchQuery !== '';
     const handleHTML = isFiltered ? '' : dragHandleSvg;
 
-    space.resources.forEach((res, index) => {
-        // --- 1. ตรวจสอบการกรอง (Filtering) ---
-        let hasMatchTag = true;
-        if (filterTags.length > 0) {
-            const itemTags = res.tags || [];
-            const itemTagsUpper = itemTags.map(t => t.toUpperCase());
-            
-            const checkTag = (tag) => {
-                if (tag === 'UNTAGGED') return itemTags.length === 0;
-                return itemTagsUpper.includes(tag.toUpperCase());
-            };
-
-            if (currentFilterMode === 'AND') {
-                hasMatchTag = filterTags.every(checkTag);
-            } else {
-                hasMatchTag = filterTags.some(checkTag);
+    // รวมลิงก์ที่อยู่ใน block (ตาม blockId) — ใช้เมื่อไม่ได้กรอง
+    const resBlockMap = {};
+    if (!isFiltered) {
+        space.resources.forEach((res, idx) => {
+            if (res.isDeleted || res.isArchived) return;
+            if (!resourceMatchesFilters(res, filterTags, currentFilterMode, currentSearchQuery)) return;
+            if (res.blockId && !res.isResourceBlockHeader) {
+                if (!resBlockMap[res.blockId]) resBlockMap[res.blockId] = [];
+                resBlockMap[res.blockId].push({ res, index: idx });
             }
-        }
-        if (!hasMatchTag) return;
-        if (currentSearchQuery && !res.title.toLowerCase().includes(currentSearchQuery)) return;
+        });
+    }
 
-        // --- Trash Rendering ---
+    const buildResourceRowHtml = (res, index, showRemoveFromBlock) => {
+        const isLocalProgram = res.url && !res.url.startsWith('http') && !res.url.startsWith('chrome');
+        const isLocal = res.tags && res.tags.some(t => t.toUpperCase() === 'HALF SCREEN');
+        const svIsActive = res.isSideView ? (isLocal ? 'active-local-split' : 'active-side-view') : '';
+        const svTitle = isLocal
+            ? (res.isSideView ? 'Half Screen: ON' : 'Half Screen: OFF')
+            : (res.isSideView ? 'Side View: ON' : 'Side View: OFF');
+
+        const sideViewButtonHTML = `<button type="button" class="btn-icon btn-toggle-side-view ${svIsActive}" data-type="resource" data-index="${index}" title="${svTitle}">${svgSideView}</button>`;
+        const visibleSideViewBtn = res.isSideView ? sideViewButtonHTML : '';
+        const hiddenSideViewBtn = !res.isSideView ? sideViewButtonHTML : '';
+        const localProgramIconHTML = isLocalProgram
+            ? `<span class="local-program-icon-wrapper" title="Local Program">${svgLocalProgramIcon}</span>`
+            : '';
+        const removeBtn =
+            showRemoveFromBlock && res.blockId && !res.isResourceBlockHeader
+                ? `<button type="button" class="btn-icon res-btn-remove-from-block" data-index="${index}" title="Remove from block">${svgRemoveFromBlock}</button>`
+                : '';
+
+        return `
+            <li class="draggable-item" data-index="${index}" data-type="resource">
+                <div class="item-main-row">
+                    ${handleHTML}
+                    <label class="google-task-checkbox" style="display: ${isResDeleteMode || isResMultiOpenMode ? 'inline-flex' : 'none'};">
+                        <input type="checkbox" class="res-checkbox" data-index="${index}">
+                        <div class="checkmark-circle">
+                            <svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg>
+                        </div>
+                    </label>
+                    <div class="text-truncate" title="${res.url || ''}">
+                        <img src="${getFaviconUrl(res.url, res.favIconUrl)}" class="favicon-img">
+                        <a href="${res.url}">${res.title}</a>
+                        ${localProgramIconHTML}
+                    </div>
+                    <div class="item-action-group" style="position: relative;">
+                        ${generateMiniTagsBtn(res.tags, 'resource', index)}
+                        ${removeBtn}
+                        ${visibleSideViewBtn}
+                        <div class="item-actions-hidden" style="display: none; gap: 6px;">
+                            ${hiddenSideViewBtn}
+                            <button type="button" class="btn-icon archive-res-btn" data-type="resource" data-index="${index}" title="Archive">${svgArchive}</button>
+                            <button type="button" class="btn-icon edit-res-btn" data-type="resource" data-index="${index}">${svgEdit}</button>
+                            <button type="button" class="btn-icon delete-res-btn" data-type="resource" data-index="${index}">${svgTrashRed}</button>
+                        </div>
+                        <button type="button" class="btn-icon btn-item-menu">${svgMenu}</button>
+                    </div>
+                </div>
+            </li>`;
+    };
+
+    const appendResourceRow = (targetUI, res, index, showRemoveFromBlock) => {
+        targetUI.innerHTML += buildResourceRowHtml(res, index, showRemoveFromBlock);
+    };
+
+    space.resources.forEach((res, index) => {
+        if (!resourceMatchesFilters(res, filterTags, currentFilterMode, currentSearchQuery)) return;
+
         if (res.isDeleted) {
             const countdown = getTrashCountdownText(res, getAppSettings().autoDeleteDays);
             trashResListUI.innerHTML += `
@@ -510,14 +702,13 @@ export function renderResources(space, currentFilterTags, currentFilterMode, cur
                         </div>
                         <span style="color:#ef4444; font-size:11px; font-weight:700; margin-right:8px;">${countdown}</span>
                         <div class="item-action-group">
-                            <button class="btn-icon restore-res-btn" data-type="resource" data-index="${index}" title="Restore">${svgRestore}</button>
-                            <button class="btn-icon delete-res-perm-btn" data-type="resource" data-index="${index}">${svgTrashRed}</button>
+                            <button type="button" class="btn-icon restore-res-btn" data-type="resource" data-index="${index}" title="Restore">${svgRestore}</button>
+                            <button type="button" class="btn-icon delete-res-perm-btn" data-type="resource" data-index="${index}">${svgTrashRed}</button>
                         </div>
                     </div></li>`;
             return;
         }
 
-        // --- Archived Rendering ---
         if (res.isArchived) {
             archivedResListUI.innerHTML += `
                 <li class="draggable-item" data-index="${index}" data-type="resource">
@@ -527,121 +718,41 @@ export function renderResources(space, currentFilterTags, currentFilterMode, cur
                             <a href="${res.url}">${res.title}</a>
                         </div>
                         <div class="item-action-group">
-                            <button class="btn-icon unarchive-res-btn" data-type="resource" data-index="${index}" title="Unarchive">${svgUnarchive}</button>
-                            <button class="btn-icon delete-res-btn" data-type="resource" data-index="${index}">${svgTrashRed}</button>
+                            <button type="button" class="btn-icon unarchive-res-btn" data-type="resource" data-index="${index}" title="Unarchive">${svgUnarchive}</button>
+                            <button type="button" class="btn-icon delete-res-btn" data-type="resource" data-index="${index}">${svgTrashRed}</button>
                         </div>
                     </div>
                 </li>`;
             return;
         }
 
-        // 🟢 NEW: Determine if it's a Local Program
-        const isLocalProgram = res.url && !res.url.startsWith('http') && !res.url.startsWith('chrome');
+        if (isFiltered) {
+            if (res.isResourceBlockHeader) return;
+            const targetUI = isAiTaggedResource(res) ? aiListUI : resListUI;
+            appendResourceRow(targetUI, res, index, !!res.blockId);
+            return;
+        }
 
-        // --- 2. ตรวจสอบประเภท (AI หรือ General) ---
-        // เช็คว่ามีป้ายคำว่า "AI" หรือ "default ai" หรือไม่
-        const isAI = res.tags && res.tags.some(tag => {
-            const t = tag.toLowerCase().trim();
-            return t === 'ai' || t === 'default ai';
-        });
+        if (res.isResourceBlockHeader) {
+            const items = resBlockMap[res.blockId] || [];
+            const inner = items.map(({ res: br, index: bi }) => buildResourceRowHtml(br, bi, true)).join('');
+            resListUI.innerHTML += generateResourceBlockSectionHTML(res, inner, items.length, index);
+            return;
+        }
 
-        // เลือกเป้าหมายที่จะวาด (ช่อง AI หรือ ช่องปกติ)
-        const targetUI = isAI ? aiListUI : resListUI;
-        
-        // Side View Button Style
-        const isLocal = res.tags && res.tags.some(t => t.toUpperCase() === 'HALF SCREEN');
-        const svIsActive = res.isSideView ? (isLocal ? 'active-local-split' : 'active-side-view') : '';
-        const svTitle = isLocal 
-            ? (res.isSideView ? 'Half Screen: ON' : 'Half Screen: OFF')
-            : (res.isSideView ? 'Side View: ON' : 'Side View: OFF');
+        if (res.blockId) return;
 
-        const sideViewButtonHTML = `<button class="btn-icon btn-toggle-side-view ${svIsActive}" data-type="resource" data-index="${index}" title="${svTitle}">${svgSideView}</button>`;
-
-        // Conditionally place the button
-        const visibleSideViewBtn = res.isSideView ? sideViewButtonHTML : '';
-        const hiddenSideViewBtn = !res.isSideView ? sideViewButtonHTML : '';
-
-        // 🟢 NEW: Local Program Icon HTML
-        const localProgramIconHTML = isLocalProgram ? `<span class="local-program-icon-wrapper" title="Local Program">${svgLocalProgramIcon}</span>` : '';
-        // --- 3. วาด HTML ลงในช่องที่เลือก ---
-        targetUI.innerHTML += `
-            <li class="draggable-item" data-index="${index}" data-type="resource">
-                <div class="item-main-row">
-                    ${handleHTML}
-                    <label class="google-task-checkbox" style="display: ${isResDeleteMode || isResMultiOpenMode ? 'inline-flex' : 'none'};">
-                        <input type="checkbox" class="res-checkbox" data-index="${index}">
-                        <div class="checkmark-circle">
-                            <svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg>
-                        </div>
-                    </label>
-                    <div class="text-truncate" title="${res.url}">
-                        <img src="${getFaviconUrl(res.url, res.favIconUrl)}" class="favicon-img">
-                        <a href="${res.url}">${res.title}</a>
-                        ${localProgramIconHTML}
-                    </div>
-                    <div class="item-action-group" style="position: relative;">
-                        ${generateMiniTagsBtn(res.tags, 'resource', index)}
-                        ${visibleSideViewBtn}
-                        <div class="item-actions-hidden" style="display: none; gap: 6px;">
-                            ${hiddenSideViewBtn}
-                            <button class="btn-icon archive-res-btn" data-type="resource" data-index="${index}" title="Archive">${svgArchive}</button>
-                            <button class="btn-icon edit-res-btn" data-type="resource" data-index="${index}">${svgEdit}</button>
-                            <button class="btn-icon delete-res-btn" data-type="resource" data-index="${index}">${svgTrashRed}</button>
-                        </div>
-                        <button class="btn-icon btn-item-menu">${svgMenu}</button>
-                    </div>
-                </div>
-            </li>`;
+        const targetUI = isAiTaggedResource(res) ? aiListUI : resListUI;
+        appendResourceRow(targetUI, res, index, false);
     });
 
     trashContainer.style.display = trashResListUI.children.length > 0 ? 'block' : 'none';
 
-    // --- 4. จัดการระบบลากวาง (Sortable) ---
+    // --- 4. ลากวางข้าม AI / General / block + ปุ่มจัดการ block ---
     if (!isFiltered && onRender) {
-        // ทำ Sortable ให้กับทั้งสองรายการ
-        [resListUI, aiListUI].forEach(listUI => {
-            if (listUI.sortable) listUI.sortable.destroy();
-            listUI.sortable = Sortable.create(listUI, {
-                animation: 150,
-                handle: '.drag-handle',
-                disabled: space.isArchived,
-                group: 'resources-folder',
-                ghostClass: 'sortable-ghost',
-                onEnd: function (evt) {
-                    // หาค่า Index ดั้งเดิมจาก Attribute เพื่อความแม่นยำ
-                    const oldIdx = parseInt(evt.item.getAttribute('data-index'));
-                    
-                    // เนื่องจากเป็น Sort ภายใน list ย่อย เราจึงใช้การจัดเรียงจาก DOM เป็นหลัก
-                    // หรือจะใช้ logic การย้ายตำแหน่งใน array space.resources แบบง่ายๆ
-                    const movedItem = space.resources.splice(oldIdx, 1)[0];
-                    
-                    // หาตำแหน่งใหม่ใน array (ต้องใช้ความระมัดระวังเมื่อแยก list)
-                    // สำหรับเคสนี้ เราจะใช้ความสะดวกในการ Re-render เป็นหลัก
-                    // หมายเหตุ: การ Sort ข้าม List ระหว่าง AI กับ General อาจจะยังไม่สมบูรณ์ถ้าใช้ logic นี้
-                    // แต่สำหรับการจัดลำดับภายใน List ตัวเองจะทำงานได้ปกติครับ
-                    
-                    // หาตำแหน่งใหม่โดยดูจากปุ่มก่อนหน้าใน DOM
-                    let newIdxInArray = 0;
-                    const allItemsAfterSort = document.querySelectorAll('#resource-ai-list li, #resource-list li');
-                    // (เราจะข้าม logic การ Sort ที่ซับซ้อนไปก่อนเพื่อให้การย้ายที่แสดงผลทำงานได้)
-                    
-                    space.resources.splice(evt.newIndex, 0, movedItem); // logic พื้นฐาน
-                    saveData();
-                    onRender();
-                }
-            });
-        });
-
-        // Add Sortable to Trash
-        Sortable.create(trashResListUI, {
-            group: 'resources-folder',
-            animation: 150,
-            onAdd: (evt) => {
-                const idx = parseInt(evt.item.dataset.index);
-                space.resources[idx].isDeleted = true;
-                saveData(); onRender();
-            }
-        });
+        initResourceFolderSortables(space, onRender);
+        const resCard = document.getElementById('resources-card');
+        if (resCard) attachResourceBlockActionListeners(resCard, space, onRender);
     }
 }
 

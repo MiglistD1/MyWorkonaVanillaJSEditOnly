@@ -31,6 +31,13 @@ export function getColorKey(hex) {
     return found ? found.key : 'blue';
 }
 
+function switchSpaceToManualSort(space) {
+    if (!space || space.isArchived) return;
+    if (space.taskSortOrder && space.taskSortOrder !== 'manual') {
+        space.taskSortOrder = 'manual';
+    }
+}
+
 // ─── Core CRUD ─────────────────────────────────────────────────────────────────
 
 /**
@@ -250,6 +257,7 @@ export function initBlockDropZones(container, spaceId, renderFn) {
 
                 const srcSpace = getSpaceFromEl(from) || getSpaces().find(s => s.id === spaceId);
                 if (!srcSpace) return;
+                switchSpaceToManualSort(srcSpace);
 
                 const itemIdx = parseInt(item.getAttribute('data-index'));
                 const movedItem = srcSpace.tasks.splice(itemIdx, 1)[0];
@@ -266,6 +274,7 @@ export function initBlockDropZones(container, spaceId, renderFn) {
                     movedItem.blockName  = to.dataset.blockName  || '';
                     movedItem.blockColor = to.dataset.blockColor || '';
                     const destSpace = getSpaceFromEl(to) || srcSpace;
+                    switchSpaceToManualSort(destSpace);
 
                     // Position-aware insertion (use sibling's data-index)
                     let nextEl = item.nextElementSibling;
@@ -276,6 +285,7 @@ export function initBlockDropZones(container, spaceId, renderFn) {
                 } else {
                     // Block → main list: insert at dropped position
                     const destSpace = getSpaceFromEl(to) || srcSpace;
+                    switchSpaceToManualSort(destSpace);
                     let nextEl = item.nextElementSibling;
                     while (nextEl && !nextEl.hasAttribute('data-index')) nextEl = nextEl.nextElementSibling;
                     const finalIdx = nextEl ? parseInt(nextEl.getAttribute('data-index')) : destSpace.tasks.length;

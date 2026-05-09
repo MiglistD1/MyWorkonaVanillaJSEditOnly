@@ -4,18 +4,72 @@ import { getCurrentSpace, saveData, getShortDate, getAppSettings, setCurrentSpac
 import { initSpMirrorFeature, spController } from '../core/SpMirrorHelper.js';
 import { eventBus, Events } from '../core/EventBus.js';
 import { mergeItems } from '../core/firebaseSync.js';
-import { generateMiniTagsBtn, generateTaskHTML, attachSubtaskEventListeners, attachTaskInlineEditListeners, handleTagAutocomplete, applySyntaxHighlighting } from '../core/ui-helpers.js';
+import {
+    generateMiniTagsBtn,
+    generateTaskHTML,
+    attachSubtaskEventListeners,
+    attachTaskInlineEditListeners,
+    handleTagAutocomplete,
+    applySyntaxHighlighting,
+    openResourceItem,
+    openOrFocusTab,
+} from '../core/ui-helpers.js';
+import { showResourceLinkPicker } from '../components/resourceLinkPicker.js';
 import { createBlock, generateBlockSectionHTML, initBlockDropZones, attachBlockActionListeners } from './blockManager.js';
 import { showCreateBlockModal } from '../components/modals.js';
 
 import { checkAndResetHabits, renderHabitList, toggleHabitModal } from './habitSheet.js';
+import { openNoteWebappInNewTab } from '../core/noteWebapp.js';
+import { openNoteWebappPickWindow } from '../core/noteWebappPickBridge.js';
+import { renderQuickNoteLinkBanner } from '../core/quickNoteWebLinkUi.js';
+import { noteSpaceLinkReady } from '../features/noteWebappBridge.js';
+import { buildObsidianOpenUri, openObsidianUriInBrowser } from '../core/obsidianUri.js';
 import { createCalendarEvent, updateCalendarEvent, deleteCalendarEvent, getAuthToken, clearAuthToken } from '../core/calendarSync.js';
 
 // State & Callbacks
+/** Quick Notes — rich text ในแอป (contenteditable) + execCommand จากแถบเครื่องมือ */
+function attachQuickNoteRichEditor() {
+    const toolbar = document.getElementById('quick-note-toolbar');
+    if (toolbar) {
+        toolbar.querySelectorAll('button[data-note-cmd]').forEach((btn) => {
+            btn.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                const cmd = btn.getAttribute('data-note-cmd');
+                if (cmd) document.execCommand(cmd, false, undefined);
+            });
+        });
+    }
+    const noteEl = document.getElementById('workspace-note');
+    if (noteEl) {
+        const persist = () => {
+            const space = getCurrentSpace();
+            if (!space) return;
+            space.note = noteEl.innerHTML;
+            saveData();
+        };
+        noteEl.addEventListener('input', persist);
+        noteEl.addEventListener('blur', persist);
+    }
+    const s0 = getCurrentSpace();
+    const b0 = document.getElementById('quick-note-link-banner');
+    if (b0 && s0) {
+        renderQuickNoteLinkBanner(
+            b0,
+            s0,
+            { pickTarget: 'space', forSpaceId: s0.id },
+            {
+                note: document.getElementById('workspace-note'),
+                toolbar: document.getElementById('quick-note-toolbar'),
+            }
+        );
+    }
+}
+
 /** 🟢 Helper: ตรวจสอบว่ากำลังโฟกัสที่ Element ที่พิมพ์ได้หรือไม่ */
 export function isAnyEditableElementFocused() {
     const el = document.activeElement;
     if (!el) return false;
+    if (el.tagName === 'IFRAME') return true;
     return el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName);
 }
 
@@ -44,6 +98,111 @@ function sortSpaceTasks(space) {
         }
         return 0;
     });
+}
+
+/** เปิดลิงก์จากงาน — ถ้า fromResource ให้ใช้การตั้งค่าล่าสุดจาก Resources */
+function openTaskLinkFromStoredData(task, space) {
+    if (!task?.linkData?.url) return false;
+    const res = space?.resources?.find(
+        r =>
+            r.url === task.linkData.url &&
+            !r.isDeleted &&
+            !r.isArchived &&
+            !r.isResourceBlockHeader
+    );
+    if (task.linkData.fromResource && res) {
+        openResourceItem(res);
+        return true;
+    }
+    if (task.linkData.fromResource && !res) {
+        openOrFocusTab(task.linkData.url);
+        return true;
+    }
+    if (task.linkData.isSideview && typeof chrome !== 'undefined' && chrome.sidePanel) {
+        chrome.sidePanel.setOptions({ path: task.linkData.url, enabled: true });
+        chrome.sidePanel.open({ windowId: chrome.windows.WINDOW_ID_CURRENT });
+        return true;
+    }
+    window.open(task.linkData.url, '_blank');
+    return true;
+}
+
+/**
+ * แยกคำสั่ง @link — รองรับ "ข้อความ @link", "@link", "@link คำใบ้"
+ * @returns {{ baseText: string } | null}
+ */
+export function parseTaskLinkCommand(trimmed) {
+    const t = (trimmed || '').trim();
+    if (!t || !t.toLowerCase().includes('@link')) return null;
+
+    const trailing = /^(.*?)\s@link\s*$/is.exec(t);
+    if (trailing) {
+        return { baseText: trailing[1].trim() };
+    }
+    if (/^@link\b/i.test(t)) {
+        return { baseText: t.replace(/^@link\s*/i, '').trim() };
+    }
+    return null;
+}
+
+function formatDateInputValue(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
+/**
+ * แยกคำสั่งวันของ task — รองรับ "ข้อความ @today", "@today ข้อความ", "@adddate"
+ * @returns {{ type: 'today' | 'tomorrow' | 'adddate', baseText: string } | null}
+ */
+export function parseTaskDateCommand(trimmed) {
+    const t = (trimmed || '').trim();
+    if (!t) return null;
+    const found = /(^|\s)@(today|tomorrow|adddate)\b/i.exec(t);
+    if (!found) return null;
+
+    const type = found[2].toLowerCase();
+    const baseText = t.replace(/(^|\s)@(today|tomorrow|adddate)\b/i, ' ').replace(/\s+/g, ' ').trim();
+    return { type, baseText };
+}
+
+function switchSpaceToManualSort(space) {
+    if (!space || space.isArchived) return;
+    if (space.taskSortOrder && space.taskSortOrder !== 'manual') {
+        space.taskSortOrder = 'manual';
+    }
+}
+
+function convertTaskIntoPreviousSubtask(space, index, taskObj, cleanedText) {
+    if (!space?.tasks || index <= 0 || !taskObj) return false;
+
+    let parentTask = null;
+    for (let i = index - 1; i >= 0; i--) {
+        const candidate = space.tasks[i];
+        if (!candidate || candidate.isDeleted || candidate.completed || candidate.isBlockHeader) continue;
+        if (candidate.blockId && !candidate.completed && !candidate.isDeleted) continue;
+        parentTask = candidate;
+        break;
+    }
+    if (!parentTask) return false;
+    if (!parentTask.subtasks) parentTask.subtasks = [];
+    parentTask.subtasksHidden = false;
+
+    const sourceId = taskObj.id || taskObj.createdAt || Date.now();
+    parentTask.subtasks.push({
+        ...taskObj,
+        id: sourceId,
+        createdAt: taskObj.createdAt || sourceId,
+        text: cleanedText || taskObj.text || '',
+        isDeleted: false,
+        deletedAt: null,
+        expiryAt: null,
+        subtasks: [],
+    });
+
+    space.tasks.splice(index, 1);
+    return true;
 }
 
 /** 🔄 Helper: Calculate next due date with End Conditions */
@@ -191,6 +350,8 @@ function initNestedSortable(container, space, refreshFn, disabled = false) {
 
                 const srcSpace = getSpaceFromEl(from);
                 const destSpace = getSpaceFromEl(to);
+                switchSpaceToManualSort(srcSpace);
+                switchSpaceToManualSort(destSpace);
                 if (!srcSpace || !destSpace) return;
 
                 // 2. ดึงข้อมูลออกจาก Array ต้นทาง
@@ -806,6 +967,41 @@ export function initTodoManager(callbacks) {
 
             const text = (el.isContentEditable ? el.textContent : el.value).trim();
 
+            // 📅 @today / @tomorrow / @adddate for main Add Task input (handle in capture phase for reliability)
+            if (el.id === 'new-task-input') {
+                const dateCommand = parseTaskDateCommand(text);
+                if (dateCommand) {
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                    const dateInput = document.getElementById('new-task-date');
+                    el.value = dateCommand.baseText;
+
+                    if (dateCommand.type === 'adddate') {
+                        if (dateInput) {
+                            try { dateInput.showPicker(); } catch (err) { dateInput.focus(); dateInput.click(); }
+                        }
+                        return;
+                    }
+
+                    if (dateInput) {
+                        const targetDate = new Date();
+                        if (dateCommand.type === 'tomorrow') targetDate.setDate(targetDate.getDate() + 1);
+                        dateInput.value = formatDateInputValue(targetDate);
+                        updateDateInputLabel(dateInput);
+                    }
+
+                    if (!dateCommand.baseText) {
+                        if (dateInput) {
+                            try { dateInput.showPicker(); } catch (err) { dateInput.focus(); dateInput.click(); }
+                        }
+                        return;
+                    }
+
+                    addTask();
+                    return;
+                }
+            }
+
             // 🧱 @block command in inline edit / contenteditable
             if (text.toLowerCase().startsWith('@block')) {
                 e.preventDefault();
@@ -842,6 +1038,117 @@ export function initTodoManager(callbacks) {
                         }
                     }
                 });
+                return;
+            }
+
+            // 🔗 @link — เลือกลิงก์จาก Resources (รองรับ "ข้อความ @link", "@link", "@link คำใบ้")
+            const linkParse = parseTaskLinkCommand(text);
+            if (linkParse) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                e.stopPropagation();
+
+                const anchorRect = el?.getBoundingClientRect?.() || null;
+
+                if (el.classList.contains('subtask-add-input')) {
+                    el.value = '';
+                    const pId = parseFloat(el.getAttribute('data-parent'));
+                    const space = getCurrentSpace();
+                    const task = space?.tasks?.find(t => t.createdAt === pId);
+                    const sid = space?.id ?? getCurrentSpaceId();
+                    showResourceLinkPicker({
+                        spaceId: sid,
+                        anchorRect,
+                        onSelect: res => {
+                            if (!task) return;
+                            if (!task.subtasks) task.subtasks = [];
+                            const subText =
+                                linkParse.baseText !== ''
+                                    ? linkParse.baseText
+                                    : res.title || res.url;
+                            task.subtasks.push({
+                                id: Date.now(),
+                                text: subText,
+                                completed: false,
+                                linkData: { url: res.url, fromResource: true, isSideview: false },
+                            });
+                            saveData();
+                            onRenderCallback();
+                        },
+                    });
+                    return;
+                }
+
+                if (el.id === 'new-task-input') {
+                    el.value = '';
+                    const space = getCurrentSpace();
+                    showResourceLinkPicker({
+                        spaceId: space.id,
+                        anchorRect,
+                        onSelect: res => {
+                            const taskTitle =
+                                linkParse.baseText !== ''
+                                    ? linkParse.baseText
+                                    : res.title || res.url;
+                            const newTask = {
+                                text: taskTitle,
+                                completed: false,
+                                tags: [],
+                                dueDate: null,
+                                createdAt: Date.now(),
+                                isProminent: false,
+                                subtasks: [],
+                                subtasksHidden: false,
+                                repeatConfig: { isRepeating: false, frequency: 'daily', interval: 1 },
+                                wasRegenerated: false,
+                                linkData: { url: res.url, fromResource: true, isSideview: false },
+                            };
+                            space.tasks.push(newTask);
+                            if (space.taskSortOrder && space.taskSortOrder !== 'manual') sortSpaceTasks(space);
+                            saveData();
+                            onRenderCallback();
+                        },
+                    });
+                    return;
+                }
+
+                if (el.isContentEditable) {
+                    const liSpaceId = parseInt(el.closest('li')?.dataset?.spaceId) || getCurrentSpaceId();
+                    const targetSpace = getSpaces().find(s => s.id === liSpaceId) || getCurrentSpace();
+
+                    showResourceLinkPicker({
+                        spaceId: targetSpace.id,
+                        anchorRect,
+                        onSelect: res => {
+                            const li = el.closest('li');
+                            const sid = parseInt(li?.dataset?.spaceId);
+                            const idx = parseInt(li?.dataset?.index);
+                            const type = li?.dataset?.type;
+                            const sp = getSpaces().find(s => s.id === sid);
+                            if (!sp) return;
+                            let t =
+                                type === 'subtask'
+                                    ? sp.tasks[parseInt(li.closest('.subtask-list')?.dataset?.parentIndex)]?.subtasks?.[
+                                          idx
+                                      ]
+                                    : sp.tasks[idx];
+                            if (t) {
+                                const taskTitle =
+                                    linkParse.baseText !== ''
+                                        ? linkParse.baseText
+                                        : res.title || res.url;
+                                t.text = taskTitle;
+                                t.linkData = { url: res.url, fromResource: true, isSideview: false };
+                                saveData();
+                                onRenderCallback();
+                                const portalEl = document.getElementById(`portal-${sid}`);
+                                if (portalEl) renderSpaceInline(sid, portalEl);
+                            }
+                        },
+                    });
+                    return;
+                }
+
                 return;
             }
 
@@ -885,8 +1192,35 @@ export function initTodoManager(callbacks) {
 
         const AT_COMMANDS = [
             { cmd: '@block:', label: '@block:', desc: 'Create a Block', icon: '🧱' },
-            { cmd: '@sp',     label: '@sp',     desc: 'Link task to another Space', icon: '🔗' },
+            { cmd: '@link', label: '@link', desc: 'Attach link from Resources', icon: '🔗' },
+            { cmd: '@sp', label: '@sp', desc: 'Link task to another Space', icon: '🔗' },
+            { cmd: '@today', label: '@today', desc: 'Set due date to today', icon: '📅' },
+            { cmd: '@tomorrow', label: '@tomorrow', desc: 'Set due date to tomorrow', icon: '🗓️' },
+            { cmd: '@adddate', label: '@adddate', desc: 'Open date picker before add', icon: '📆' },
         ];
+
+        const getAtQueryFromText = (rawText) => {
+            const text = (rawText || '').trim();
+            if (!text) return null;
+            const tokens = text.split(/\s+/);
+            const last = tokens[tokens.length - 1] || '';
+            if (!last.startsWith('@')) return null;
+            return last;
+        };
+
+        const applyAtCommandToText = (rawText, command) => {
+            const text = rawText || '';
+            const trimmedRight = text.replace(/\s+$/, '');
+            const match = trimmedRight.match(/(?:^|\s)(@[^\s]*)$/);
+            if (match) {
+                const token = match[1];
+                const idx = trimmedRight.lastIndexOf(token);
+                if (idx !== -1) {
+                    return `${trimmedRight.slice(0, idx)}${command} `;
+                }
+            }
+            return `${trimmedRight}${trimmedRight ? ' ' : ''}${command} `;
+        };
 
         function getOrCreateAtDropdown() {
             let el = document.getElementById('at-command-dropdown');
@@ -907,7 +1241,7 @@ export function initTodoManager(callbacks) {
                     const anchor = el._anchor;
                     if (!anchor) return;
                     if (anchor.isContentEditable) {
-                        anchor.textContent = c.cmd;
+                        anchor.textContent = applyAtCommandToText(anchor.textContent || '', c.cmd);
                         // move caret to end
                         const range = document.createRange();
                         range.selectNodeContents(anchor);
@@ -916,7 +1250,7 @@ export function initTodoManager(callbacks) {
                         sel.removeAllRanges();
                         sel.addRange(range);
                     } else {
-                        anchor.value = c.cmd;
+                        anchor.value = applyAtCommandToText(anchor.value || '', c.cmd);
                     }
                     anchor.focus();
                     hideAtDropdown();
@@ -953,15 +1287,17 @@ export function initTodoManager(callbacks) {
         const isAtCommandField = (el) =>
             el.id === 'new-task-input' ||
             el.id === 'master-task-input' ||
+            el.classList.contains('space-quick-input') ||
             el.classList.contains('subtask-add-input') ||
             el.classList.contains('task-actual-text');
 
         document.addEventListener('input', (e) => {
             const el = e.target;
             if (!isAtCommandField(el)) return;
-            const text = (el.isContentEditable ? el.textContent : el.value).trim();
-            if (text.startsWith('@')) {
-                showAtDropdown(el, text);
+            const text = el.isContentEditable ? el.textContent : el.value;
+            const query = getAtQueryFromText(text);
+            if (query) {
+                showAtDropdown(el, query);
             } else {
                 hideAtDropdown();
             }
@@ -1333,6 +1669,34 @@ export function initTodoManager(callbacks) {
         e.preventDefault();
         e.stopImmediatePropagation();
         const text = e.target.value.trim();
+        const dateCommand = parseTaskDateCommand(text);
+        if (dateCommand) {
+            const dateInput = document.getElementById('new-task-date');
+            e.target.value = dateCommand.baseText;
+
+            if (dateCommand.type === 'adddate') {
+                if (dateInput) {
+                    try { dateInput.showPicker(); } catch (err) { dateInput.focus(); dateInput.click(); }
+                }
+                return;
+            }
+
+            if (dateInput) {
+                const targetDate = new Date();
+                if (dateCommand.type === 'tomorrow') targetDate.setDate(targetDate.getDate() + 1);
+                dateInput.value = formatDateInputValue(targetDate);
+                updateDateInputLabel(dateInput);
+            }
+            if (!dateCommand.baseText) {
+                if (dateInput) {
+                    try { dateInput.showPicker(); } catch (err) { dateInput.focus(); dateInput.click(); }
+                }
+                return;
+            }
+            addTask();
+            return;
+        }
+
         if (text.toLowerCase().startsWith('@block')) {
             // 🧱 @block command: extract name (e.g. "@block:Sprint Tasks" or just "@block")
             const prefillName = text.slice(6).replace(/^[:\s]+/, '').trim();
@@ -1602,116 +1966,16 @@ export function initTodoManager(callbacks) {
         };
     }
 
-        // --- Google Keep Mode Logic ---
-    const keepToggle = document.getElementById('quick-note-keep-toggle');
-    const keepEdit = document.getElementById('quick-note-keep-edit');
-    const keepExternal = document.createElement('button'); // สร้างปุ่มเพิ่มสำหรับเปิด Tab ใหม่
-    const saveKeepBtn = document.getElementById('save-keep-url-btn');
-    const keepUrlInput = document.getElementById('keep-url-input');
-    const keepIframe = document.getElementById('keep-iframe');
-    const keepSetup = document.getElementById('keep-setup-container');
-    const noteContainer = document.getElementById('quick-note-body');
-    const noteToolbar = document.querySelector('.note-toolbar');
-    const workspaceNote = document.getElementById('workspace-note');
-
-    // 🟢 รวมกลุ่มปุ่มและใส่พื้นหลังสีส้ม
-    let keepGroup = document.getElementById('quick-note-keep-group');
-    if (!keepGroup) {
-        keepGroup = document.createElement('div');
-        keepGroup.id = 'quick-note-keep-group';
-        keepGroup.style = 'display: flex; gap: 2px; background: rgba(245, 158, 11, 0.15); padding: 2px; border-radius: 6px; border: 1px solid rgba(245, 158, 11, 0.2); align-items: center;';
-        keepToggle.parentNode.insertBefore(keepGroup, keepToggle);
-        keepGroup.appendChild(keepToggle);
+    const btnOpenNoteWebapp = document.getElementById('btn-open-note-webapp');
+    if (btnOpenNoteWebapp) {
+        btnOpenNoteWebapp.addEventListener('click', () => openNoteWebappInNewTab());
     }
-
-    // เตรียมปุ่ม External ถ้ายังไม่มี
-    if (!document.getElementById('quick-note-keep-external')) {
-        keepExternal.id = 'quick-note-keep-external';
-        keepExternal.className = 'btn-icon';
-        keepExternal.innerHTML = `<svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="11" x2="21" y2="3"></line></svg>`;
-        keepGroup.appendChild(keepExternal);
-        if (keepEdit) keepGroup.appendChild(keepEdit);
+    const btnPickNote = document.getElementById('btn-quicknote-pick-note');
+    if (btnPickNote) {
+        btnPickNote.addEventListener('click', () =>
+            openNoteWebappPickWindow({ pickTarget: 'space' })
+        );
     }
-
-    const renderKeepLogic = () => {
-        const space = getCurrentSpace();
-        if (!space) return;
-
-        const isKeepMode = space.quickNoteKeepMode || false;
-        const url = space.quickNoteKeepUrl || "";
-
-        if (!isKeepMode) {
-            workspaceNote.style.display = 'block';
-            noteToolbar.style.display = 'flex';
-            keepSetup.style.display = 'none';
-            keepIframe.style.display = 'none';
-            keepToggle.style.opacity = '0.5';
-            if (keepEdit) keepEdit.style.display = 'none';
-            document.getElementById('quick-note-keep-external').style.display = 'none';
-            if (noteContainer) noteContainer.classList.remove('keep-mode-active');
-        } else {
-            workspaceNote.style.display = 'none';
-            noteToolbar.style.display = 'none';
-            keepToggle.style.opacity = '1';
-            if (keepEdit) keepEdit.style.display = 'inline-flex';
-            document.getElementById('quick-note-keep-external').style.display = 'inline-flex';
-            if (noteContainer) noteContainer.classList.add('keep-mode-active');
-            
-            if (!url) {
-                keepSetup.style.display = 'flex';
-                keepIframe.style.display = 'none';
-            } else {
-                keepSetup.style.display = 'none';
-                keepIframe.style.display = 'block';
-                if (keepIframe.src !== url) {
-                    keepIframe.src = 'about:blank';
-                    setTimeout(() => { keepIframe.src = url; }, 50);
-                }
-            }
-        }
-    };
-
-    if (keepEdit) {
-        keepEdit.onclick = () => {
-
-            const space = getCurrentSpace();
-            if (!space) return;
-            const newUrl = prompt("Enter new Google Keep URL for this Space:", space.quickNoteKeepUrl || "");
-            if (newUrl !== null && newUrl.trim() !== "") {
-                space.quickNoteKeepUrl = newUrl.trim();
-                saveData();
-                renderKeepLogic();
-            }
-        };
-    }
-
-    const btnExternal = document.getElementById('quick-note-keep-external');
-    if (btnExternal) {
-        btnExternal.onclick = () => {
-            const space = getCurrentSpace();
-            if (space && space.quickNoteKeepUrl) window.open(space.quickNoteKeepUrl, '_blank');
-        };
-    }
-
-    keepToggle.onclick = () => {
-        const space = getCurrentSpace();
-        if (!space) return;
-        space.quickNoteKeepMode = !(space.quickNoteKeepMode || false);
-        saveData();
-        renderKeepLogic();
-    };
-
-    saveKeepBtn.onclick = () => {
-        const val = keepUrlInput.value.trim();
-        const space = getCurrentSpace();
-        if (val && space) {
-            space.quickNoteKeepUrl = val;
-            saveData();
-            renderKeepLogic();
-        }
-    };
-
-    renderKeepLogic();
 
     // Section Order Events
     const btnNoteUp = document.getElementById('btn-order-note-up');
@@ -1764,148 +2028,52 @@ export function initTodoManager(callbacks) {
     // รันการตรวจสอบสถานะเริ่มต้น
     setTimeout(() => checkCalendarAuth(false), 1000);
 
-    // Note Events
-    document.querySelectorAll('.custom-color-slot').forEach((picker, index) => {
-        picker.addEventListener('input', (e) => { document.execCommand('foreColor', false, e.target.value); getCurrentSpace().note = document.getElementById('workspace-note').innerHTML; getAppSettings().quickColors[index] = e.target.value; saveData(); });
-    });
-    // workspaceNote ถูกประกาศไว้แล้วด้านบน
-    document.getElementById('btn-undo-note').addEventListener('mousedown', (e) => { e.preventDefault(); document.execCommand('undo', false, null); getCurrentSpace().note = document.getElementById('workspace-note').innerHTML; saveData(); });
-    document.querySelectorAll('.note-toolbar select').forEach(el => { el.addEventListener('change', (e) => { document.execCommand(e.target.dataset.cmd, false, e.target.value); getCurrentSpace().note = document.getElementById('workspace-note').innerHTML; saveData(); }); });
-    
+    attachQuickNoteRichEditor();
 
-    // 🟢 Smart Checkbox Logic for Workspace Note
-    const CHECKBOX_HTML = '<label class="google-task-checkbox" contenteditable="false" style="display:inline-flex; align-items:center; margin-right:8px; vertical-align:middle;"><input type="checkbox"> <div class="checkmark-circle"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg></div></label>&nbsp;';
-
-    workspaceNote.addEventListener('keydown', (e) => {
-        if (e.key === 'Tab') {
-            e.preventDefault();
-            document.execCommand(e.shiftKey ? 'outdent' : 'indent', false, null);
-            getCurrentSpace().note = workspaceNote.innerHTML;
-            saveData();
-            return;
-        }
-        if (e.key === 'Enter') {
-            const selection = window.getSelection();
-            if (!selection.rangeCount) return;
-            
-            const range = selection.getRangeAt(0);
-            let line = range.startContainer;
-            if (line.nodeType === 3) line = line.parentNode;
-            line = line.closest('div, p') || line;
-
-            // ตรวจสอบว่าบรรทัดปัจจุบันมี Checkbox หรือไม่
-            if (line && line.querySelector('.google-task-checkbox')) {
-                const text = line.textContent.trim();
-                
-                if (text === "") {
-                    // กรณีบรรทัดว่าง: ลบ Checkbox ออกแล้วเปลี่ยนเป็นบรรทัดปกติ
-                    e.preventDefault();
-                    line.querySelector('.google-task-checkbox').remove();
-                    if (line.innerHTML === "") line.innerHTML = "<br>";
-                } else {
-                    // กรณีมีข้อความ: สร้างบรรทัดใหม่พร้อม Checkbox
-                    e.preventDefault();
-                    document.execCommand('insertParagraph');
-                    document.execCommand('insertHTML', false, CHECKBOX_HTML);
-                }
-                getCurrentSpace().note = workspaceNote.innerHTML;
-                saveData();
-            }
-        }
-    });
-
-    // 🟢 บันทึกสถานะ Checked ลงใน HTML เพื่อให้ Persistence ทำงาน
-    workspaceNote.addEventListener('change', (e) => {
-        if (e.target.type === 'checkbox' && e.target.closest('.google-task-checkbox')) {
-            if (e.target.checked) {
-                e.target.setAttribute('checked', 'checked');
-            } else {
-                e.target.removeAttribute('checked');
-            }
-            getCurrentSpace().note = workspaceNote.innerHTML;
-            saveData();
-        }
-    });
-
-    // 🟢 Markdown Auto-Formatting (type '* ' for bullet, '[] ' for checkbox)
-    workspaceNote.addEventListener('input', () => {
-        const sel = window.getSelection();
-        if (!sel || !sel.rangeCount) return;
-        const range = sel.getRangeAt(0);
-        const node = range.startContainer;
-        if (node.nodeType !== 3) return;
-        const text = node.textContent;
-        const offset = range.startOffset;
-        if (offset >= 2 && text.slice(0, 2) === '* ') {
-            const del = document.createRange();
-            del.setStart(node, 0); del.setEnd(node, 2);
-            sel.removeAllRanges(); sel.addRange(del);
-            document.execCommand('delete', false, null);
-            document.execCommand('insertUnorderedList', false, null);
-            getCurrentSpace().note = workspaceNote.innerHTML;
-            saveData();
-            return;
-        }
-        if (offset >= 3 && text.slice(0, 3) === '[] ') {
-            const del = document.createRange();
-            del.setStart(node, 0); del.setEnd(node, 3);
-            sel.removeAllRanges(); sel.addRange(del);
-            document.execCommand('delete', false, null);
-            document.execCommand('insertHTML', false, CHECKBOX_HTML);
-            getCurrentSpace().note = workspaceNote.innerHTML;
-            saveData();
-        }
-    });
-
-    // 🟢 New Formatting Buttons for Workspace Note (Google Docs Style)
-    const bindNoteCmd = (id, cmd, value = null) => {
-        const btn = document.getElementById(id);
-        if (btn) {
-            btn.addEventListener('mousedown', (e) => {
-                e.preventDefault();
-                document.execCommand(cmd, false, value);
-                getCurrentSpace().note = document.getElementById('workspace-note').innerHTML;
-                saveData();
-            });
-        }
-    };
-
-    bindNoteCmd('btn-note-bold', 'bold');
-    bindNoteCmd('btn-note-italic', 'italic');
-    bindNoteCmd('btn-note-underline', 'underline');
-    bindNoteCmd('btn-note-strikethrough', 'strikeThrough');
-    bindNoteCmd('btn-note-bullet-list', 'insertUnorderedList');
-    bindNoteCmd('btn-note-numbered-list', 'insertOrderedList');
-    bindNoteCmd('btn-note-reset-format', 'removeFormat');
-    bindNoteCmd('btn-note-hr', 'insertHorizontalRule');
-    
-    // Special Case: Checkbox
-    const btnCheckbox = document.getElementById('btn-note-checkbox');
-    if (btnCheckbox) {
-        btnCheckbox.addEventListener('mousedown', (e) => {
-            e.preventDefault();
-            // ใช้ insertParagraph ก่อนเพื่อให้มั่นใจว่าเป็นบรรทัดใหม่ที่สะอาด แล้วค่อยใส่ Checkbox
-            document.execCommand('insertParagraph');
-            document.execCommand('insertHTML', false, CHECKBOX_HTML);
-            getCurrentSpace().note = document.getElementById('workspace-note').innerHTML;
+    const btnQnObsOpen = document.getElementById('btn-quicknote-obsidian-open');
+    const btnQnObsPath = document.getElementById('btn-quicknote-obsidian-path');
+    const btnQnObsClear = document.getElementById('btn-quicknote-obsidian-clear');
+    if (btnQnObsPath) {
+        btnQnObsPath.addEventListener('click', () => {
+            const app = getAppSettings();
+            const cur = (app.quickNoteObsidianRelPath || '').trim();
+            const next = prompt('Path ไฟล์ใน vault (สัมพันธ์กับราก vault เช่น 4_Notes/foo/note.md):', cur);
+            if (next === null) return;
+            app.quickNoteObsidianRelPath = next.trim();
             saveData();
         });
     }
-
-    // More Actions dropdown toggle
-    const btnMoreActions = document.getElementById('btn-note-more-actions');
-    const noteMorePopup = document.getElementById('note-more-popup');
-    if (btnMoreActions && noteMorePopup) {
-        btnMoreActions.addEventListener('mousedown', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            noteMorePopup.classList.toggle('is-open');
-        });
-        document.addEventListener('click', (e) => {
-            if (!e.target.closest('.note-more-actions-wrapper')) {
-                noteMorePopup.classList.remove('is-open');
+    if (btnQnObsOpen) {
+        btnQnObsOpen.addEventListener('click', () => {
+            const app = getAppSettings();
+            const vault = (app.obsidianVaultName || '').trim();
+            if (!vault) {
+                alert('ตั้งชื่อ Obsidian vault ใน App Settings (ปุ่ม ⚙️)');
+                return;
             }
-        }, true);
+            let rel = (app.quickNoteObsidianRelPath || '').trim();
+            if (!rel) {
+                const entered = prompt('Path ไฟล์ใน vault:', '');
+                if (!entered || !entered.trim()) return;
+                rel = entered.trim();
+                app.quickNoteObsidianRelPath = rel;
+                saveData();
+            }
+            const uri = buildObsidianOpenUri(vault, rel);
+            if (uri) openObsidianUriInBrowser(uri);
+        });
+    }
+    if (btnQnObsClear) {
+        btnQnObsClear.addEventListener('click', () => {
+            const app = getAppSettings();
+            if (!(app.quickNoteObsidianRelPath || '').trim()) {
+                alert('ยังไม่ได้ตั้ง path');
+                return;
+            }
+            if (!confirm('ล้าง path ที่ผูกกับปุ่ม Obsidian ของ Quick Notes?')) return;
+            app.quickNoteObsidianRelPath = '';
+            saveData();
+        });
     }
 
     // Clear Archive Button
@@ -2153,7 +2321,24 @@ export function initTodoManager(callbacks) {
         // Restore Task
         // 🟢 NEW: Restore Task (from trash)
         if (e.target.closest('.restore-task-btn')) {
-            const idx = parseInt(e.target.closest('.restore-task-btn').dataset.index);
+            const btn = e.target.closest('.restore-task-btn');
+            const pIdxAttr = btn.dataset.parentIndex;
+            const sIdxAttr = btn.dataset.subIndex;
+            if (pIdxAttr !== undefined && sIdxAttr !== undefined) {
+                const pIdx = parseInt(pIdxAttr);
+                const sIdx = parseInt(sIdxAttr);
+                const subtask = space.tasks[pIdx]?.subtasks?.[sIdx];
+                if (subtask) {
+                    subtask.isDeleted = false;
+                    subtask.deletedAt = null;
+                    subtask.expiryAt = null;
+                    saveData();
+                    onRenderCallback();
+                }
+                return;
+            }
+
+            const idx = parseInt(btn.dataset.index);
             const task = space.tasks[idx];
             if (task) {
                 task.isDeleted = false;
@@ -2201,14 +2386,11 @@ export function initTodoManager(callbacks) {
                         if (token) deleteCalendarEvent(subtask.calendarEventId, token);
                     });
                 }
-                // Phase 5: Soft Delete instead of splice
-                subtask.isDeleted = true;
-                subtask.deletedAt = Date.now();
-                subtask.syncVersion = (subtask.syncVersion || 0) + 1;
-                const permSubId = subtask.id || subtask.createdAt;
-                window.dispatchEvent(new CustomEvent('task-deleted', { detail: { taskId: permSubId } }));
-                saveData();
-                onRenderCallback();
+                if (space.tasks[pIdx]?.subtasks?.[sIdx]) {
+                    space.tasks[pIdx].subtasks.splice(sIdx, 1);
+                    saveData();
+                    onRenderCallback();
+                }
             }
         }
 
@@ -2224,12 +2406,7 @@ export function initTodoManager(callbacks) {
             
             if (task.linkData && task.linkData.url) {
                 e.preventDefault();
-                if (task.linkData.isSideview && typeof chrome !== 'undefined' && chrome.sidePanel) {
-                    chrome.sidePanel.setOptions({ path: task.linkData.url, enabled: true });
-                    chrome.sidePanel.open({ windowId: chrome.windows.WINDOW_ID_CURRENT });
-                } else {
-                    window.open(task.linkData.url, '_blank');
-                }
+                openTaskLinkFromStoredData(task, space);
             } else {
                 openTaskLinkModal(idx, pIdx !== null, pIdx);
             }
@@ -2786,20 +2963,10 @@ export function initTodoManager(callbacks) {
                     saveData(); onRenderCallback();
                 },
                 onConvertToSubtask: (space, index, taskObj, cleanedText) => {
-                    if (index === 0) return;
-                    const parentTask = space.tasks[index - 1];
-                    if (!parentTask) return;
-                    if (!parentTask.subtasks) parentTask.subtasks = [];
-                    const textToUse = cleanedText || taskObj.text;
-                    parentTask.subtasks.push({ id: Date.now(), text: textToUse, completed: false });
-                    // Phase 5: Soft Delete instead of splice
-                    const taskToConvert = space.tasks[index];
-                    if (taskToConvert) {
-                        taskToConvert.isDeleted = true;
-                        taskToConvert.deletedAt = Date.now();
-                        taskToConvert.syncVersion = (taskToConvert.syncVersion || 0) + 1;
+                    if (convertTaskIntoPreviousSubtask(space, index, taskObj, cleanedText)) {
+                        saveData();
+                        onRenderCallback();
                     }
-                    saveData(); onRenderCallback();
                 },
                 onUpdate: () => onRenderCallback(),
             });
@@ -3433,6 +3600,35 @@ async function addTask() {
     const dateInput = document.getElementById('new-task-date');
     const quickCalBtn = document.getElementById('btn-task-calendar-sync');
     let text = input.value.trim();
+
+    // 🟢 Safety net: parse @date commands here too in case keydown handler is bypassed
+    const dateCommand = parseTaskDateCommand(text);
+    if (dateCommand) {
+        text = dateCommand.baseText;
+        input.value = text;
+
+        if (dateCommand.type === 'adddate') {
+            if (dateInput) {
+                try { dateInput.showPicker(); } catch (err) { dateInput.focus(); dateInput.click(); }
+            }
+            return;
+        }
+
+        if (dateInput) {
+            const targetDate = new Date();
+            if (dateCommand.type === 'tomorrow') targetDate.setDate(targetDate.getDate() + 1);
+            dateInput.value = formatDateInputValue(targetDate);
+            updateDateInputLabel(dateInput);
+        }
+
+        if (!text) {
+            if (dateInput) {
+                try { dateInput.showPicker(); } catch (err) { dateInput.focus(); dateInput.click(); }
+            }
+            return;
+        }
+    }
+
     if (text !== '') {
         // 🔴 ป้องกันการเพิ่มงาน Repeat ที่ไม่มีวันที่ (กรณีผู้ใช้ลบวันที่ออกหลังตั้งค่า Repeat)
         if (currentTaskRepeatConfig.isRepeating && !dateInput.value) {
@@ -3688,8 +3884,8 @@ async function saveTaskLink() {
         }
     }
 
-    if (task) {
-        task.linkData = { url, isSideview };
+        if (task) {
+        task.linkData = { url, isSideview, fromResource: false };
         // 🔗 Mirror sync on link change
         if (!editingLinkSubIdx) {
             const linkSpace = (editingLinkSpaceId && editingLinkSpaceId !== 'sandbox') ? getSpaces().find(s => s.id === editingLinkSpaceId) : getCurrentSpace();
@@ -3708,12 +3904,24 @@ async function saveTaskLink() {
 }
 export function renderQuickNotes(space) {
     const noteArea = document.getElementById('workspace-note');
-    if (noteArea) {
-        // Note: We don't overwrite innerHTML if it's focused to avoid cursor jumping, 
-        // but initially or when switching spaces we must set it.
+    const webLinked = noteSpaceLinkReady(space);
+    const suppressed = !!(space?.quickNoteSuppressLocalEditor);
+    if (noteArea && !webLinked) {
         if (document.activeElement !== noteArea) {
-            noteArea.innerHTML = space.note || "";
+            noteArea.innerHTML = suppressed ? '' : space?.note || '';
         }
+    }
+    const banner = document.getElementById('quick-note-link-banner');
+    if (banner && space) {
+        renderQuickNoteLinkBanner(
+            banner,
+            space,
+            { pickTarget: 'space', forSpaceId: space.id },
+            {
+                note: noteArea,
+                toolbar: document.getElementById('quick-note-toolbar'),
+            }
+        );
     }
 }
 
@@ -3927,7 +4135,7 @@ export function renderTasks(space, currentFilterTags, currentFilterMode, current
     [taskListUI, archiveListUI, trashListUI, repeatingWaitingListUI, calendarSyncListUI].forEach(c => c && c.querySelectorAll('.task-actual-text').forEach(el => applySyntaxHighlighting(el)));
 
     if (!isFiltered && taskListUI) {
-        const isDisabled = space.isArchived || (space.taskSortOrder !== 'manual' && !!space.taskSortOrder);
+        const isDisabled = space.isArchived;
         initNestedSortable(taskListUI, space, onRenderCallback, isDisabled);
     }
 
@@ -4256,7 +4464,7 @@ export function renderSpaceInline(targetSpaceId, targetContainer, options = {}) 
         const linkBtn = target.closest('.task-link-btn');
         if (linkBtn) {
             if (task.linkData?.url) {
-                window.open(task.linkData.url, '_blank');
+                openTaskLinkFromStoredData(task, space);
             } else {
                 // 🟢 FIX: ต้องส่ง space.id เข้าไปด้วยเพื่อให้หน้าต่าง Link ค้นหางานเจอในโหมด Master List
                 openTaskLinkModal(idx, isSubtask, pIdx, space.id);
@@ -4338,6 +4546,8 @@ export function renderSpaceInline(targetSpaceId, targetContainer, options = {}) 
             const task = isSubtask ? space.tasks[pIdx]?.subtasks?.[idx] : space.tasks[idx];
 
             if (task) {
+            if (isSubtask) return;
+
                 const isChecked = e.target.checked;
                 
                 // 🟢 Sync logic with handleTaskChange (Matching Native Space View)
@@ -4448,15 +4658,10 @@ export function renderSpaceInline(targetSpaceId, targetContainer, options = {}) 
             }
         },
         onConvertToSubtask: (space, index, taskObj, cleanedText) => {
-            if (index === 0) return;
-            const parentTask = space.tasks[index - 1];
-            if (!parentTask) return;
-            if (!parentTask.subtasks) parentTask.subtasks = [];
-            const textToUse = cleanedText || taskObj.text;
-            parentTask.subtasks.push({ id: Date.now(), text: textToUse, completed: false });
-            space.tasks.splice(index, 1);
-            saveData();
-            onRefresh();
+            if (convertTaskIntoPreviousSubtask(space, index, taskObj, cleanedText)) {
+                saveData();
+                onRefresh();
+            }
         }
     });
 
@@ -4543,7 +4748,7 @@ export function renderSpaceInline(targetSpaceId, targetContainer, options = {}) 
     const taskListUI = targetContainer.querySelector('.task-list');
     if (taskListUI) {
         const isMasterFiltered = window.masterTodoListState && (window.masterTodoListState.showOnlyFlagged || window.masterTodoListState.dateFilter !== 'all' || window.masterTodoListState.searchQuery);
-        const isDisabled = currentSort !== 'manual' || isMasterFiltered;
+        const isDisabled = isMasterFiltered;
         initNestedSortable(taskListUI, space, onRefresh, isDisabled);
     }
 }      

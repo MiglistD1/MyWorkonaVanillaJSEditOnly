@@ -1,5 +1,6 @@
 import { svgTag, dragHandleSvg, svgEdit, svgTrashRed, svgPencil, svgRestore, svgArchive, svgRepeat, svgManualRepeat } from './icons.js';
 import { getShortDate, getAppSettings, getUnitCharFromThai, getFilterTags } from './storage.js';
+import { getNoteWebappOrigin } from './noteWebapp.js';
 import { eventBus, Events } from './EventBus.js';
 
 /**
@@ -107,8 +108,9 @@ export function openOrFocusTab(url) {
                         return true;
                     }
 
-                    // Special Case: Google Keep (Match any keep.google.com)
-                    if (targetUrlObj.hostname === 'keep.google.com') {
+                    // Note webapp (ตั้ง URL ใน App Settings — default localhost:5173)
+                    const noteOrigin = getNoteWebappOrigin();
+                    if (noteOrigin && targetUrlObj.origin === noteOrigin) {
                         return true;
                     }
 
@@ -132,6 +134,42 @@ export function openOrFocusTab(url) {
     } catch (e) {
         console.error("Invalid URL passed to openOrFocusTab:", url);
         window.open(url, '_blank');
+    }
+}
+
+/**
+ * เปิดลิงก์ Resource ตามการตั้งค่าเดียวกับการคลิกในรายการ Resources
+ * (โปรแกรมในเครื่อง / Side Panel / Half screen + แท็บ)
+ */
+export function openResourceItem(item) {
+    if (!item || !item.url) return;
+    const url = item.url;
+    const isLocalProgram = url && !url.startsWith('http') && !url.startsWith('chrome');
+    const isHalfScreenTag = item.tags && item.tags.some(t => t.toUpperCase() === 'HALF SCREEN');
+
+    if (isLocalProgram) {
+        if (typeof chrome === 'undefined' || !chrome.runtime?.sendNativeMessage) {
+            window.open(url, '_blank');
+            return;
+        }
+        const useSplit = item.isSideView && isHalfScreenTag;
+        if (useSplit && chrome.windows) {
+            chrome.windows.getCurrent({}, win => {
+                const width = Math.floor(window.screen.availWidth / 2);
+                const height = window.screen.availHeight;
+                chrome.windows.update(win.id, { left: 0, top: 0, width, height, state: 'normal' });
+            });
+        }
+        chrome.runtime.sendNativeMessage('com.myworkona.launcher', {
+            path: item.url,
+            name: item.title,
+            splitView: useSplit,
+        });
+    } else if (item.isSideView && typeof chrome !== 'undefined' && chrome.sidePanel) {
+        chrome.sidePanel.setOptions({ path: item.url, enabled: true });
+        chrome.sidePanel.open({ windowId: chrome.windows.WINDOW_ID_CURRENT });
+    } else {
+        openOrFocusTab(url);
     }
 }
 
@@ -349,8 +387,13 @@ export function generateTaskHTML(task, index, {
     let linkTypeClass = '';
     if (hasLink) {
         const url = task.linkData.url.toLowerCase();
-        if (url.includes('keep.google.com')) {
-            linkTypeClass = 'link-keep';
+        let linkIsNoteWebapp = false;
+        try {
+            const noteOrigin = getNoteWebappOrigin();
+            if (noteOrigin) linkIsNoteWebapp = new URL(task.linkData.url).origin === noteOrigin;
+        } catch { /* ignore */ }
+        if (linkIsNoteWebapp) {
+            linkTypeClass = 'link-note-webapp';
         } else if (url.includes('docs.google.com/document')) {
             linkTypeClass = 'link-docs';
         } else if (url.includes('docs.google.com/spreadsheets')) {
@@ -380,7 +423,7 @@ export function generateTaskHTML(task, index, {
                     </div>
                 </div>
                 <div class="item-action-group" style="flex-shrink: 0; margin-left: auto; display: flex; align-items: center; gap: 8px;">
-                    <button class="btn-icon restore-task-btn" data-index="${index}" ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="Restore Task">${svgRestore}</button>
+                    <button class="btn-icon restore-task-btn" data-index="${index}" ${isSubtask ? `data-parent-index="${parentIndex}" data-sub-index="${index}"` : ''} ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="Restore Task">${svgRestore}</button>
                     <button class="btn-icon delete-task-perm-btn" data-index="${index}" ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="Delete Permanently">${svgTrashRed}</button>
                 </div>
             </div>
@@ -432,7 +475,7 @@ export function generateTaskHTML(task, index, {
         const countdown = getTrashCountdownText(task, getAppSettings().autoDeleteDays);
         collapsibleActionsContent = `
             <!-- Countdown moved to front of text -->
-            <button class="btn-icon restore-task-btn" data-index="${index}" ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="Restore Task">${svgRestore}</button>
+            <button class="btn-icon restore-task-btn" data-index="${index}" ${isSubtask ? `data-parent-index="${parentIndex}" data-sub-index="${index}"` : ''} ${isMasterView ? `data-space-id="${spaceId}"` : ''} title="Restore Task">${svgRestore}</button>
             ${isSubtask ? `
                 <button class="btn-icon delete-subtask-perm-btn" data-parent-index="${parentIndex}" data-sub-index="${index}" data-id="${task.id}" title="Delete Permanently">${svgTrashRed}</button>
             ` : `
@@ -585,6 +628,86 @@ export function attachSubtaskEventListeners(container, space, onRenderCallback, 
 export function attachTaskInlineEditListeners(container, getSpaceFn, callbacks = {}) {
     const { fetchGoogleAPI, getGoogleAuthToken, getCurrentGoogleListId, saveData, onUpdate } = callbacks;
 
+    const formatDateInputValue = (date) => {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    };
+
+    const parseInlineDateCommand = (trimmed) => {
+        const t = (trimmed || '').trim();
+        if (!t) return null;
+        const found = /(^|\s)@(today|tomorrow|adddate)\b/i.exec(t);
+        if (!found) return null;
+        const type = found[2].toLowerCase();
+        const baseText = t.replace(/(^|\s)@(today|tomorrow|adddate)\b/i, ' ').replace(/\s+/g, ' ').trim();
+        return { type, baseText };
+    };
+
+    const pickInlineDate = () => {
+        return new Promise((resolve) => {
+            const backdrop = document.createElement('div');
+            backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:10002;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;';
+
+            const panel = document.createElement('div');
+            panel.style.cssText = 'width:min(360px,calc(100vw - 24px));max-height:calc(100vh - 24px);overflow:auto;background:var(--bg-card,#fff);border:1px solid var(--border-color,#e5e7eb);border-radius:12px;padding:12px;box-shadow:0 10px 30px rgba(0,0,0,0.25);box-sizing:border-box;';
+            panel.innerHTML = `
+                <div style="font-size:12px;font-weight:700;color:var(--text-main,#111827);margin-bottom:8px;">Select Due Date</div>
+                <input type="date" class="sf-inline-date-picker" style="width:100%;height:38px;border:1px solid var(--border-color,#d1d5db);border-radius:8px;padding:0 8px;background:var(--bg-body,#fff);color:var(--text-main,#111827);box-sizing:border-box;">
+                <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px;flex-wrap:wrap;">
+                    <button type="button" class="sf-inline-date-cancel" style="height:34px;padding:0 12px;border:1px solid var(--border-color,#d1d5db);border-radius:8px;background:var(--bg-body,#fff);color:var(--text-main,#111827);cursor:pointer;">Cancel</button>
+                    <button type="button" class="sf-inline-date-ok" style="height:34px;padding:0 14px;border:1px solid #3b82f6;border-radius:8px;background:#3b82f6;color:#fff;cursor:pointer;">OK</button>
+                </div>
+            `;
+            backdrop.appendChild(panel);
+            document.body.appendChild(backdrop);
+
+            const picker = panel.querySelector('.sf-inline-date-picker');
+            const btnCancel = panel.querySelector('.sf-inline-date-cancel');
+            const btnOk = panel.querySelector('.sf-inline-date-ok');
+
+            let resolved = false;
+            const done = (value = null) => {
+                if (resolved) return;
+                resolved = true;
+                picker.removeEventListener('change', onChange);
+                picker.removeEventListener('keydown', onKeyDown);
+                btnCancel.removeEventListener('click', onCancel);
+                btnOk.removeEventListener('click', onOk);
+                backdrop.removeEventListener('click', onBackdropClick);
+                backdrop.remove();
+                resolve(value);
+            };
+            const onChange = () => {};
+            const onCancel = () => done(null);
+            const onOk = () => done(picker.value || null);
+            const onBackdropClick = (ev) => {
+                if (ev.target === backdrop) done(null);
+            };
+            const onKeyDown = (ev) => {
+                if (ev.key === 'Enter') {
+                    ev.preventDefault();
+                    done(picker.value || null);
+                } else if (ev.key === 'Escape') {
+                    ev.preventDefault();
+                    done(null);
+                }
+            };
+
+            picker.addEventListener('change', onChange);
+            picker.addEventListener('keydown', onKeyDown);
+            btnCancel.addEventListener('click', onCancel);
+            btnOk.addEventListener('click', onOk);
+            backdrop.addEventListener('click', onBackdropClick);
+
+            const today = new Date();
+            picker.value = formatDateInputValue(today);
+            // ใช้ focus เฉย ๆ เพื่อเลี่ยงบาง browser ที่เปิดปฏิทินลอยผิดตำแหน่ง
+            picker.focus();
+        });
+    };
+
     // Now imported statically from SpMirrorHelper
 
     // 🟢 0. Handle Autocomplete during inline typing
@@ -655,6 +778,22 @@ export function attachTaskInlineEditListeners(container, getSpaceFn, callbacks =
             }
 
             if (taskObj) {
+                // 📅 Inline @date command support in task list (e.g. "งานนี้ @today")
+                if (type === 'task') {
+                    const dateCmd = parseInlineDateCommand(newText);
+                    if (dateCmd) {
+                        const targetDate = new Date();
+                        if (dateCmd.type === 'tomorrow') targetDate.setDate(targetDate.getDate() + 1);
+                        if (dateCmd.type === 'today' || dateCmd.type === 'tomorrow') {
+                            taskObj.dueDate = formatDateInputValue(targetDate);
+                        } else if (dateCmd.type === 'adddate') {
+                            const selectedDate = await pickInlineDate();
+                            if (selectedDate) taskObj.dueDate = selectedDate;
+                        }
+                        newText = dateCmd.baseText;
+                    }
+                }
+
                 // 🟢 NEW: Auto-tagging Logic (เหมือนฟังก์ชันเก่าในช่อง Add Task)
                 // 1. แทนที่ทางลัด #1 ด้วยป้ายที่กำลังกรองอยู่
                 const currentFilters = (getFilterTags() || []).filter(t => !['ALL', 'UNTAGGED', 'AI', 'HALF SCREEN'].includes(t.toUpperCase()));

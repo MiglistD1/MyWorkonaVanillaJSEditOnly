@@ -17,6 +17,8 @@ import { applyAppSettings, initSettingsManager } from './core/settings-manager.j
 import { initSearchManager } from './core/searchManager.js';
 import { initRewardSystem } from './features/rewardSystem.js';
 import { initContentManager, renderMainContent, renderAll } from './core/contentManager.js';
+import { installNoteWebappPickListener } from './core/noteWebappPickBridge.js';
+import { initDetachedNoteWindowListener } from './core/noteWebappDetachedWindow.js';
 import { openOrFocusTab } from './core/ui-helpers.js';
 import { initDashboardQuickNote } from './features/dashboardQuickNote.js';
 import { initStateManagerIntegration, stateManager, eventBus, Events } from './core/StateManagerIntegration.js';
@@ -234,7 +236,9 @@ document.addEventListener('DOMContentLoaded', () => {
         window.openOrFocusTab = openOrFocusTab;
         window.handleSpaceChange = handleSpaceChange;
         window.renderAll = renderAll;
-        
+        installNoteWebappPickListener();
+        initDetachedNoteWindowListener();
+
         // Initialize Core Modules
         applyAppSettings();
         initContentManager();
@@ -293,29 +297,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const positionDrivePopup = () => {
                 if (!driveSyncPopup || !driveSyncContainer) return;
-                if (window.innerWidth <= 768) {
-                    const rect   = driveSyncContainer.getBoundingClientRect();
-                    const margin = 8;
-                    const top    = Math.min(window.innerHeight - 70, rect.bottom + 8);
-                    const width  = Math.min(280, window.innerWidth - margin * 2);
-                    let left = rect.right - width;
-                    if (left < margin) left = margin;
-                    driveSyncPopup.style.position  = 'fixed';
-                    driveSyncPopup.style.width     = `${width}px`;
-                    driveSyncPopup.style.left      = `${left}px`;
-                    driveSyncPopup.style.right     = 'auto';
-                    driveSyncPopup.style.top       = `${top}px`;
-                    driveSyncPopup.style.maxHeight = `calc(100vh - ${top + margin}px)`;
-                    driveSyncPopup.style.overflowY = 'auto';
-                } else {
-                    driveSyncPopup.style.position  = 'absolute';
-                    driveSyncPopup.style.width     = '';
-                    driveSyncPopup.style.left      = 'auto';
-                    driveSyncPopup.style.right     = '0';
-                    driveSyncPopup.style.top       = '115%';
-                    driveSyncPopup.style.maxHeight = '';
-                    driveSyncPopup.style.overflowY = '';
-                }
+                const rect      = driveSyncContainer.getBoundingClientRect();
+                const margin    = 8;
+                const popupW    = Math.min(280, window.innerWidth - margin * 2);
+                const top       = Math.min(window.innerHeight - 70, rect.bottom + 8);
+                const maxH      = window.innerHeight - top - margin;
+
+                // Account for sidebar so popup never slides under it
+                const sidebar   = document.getElementById('spacebar');
+                const sidebarRight = (sidebar && sidebar.offsetParent !== null)
+                    ? sidebar.getBoundingClientRect().right
+                    : 0;
+                const leftBound = Math.max(sidebarRight + margin, margin);
+
+                // Prefer right-aligned to the button; clamp so it never overflows either edge
+                let left = rect.right - popupW;
+                if (left < leftBound) left = leftBound;
+                if (left + popupW > window.innerWidth - margin) left = window.innerWidth - margin - popupW;
+                if (left < leftBound) left = leftBound; // final safety clamp
+
+                driveSyncPopup.style.position  = 'fixed';
+                driveSyncPopup.style.width     = `${popupW}px`;
+                driveSyncPopup.style.left      = `${left}px`;
+                driveSyncPopup.style.right     = 'auto';
+                driveSyncPopup.style.top       = `${top}px`;
+                driveSyncPopup.style.maxHeight = `${maxH}px`;
+                driveSyncPopup.style.overflowY = 'auto';
             };
 
             const _applyDeviceCapabilityUI = () => {
@@ -585,19 +592,33 @@ document.addEventListener('DOMContentLoaded', () => {
                 _setDesktopVerifiedState(desktopVerified, /*silent=*/true);
                 const histContent  = document.getElementById('drive-sync-history-content');
                 const clearHistBtn = document.getElementById('btn-drive-clear-history');
+                const histContentM  = document.getElementById('drive-gdrive-history-content');
+                const clearHistBtnM = document.getElementById('btn-gdrive-clear-history');
+                const hist = getSyncHistory();
+                const _renderHistRows = (hist) => hist.length === 0
+                    ? '<span>No sync history yet</span>'
+                    : hist.map(h => {
+                        const icon  = h.status === 'success' ? '✓' : '⚠';
+                        const color = h.status === 'success' ? '#10b981' : '#ef4444';
+                        const time  = new Date(h.time).toLocaleTimeString();
+                        return `<div style="display:flex;justify-content:space-between;"><span style="color:${color};font-weight:700;">${icon} ${h.type}</span><span>${time}</span></div>`;
+                    }).join('');
                 if (histContent) {
-                    const hist = getSyncHistory();
                     if (hist.length === 0) {
                         histContent.innerHTML = '<span>No sync history yet</span>';
                         if (clearHistBtn) clearHistBtn.style.display = 'none';
                     } else {
-                        histContent.innerHTML = hist.map(h => {
-                            const icon  = h.status === 'success' ? '✓' : '⚠';
-                            const color = h.status === 'success' ? '#10b981' : '#ef4444';
-                            const time  = new Date(h.time).toLocaleTimeString();
-                            return `<div style="display:flex;justify-content:space-between;"><span style="color:${color};font-weight:700;">${icon} ${h.type}</span><span>${time}</span></div>`;
-                        }).join('');
+                        histContent.innerHTML = _renderHistRows(hist);
                         if (clearHistBtn) clearHistBtn.style.display = 'flex';
+                    }
+                }
+                if (histContentM) {
+                    if (hist.length === 0) {
+                        histContentM.innerHTML = '<span>No sync history yet</span>';
+                        if (clearHistBtnM) clearHistBtnM.style.display = 'none';
+                    } else {
+                        histContentM.innerHTML = _renderHistRows(hist);
+                        if (clearHistBtnM) clearHistBtnM.style.display = 'flex';
                     }
                 }
             };
@@ -1376,6 +1397,22 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             document.getElementById('btn-drive-clear-history')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                clearSyncHistory();
+                refreshDrivePopupUI();
+            });
+
+            // ─ History toggle (mobile)
+            document.getElementById('btn-gdrive-view-history')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const list = document.getElementById('drive-gdrive-history-list');
+                if (!list) return;
+                const isHidden = list.style.display === 'none';
+                list.style.display = isHidden ? 'flex' : 'none';
+                if (isHidden) refreshDrivePopupUI();
+            });
+
+            document.getElementById('btn-gdrive-clear-history')?.addEventListener('click', (e) => {
                 e.stopPropagation();
                 clearSyncHistory();
                 refreshDrivePopupUI();

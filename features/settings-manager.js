@@ -3,6 +3,7 @@ import {
     setSpaces, setAppSettings, setCurrentSpaceId, 
     saveData, getShortDate 
 } from './storage.js';
+import { syncAllNoteWebappIframes } from '../core/noteWebapp.js';
 
 export function applyAppSettings() {
     const appSettings = getAppSettings();
@@ -317,6 +318,8 @@ export function applyAppSettings() {
             @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
         }
     `;
+
+    syncAllNoteWebappIframes();
 }
 
 export function initSettingsManager(callbacks) {

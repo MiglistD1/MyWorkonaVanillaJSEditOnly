@@ -724,7 +724,13 @@ export function setupSettingsModal(onRender) {
 
     document.getElementById('btn-open-settings').addEventListener('click', () => { 
         const appSettings = getAppSettings();
-        document.getElementById('setting-title').value = appSettings.title; 
+        document.getElementById('setting-title').value = appSettings.title;
+        const obsVaultEl = document.getElementById('setting-obsidian-vault');
+        if (obsVaultEl) obsVaultEl.value = appSettings.obsidianVaultName || '';
+        const nwEl = document.getElementById('setting-note-webapp-url');
+        if (nwEl) nwEl.value = appSettings.noteWebappUrl || 'http://localhost:5173';
+        const lockUnlinkedEl = document.getElementById('setting-quick-note-lock-unlinked');
+        if (lockUnlinkedEl) lockUnlinkedEl.checked = !!appSettings.quickNoteLockUnlinked;
         const currentIcon = appSettings.icon || "🚀";
         document.getElementById('setting-icon').value = currentIcon; 
         updateSettingPreview(currentIcon);
@@ -753,11 +759,30 @@ export function setupSettingsModal(onRender) {
         document.getElementById('settings-modal').style.display = 'flex'; 
     });
 
+    const btnClearObsidianVault = document.getElementById('btn-clear-obsidian-vault');
+    if (btnClearObsidianVault) {
+        btnClearObsidianVault.addEventListener('click', () => {
+            if (!confirm('ล้างชื่อ Obsidian vault และบันทึกเลย?\n(โน้ตในแอปไม่หาย — แค่เลิกจำชื่อ vault สำหรับปุ่มเปิด Obsidian)')) return;
+            const appSettings = getAppSettings();
+            appSettings.obsidianVaultName = '';
+            saveData();
+            const inp = document.getElementById('setting-obsidian-vault');
+            if (inp) inp.value = '';
+        });
+    }
+
     document.getElementById('btn-close-settings').addEventListener('click', () => { document.getElementById('settings-modal').style.display = 'none'; });
     
     document.getElementById('btn-save-settings').addEventListener('click', () => {
         const appSettings = getAppSettings();
         appSettings.title = document.getElementById('setting-title').value;
+        const obsVaultSave = document.getElementById('setting-obsidian-vault');
+        if (obsVaultSave) appSettings.obsidianVaultName = obsVaultSave.value.trim();
+        const nwSave = document.getElementById('setting-note-webapp-url');
+        if (nwSave) appSettings.noteWebappUrl = (nwSave.value.trim() || 'http://localhost:5173');
+        appSettings.notesLinkProvider = 'webllm';
+        const lockUnlinkedSave = document.getElementById('setting-quick-note-lock-unlinked');
+        if (lockUnlinkedSave) appSettings.quickNoteLockUnlinked = !!lockUnlinkedSave.checked;
         appSettings.icon = document.getElementById('setting-icon').value;
         appSettings.color = document.getElementById('setting-color').value;
         appSettings.font = document.getElementById('setting-app-font').value;
@@ -898,6 +923,7 @@ export function setupItemModals(onRender) {
         }
 
         if (!item) return;
+        if (type === 'resource' && item.isResourceBlockHeader) return;
 
         tempIconData = item.favIconUrl || null;
         updatePreview();
@@ -958,6 +984,10 @@ export function setupItemModals(onRender) {
             modal.style.display = 'none';
         };
     }
+
+    // Ensure Cancel button reliably closes modal (fixes cases where inline onclick may be blocked)
+    const cancelResBtn = document.getElementById('modal-edit-res-cancel');
+    if (cancelResBtn) cancelResBtn.onclick = () => { modal.style.display = 'none'; };
 }
 
 /**

@@ -6,6 +6,22 @@ chrome.action.onClicked.addListener(() => {
   chrome.tabs.create({ url });
 });
 
+/** หน้า pick บน localhost ส่งผลเลือกโน้ตเมื่อไม่มี window.opener (เช่น เปิดจาก Side Panel) — เก็บแล้วให้ dashboard ดึง */
+chrome.runtime.onMessageExternal.addListener((message, _sender, sendResponse) => {
+  if (!message || message.type !== 'NOTE_WEBAPP_PICK') {
+    return;
+  }
+  const payload = { ...message, _ts: Date.now() };
+  chrome.storage.local.set({ pendingNoteWebappPick: payload }, () => {
+    if (chrome.runtime.lastError) {
+      sendResponse({ ok: false, error: chrome.runtime.lastError.message });
+      return;
+    }
+    sendResponse({ ok: true });
+  });
+  return true;
+});
+
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.url && changeInfo.url.startsWith('https://myworkona.test/open')) {
     try {

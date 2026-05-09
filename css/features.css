@@ -527,7 +527,7 @@ body.is-sorting-tasks .smart-flow-desc {
 .btn-add-mini-tag.has-tags { background: rgba(47, 128, 237, 0.1); color: var(--primary-color); border-color: var(--primary-color);}
 
 .task-link-btn.has-link { color: #000 !important; background: #fbbf24 !important; opacity: 1 !important; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-.task-link-btn.has-link.link-keep { background: #fbbf24 !important; color: #000 !important; }
+.task-link-btn.has-link.link-note-webapp { background: #fbbf24 !important; color: #000 !important; }
 .task-link-btn.has-link.link-docs { background: #2684fc !important; color: #fff !important; }
 .task-link-btn.has-link.link-sheets { background: #10b981 !important; color: #fff !important; }
 .task-link-btn.has-link.link-other { background: #a855f7 !important; color: #fff !important; }
@@ -878,6 +878,8 @@ body.is-sorting-tasks .smart-flow-desc {
 .dark-mode .note-container { background: #222222; border-color: #555; }
 .note-toolbar { display: flex; gap: 8px; padding: 8px 12px; border-bottom: 1px dashed var(--border-color); align-items: center; background: rgba(0,0,0,0.02);}
 .note-area { width: 100%; flex: 1; min-height: 250px; font-family: var(--note-font, var(--app-font)); font-size: 16px; outline: none; line-height: 1.6; padding: 15px; box-sizing: border-box; color: var(--text-main); overflow-y: auto;}
+/* Quick Note / floating / CC / peek — applyQuickNoteEditorsLock */
+.quick-note-locked { cursor: not-allowed; opacity: 0.9; }
 .note-area div:has(> .google-task-checkbox input:checked), .note-area p:has(> .google-task-checkbox input:checked) { text-decoration: line-through; color: var(--text-muted); opacity: 0.6; }
 .note-toolbar-sep { color: var(--border-color); margin: 0 4px; opacity: 0.5; user-select: none; pointer-events: none; }
 .note-more-actions-wrapper { position: relative; display: inline-flex; align-items: center; }

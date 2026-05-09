@@ -1,4 +1,8 @@
 import { getSpaces, getAppSettings, saveData, getFilterTags, getCurrentSpace, getCurrentSpaceId } from '../core/storage.js';
+import { openNoteWebappInNewTab } from '../core/noteWebapp.js';
+import { openNoteWebappPickWindow, resolveDefaultPickForSpaceId } from '../core/noteWebappPickBridge.js';
+import { renderQuickNoteLinkBanner } from '../core/quickNoteWebLinkUi.js';
+import { noteSpaceLinkReady } from '../features/noteWebappBridge.js';
 import { updateKeepTagButtonState, openKeepWithTag } from './googleKeep.js';
 import { renderMasterTodoList, renderMasterHeaderControls, initMasterEvents, masterTodoListState as commandCenterState } from './masterTodoList.js';
 import { renderSmartFlow, initSmartFlow, flowState, showFocusPopup, formatFocusTime } from './smartFlow.js';
@@ -7,6 +11,76 @@ import { toggleHabitModal } from './habitSheet.js';
 import Sortable from '../sortable.esm.js';
 
 let ccWidgetStateCache = null; // 🟢 แคชสถานะ UI ไว้ในแรมเพื่อให้ทำงานเร็วขึ้น
+
+function escapeHtml(str) {
+    return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+/** Space ที่ใช้เก็บ Quick Note บน Command Center — สอดคล้องกับ Master Quick Add / filter */
+function getCommandCenterNoteSpace() {
+    const allSpaces = getSpaces().filter(s => !s.isArchived);
+    const pickId = commandCenterState.selectedQuickAddSpaceId ?? allSpaces[0]?.id;
+    if (pickId == null) return null;
+    return getSpaces().find(s => s.id === pickId) || null;
+}
+
+function setupCommandCenterQuickNote() {
+    const toolbar = document.getElementById('cc-quick-note-toolbar');
+    const noteEl = document.getElementById('cc-workspace-note');
+    if (!noteEl) return;
+
+    if (toolbar) {
+        toolbar.querySelectorAll('button[data-cc-note-cmd]').forEach((btn) => {
+            btn.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                const cmd = btn.getAttribute('data-cc-note-cmd');
+                if (cmd) document.execCommand(cmd, false, undefined);
+            });
+        });
+    }
+
+    const sp = getCommandCenterNoteSpace();
+    const ccLinked = noteSpaceLinkReady(sp);
+    const ccSuppressed = !!(sp?.quickNoteSuppressLocalEditor);
+    if (!ccLinked && document.activeElement !== noteEl) {
+        noteEl.innerHTML = ccSuppressed ? '' : sp?.note || '';
+    }
+
+    const persist = () => {
+        const target = getCommandCenterNoteSpace();
+        if (!target) return;
+        target.note = noteEl.innerHTML;
+        saveData();
+    };
+    noteEl.addEventListener('input', persist);
+    noteEl.addEventListener('blur', persist);
+
+    document.getElementById('cc-btn-open-note-webapp')?.addEventListener('click', () => openNoteWebappInNewTab());
+    document.getElementById('cc-btn-pick-note')?.addEventListener('click', () =>
+        openNoteWebappPickWindow({
+            pickTarget: 'space',
+            forSpaceId: resolveDefaultPickForSpaceId(),
+        })
+    );
+
+    const ccBan = document.getElementById('cc-quick-note-link-banner');
+    const ccSp = getCommandCenterNoteSpace();
+    if (ccBan && ccSp) {
+        renderQuickNoteLinkBanner(
+            ccBan,
+            ccSp,
+            { pickTarget: 'space', forSpaceId: resolveDefaultPickForSpaceId() },
+            {
+                note: document.getElementById('cc-workspace-note'),
+                toolbar: document.getElementById('cc-quick-note-toolbar'),
+            }
+        );
+    }
+}
 
 function saveCommandCenterUiState(uiState) {
     const settings = getAppSettings();
@@ -88,6 +162,9 @@ export async function renderDefaultDashboard() {
     const flowScroller = document.getElementById('smart-flow-container');
     const flowScroll = flowScroller ? flowScroller.scrollTop : 0;
 
+    const ccNoteSpace = getCommandCenterNoteSpace();
+    const ccNoteSpaceLabel = escapeHtml(ccNoteSpace?.name || '—');
+
     // 1. Render Dashboard Wrapper
     container.innerHTML = `
         <div id="cc-minimized-row" class="minimized-widgets-bar">
@@ -108,6 +185,27 @@ export async function renderDefaultDashboard() {
             </div>
             ${isMinimized('todo') ? `<div class="minimized-bubble" data-id="todo" title="Restore Todo List"><svg class="svg-icon-sm"><use href="#icon-check-square"></use></svg></div>` : ''}
             ${isMinimized('flow') ? `<div class="minimized-bubble" data-id="flow" title="Restore Smart Flow"><svg class="svg-icon-sm"><use href="#icon-sparkles"></use></svg></div>` : ''}
+        </div>
+
+        <div id="cc-quick-note-card" class="card" style="width:100%;margin-bottom:16px;padding:12px 16px;box-sizing:border-box;border:1px solid var(--border-color);border-radius:12px;background:var(--bg-card);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px;">
+                <span class="section-label" style="margin:0;">Quick Notes</span>
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                    <span style="font-size:11px;color:var(--text-muted);">Space: ${ccNoteSpaceLabel}</span>
+                    <button type="button" class="btn-icon" id="cc-btn-pick-note" title="เลือกโน้ตจาก LLM Wiki" style="color:var(--primary-color);">📎</button>
+                    <button type="button" class="btn-icon" id="cc-btn-open-note-webapp" title="เปิด LLM Wiki Manager ในแท็บใหม่" style="color:var(--primary-color);">📝</button>
+                </div>
+            </div>
+            <div id="cc-quick-note-link-banner" style="flex-shrink:0;margin-bottom:8px;"></div>
+            <div id="cc-quick-note-toolbar" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px;">
+                <button type="button" class="btn-icon" data-cc-note-cmd="bold" title="Bold" style="font-weight:800;">B</button>
+                <button type="button" class="btn-icon" data-cc-note-cmd="italic" title="Italic" style="font-style:italic;">I</button>
+                <button type="button" class="btn-icon" data-cc-note-cmd="underline" title="Underline" style="text-decoration:underline;">U</button>
+                <button type="button" class="btn-icon" data-cc-note-cmd="insertUnorderedList" title="Bullet list">•</button>
+                <button type="button" class="btn-icon" data-cc-note-cmd="insertOrderedList" title="Numbered list">1.</button>
+            </div>
+            <div id="cc-workspace-note" contenteditable="true" spellcheck="true"
+                style="min-height:180px;max-height:min(420px,50vh);overflow-y:auto;padding:10px 12px;font-family:var(--note-font);font-size:var(--app-font-size);line-height:1.55;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-card);outline:none;"></div>
         </div>
 
         <div id="cc-widget-grid" class="dashboard-grid-inner ${uiState.isLocked ? 'is-locked' : ''}">
@@ -258,6 +356,8 @@ export async function renderDefaultDashboard() {
 
     restoreScrolls(); // Sync restore
     requestAnimationFrame(restoreScrolls); // Async backup for DOM flow
+
+    setupCommandCenterQuickNote();
 }
 
 /**
@@ -271,11 +371,9 @@ function renderGoogleIntegrations() {
             </button>
             <div id="master-google-apps-popup" class="dropdown-menu" style="display: none; top: 110%; right: 0;">
                 <div class="app-row">
-                    <span class="app-label label-keep">Keep</span>
+                    <span class="app-label" style="color:var(--primary-color);">Note webapp</span>
                     <div class="app-controls">
-                        <button id="master-btn-open-keep" class="btn-icon app-btn" title="Open Keep" style="color:#f59e0b;"><svg viewBox="0 0 24 24" fill="currentColor" style="width:20px;height:20px;"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"></path></svg></button>
-                        <button class="btn-icon app-btn side-view-toggle" id="master-keep-side-view-btn" title="Toggle Side View"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="15" y1="3" x2="15" y2="21"></line></svg></button>
-                        <button id="master-btn-keep-tag" class="btn-icon app-btn" title="Filter Label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg></button>
+                        <button type="button" id="master-btn-open-keep" class="btn-icon app-btn" title="เปิด Note webapp ในแท็บใหม่" style="color:var(--primary-color);">📝</button>
                     </div>
                 </div>
                 <!-- Row 2: Calendar -->

@@ -4,6 +4,7 @@ import {
     saveData, getShortDate,
     getLocalSettings, setLocalSettings
 } from './storage.js';
+import { syncAllNoteWebappIframes } from './noteWebapp.js';
 
 export function applyAppSettings() {
     const appSettings = getAppSettings();
@@ -639,6 +640,8 @@ function _initDriveVaultUI() {
             btnSync.textContent = 'Sync Now';
         });
     }
+
+    syncAllNoteWebappIframes();
 }
 export function initSettingsManager(callbacks) {
     const { onRenderAll } = callbacks;

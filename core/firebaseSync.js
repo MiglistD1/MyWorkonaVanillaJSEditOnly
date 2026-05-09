@@ -318,49 +318,91 @@ async function getSyncHistory() {
 }
 
 /**
- * 🟢 Helper: วาดรายการประวัติการซิงค์ใน UI
+ * 🟢 Helper: วาดรายการประวัติการซิงค์ใน UI (รวม Desktop + Firebase)
  */
 export async function renderSyncHistoryUI() {
     const container = document.getElementById('sync-history-content');
     const clearBtn = document.getElementById('btn-clear-sync-history');
     if (!container) return;
-    const history = await getSyncHistory();
+    const fbHistory = await getSyncHistory();
 
-    if (history.length === 0) {
+    // Get Drive/Desktop history from localStorage
+    let driveHist = [];
+    try {
+        const driveStr = localStorage.getItem('drive-sync-history');
+        driveHist = driveStr ? JSON.parse(driveStr) : [];
+    } catch { driveHist = []; }
+
+    // Combine both sources
+    const allEntries = [
+        ...fbHistory.map(entry => ({ text: entry, source: '☁️ Cloud', type: 'text' })),
+        ...driveHist.map(h => ({ text: `${h.type} (${h.status})`, source: '💻 Desktop', time: h.time, type: 'object' }))
+    ];
+
+    // Sort by time if possible
+    allEntries.sort((a, b) => {
+        const timeA = a.time ? new Date(a.time).getTime() : 0;
+        const timeB = b.time ? new Date(b.time).getTime() : 0;
+        return timeB - timeA;
+    });
+
+    if (allEntries.length === 0) {
         container.innerHTML = '<div style="text-align:center; opacity:0.5;">No history yet</div>';
         if (clearBtn) clearBtn.style.display = 'none';
     } else {
-        container.innerHTML = history.map(entry => {
+        container.innerHTML = allEntries.slice(0, 20).map(entry => {
+            const { text, source } = entry;
             let icon = '•';
             let color = 'var(--text-muted)';
             
-            // 🔵 Push: WebApp -> Firebase หรือ Merged -> Firebase
-            if (entry.includes('-> Firebase')) {
+            // 🔵 Push: WebApp -> Firebase eller Merged -> Firebase
+            if (text.includes('-> Firebase')) {
                 icon = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;"><path d="M12 5v14M5 12l7-7 7 7"/></svg>`;
                 color = '#3b82f6';
             } 
             // 🟢 Pull: Firebase -> WebApp
-            else if (entry.includes('Firebase ->')) {
+            else if (text.includes('Firebase ->')) {
                 icon = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;"><path d="M12 19V5M5 12l7 7 7-7"/></svg>`;
                 color = '#10b981';
             }
 
-            return `<div style="padding: 6px 0; border-bottom: 1px solid var(--border-color); width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; display: flex; align-items: center; color: ${color};">
+            return `<div style="padding: 6px 0; border-bottom: 1px solid var(--border-color); width: 100%; overflow: hidden; font-size: 10px; display: flex; align-items: center; gap: 6px; color: ${color};">
                 ${icon}
-                <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; font-weight: 600;">${entry}</span>
+                <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600;">${text}</span>
+                <span style="font-size: 8px; color: var(--text-muted); flex-shrink: 0; white-space: nowrap;">[${source}]</span>
             </div>`;
         }).join('');
         if (clearBtn) clearBtn.style.display = 'flex';
     }
 }
 
+/** Command Center (space 0): โน้ตผูกกับ space จาก Master Quick Add — เหมือน Quick Note ใน CC */
+function resolveNoteSpaceForSync() {
+    const sid = getCurrentSpaceId();
+    if (sid !== 0) return getCurrentSpace();
+    const allSpaces = getSpaces().filter(s => !s.isArchived);
+    const pickId = (typeof window !== 'undefined' && window.masterTodoListState?.selectedQuickAddSpaceId) ?? allSpaces[0]?.id;
+    if (pickId == null) return null;
+    return getSpaces().find(s => s.id === pickId) || null;
+}
+
 /**
  * �️ Force Push current Note to Cloud
  */
 export async function forcePushNote() {
+    const sid = getCurrentSpaceId();
     const workspaceNote = document.getElementById('workspace-note');
-    if (!workspaceNote) return;
-    const content = workspaceNote.innerHTML;
+    const ccNote = document.getElementById('cc-workspace-note');
+    let content = '';
+    if (sid === 0 && ccNote) {
+        content = ccNote.innerHTML;
+    } else if (workspaceNote && workspaceNote.tagName !== 'IFRAME') {
+        content = workspaceNote.innerHTML;
+    } else {
+        const space = resolveNoteSpaceForSync();
+        if (!space) return;
+        content = space.note || '';
+    }
     
     updateSyncStatusUI('syncing');
     try {
@@ -405,16 +447,20 @@ export async function forcePullCurrentSpace() {
 }
 
 export async function forcePullNote() {
+    const sid = getCurrentSpaceId();
     const workspaceNote = document.getElementById('workspace-note');
-    if (!workspaceNote) return;
-    
+    const ccNote = document.getElementById('cc-workspace-note');
+    const canWriteWorkspace = workspaceNote && workspaceNote.tagName !== 'IFRAME';
+    const canWriteCc = !!ccNote;
+
     updateSyncStatusUI('syncing');
     try {
         const snapshot = await getDoc(docRef);
         const data = snapshot.data();
         if (data && data.content !== undefined) {
-            workspaceNote.innerHTML = data.content;
-            const space = getCurrentSpace();
+            if (sid === 0 && canWriteCc) ccNote.innerHTML = data.content;
+            else if (canWriteWorkspace) workspaceNote.innerHTML = data.content;
+            const space = resolveNoteSpaceForSync();
             if (space) space.note = data.content;
             saveData(true);
             updateSyncStatusUI('synced', 'Firebase -> WebApp');

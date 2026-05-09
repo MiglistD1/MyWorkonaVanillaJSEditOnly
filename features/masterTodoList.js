@@ -1,16 +1,21 @@
 import { getSpaces, saveData, getAppSettings, setCurrentSpaceId, getFilterTags, loadData } from '../core/storage.js';
 import Sortable from '../sortable.esm.js';
 import { svgRefresh } from '../core/icons.js';
-import { openTaskEditModal, openTaskLinkModal, isAnyEditableElementFocused, toggleTaskFocus, playTaskCompletedSound, calculateNextDate, renderSpaceInline } from './todoManager.js'; 
+import { openTaskEditModal, openTaskLinkModal, isAnyEditableElementFocused, toggleTaskFocus, playTaskCompletedSound, calculateNextDate, renderSpaceInline, parseTaskLinkCommand, parseTaskDateCommand } from './todoManager.js'; 
 import { handleMiniTagClick, showCreateBlockModal } from '../components/modals.js';
 import { generateTaskHTML, attachSubtaskEventListeners, attachTaskInlineEditListeners, handleTagAutocomplete, applySyntaxHighlighting, getFaviconUrl, openOrFocusTab } from '../core/ui-helpers.js';
+import { showResourceLinkPicker } from '../components/resourceLinkPicker.js';
 import { createBlock } from './blockManager.js';
 
 import { renderSidebar } from '../components/sidebar.js';
-import { updateKeepTagButtonState } from './googleKeep.js';
 import { createCalendarEvent, deleteCalendarEvent } from '../core/calendarSync.js';
 import { setupBasketModal } from '../components/modals.js';
 import { eventBus, Events } from '../core/EventBus.js';
+import { buildObsidianOpenUri, openObsidianUriInBrowser } from '../core/obsidianUri.js';
+import { openNoteWebappInNewTab } from '../core/noteWebapp.js';
+import { openNoteWebappPickWindow } from '../core/noteWebappPickBridge.js';
+import { renderQuickNoteLinkBanner } from '../core/quickNoteWebLinkUi.js';
+import { noteSpaceLinkReady } from '../features/noteWebappBridge.js';
 
 /**
  * 🟢 FIX #3: Guard to prevent rendering deleted linked tasks
@@ -51,6 +56,46 @@ function sortSpaceTasks(space) {
         }
         return 0;
     });
+}
+
+function formatDateInputValue(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
+function openQuickDatePicker(anchorEl, onPick) {
+    const picker = document.createElement('input');
+    picker.type = 'date';
+    picker.style.position = 'fixed';
+    picker.style.left = '-9999px';
+    picker.style.top = '0';
+    picker.style.opacity = '0';
+    document.body.appendChild(picker);
+
+    let handled = false;
+    const cleanup = () => {
+        picker.removeEventListener('change', onChange);
+        picker.removeEventListener('blur', onBlur);
+        picker.remove();
+    };
+    const onChange = () => {
+        handled = true;
+        if (picker.value) onPick(picker.value);
+        cleanup();
+    };
+    const onBlur = () => setTimeout(cleanup, 0);
+    picker.addEventListener('change', onChange);
+    picker.addEventListener('blur', onBlur);
+
+    try {
+        picker.showPicker();
+    } catch (err) {
+        picker.focus();
+        picker.click();
+    }
+    if (anchorEl?.focus) anchorEl.focus();
 }
 
 const computerIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="12" y1="17" x2="12" y2="21"></line><line x1="8" y1="21" x2="16" y2="21"></line></svg>`;
@@ -399,7 +444,7 @@ function renderTaskGroups(allSpaces) {
                             <svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
                         </button>
                         <div class="master-space-toolbar-items">
-                            <button class="btn-icon btn-master-space-tool btn-master-goto-space" data-space-id="${space.id}" title="Open Space">
+                            <button class="btn-icon btn-master-space-tool btn-master-goto-space" data-space-id="${space.id}" data-action="goto" title="Open Space">
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
                             </button>
                             <button class="btn-icon btn-master-space-tool btn-space-peek ${peekState.spaceId === space.id ? 'is-peeking' : ''}" data-space-id="${space.id}" title="Peek this space"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg></button>
@@ -555,11 +600,9 @@ function renderSpacePeekPanel(spaceId) {
     const space = getSpaces().find(s => s.id === spaceId);
     if (!space) return;
 
-    // 🟢 FIX: ใช้ property 'note' ให้ตรงกับหน้า Space ปกติ เพื่อให้ข้อมูลเชื่อมต่อกัน
-    const noteContent = space.note || '';
-    const isKeepMode = !!(space.quickNoteKeepMode);
-    const keepUrl = space.quickNoteKeepUrl || '';
-    const resources = (space.resources || []).filter(r => !r.isDeleted && !r.isArchived);
+    const resources = (space.resources || []).filter(
+        r => !r.isDeleted && !r.isArchived && !r.isResourceBlockHeader
+    );
     const sppSettings = getAppSettings().spacePeekSettings || {};
     const isLocked = !!(sppSettings.isLocked);
     if (isLocked && !peekState.isFloat) peekState.inlineWidth = sppSettings.inlineWidth || 268;
@@ -585,23 +628,25 @@ function renderSpacePeekPanel(spaceId) {
 
     panel.className = `space-peek-panel ${peekState.isFloat ? 'is-float' : 'is-inline'}${isLocked ? ' is-locked' : ''}`;
 
-    const keepNoteArea = isKeepMode
-        ? (keepUrl
-            ? `<iframe class="spp-keep-iframe" src="about:blank" data-src="${keepUrl}" style="min-height:200px;"></iframe>`
-            : `<div class="spp-keep-setup">
-                <p style="font-size:11px;color:var(--text-muted);text-align:center;margin:0 0 8px;">Connect a Google Keep URL:</p>
-                <input type="text" class="spp-keep-input settings-input" placeholder="https://keep.google.com/\u2026" style="font-size:12px;">
-                <button class="btn btn-primary spp-keep-save" style="width:100%;justify-content:center;padding:6px;margin-top:6px;">Connect</button>
-               </div>`)
-        : `<div class="spp-note-editor note-area" contenteditable="true" data-space-id="${spaceId}" placeholder="Quick notes for ${space.name}\u2026">${noteContent}</div>`;
+    const notePeekHtml = `
+                <div id="spp-quick-note-link-banner" style="flex-shrink:0;margin-bottom:8px;"></div>
+                <div class="spp-quick-note-toolbar" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px;flex-shrink:0;">
+                    <button type="button" class="btn-icon" data-spp-note-cmd="bold" title="Bold" style="font-weight:800;">B</button>
+                    <button type="button" class="btn-icon" data-spp-note-cmd="italic" title="Italic" style="font-style:italic;">I</button>
+                    <button type="button" class="btn-icon" data-spp-note-cmd="underline" title="Underline" style="text-decoration:underline;">U</button>
+                    <button type="button" class="btn-icon" data-spp-note-cmd="insertUnorderedList" title="Bullet list">•</button>
+                    <button type="button" class="btn-icon" data-spp-note-cmd="insertOrderedList" title="Numbered list">1.</button>
+                </div>
+                <div id="spp-workspace-note" contenteditable="true" spellcheck="true" class="spp-workspace-note-editor"
+                    style="width:100%;min-height:200px;flex:1;overflow-y:auto;padding:8px 10px;font-family:var(--note-font);font-size:var(--app-font-size);line-height:1.55;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-card);outline:none;"></div>`;
 
     panel.innerHTML = `
         <div class="spp-header" id="spp-drag-handle">
             <div class="spp-title">${panelSvg} ${space.name}</div>
             <div class="spp-header-actions">
-                <button class="btn-icon spp-float-btn" title="${peekState.isFloat ? 'Dock panel' : 'Float panel'}" style="opacity:0.6;">${peekState.isFloat ? dockSvg : floatSvg}</button>
-                <button class="btn-icon spp-lock-btn" title="${isLocked ? 'Unlock size (right-click to reset)' : 'Lock current size'}" style="opacity:${isLocked ? '1' : '0.5'};color:${isLocked ? '#ef4444' : '#22c55e'}">${isLocked ? closedLockSvg : openLockSvg}</button>
-                <button class="btn-icon spp-close-btn" title="Close peek" style="opacity:0.5;font-size:14px;line-height:1;">\u2715</button>
+                <button type="button" class="btn-icon spp-float-btn" title="${peekState.isFloat ? 'Dock panel' : 'Float panel'}" style="opacity:0.6;">${peekState.isFloat ? dockSvg : floatSvg}</button>
+                <button type="button" class="btn-icon spp-lock-btn" title="${isLocked ? 'Unlock size (right-click to reset)' : 'Lock current size'}" style="opacity:${isLocked ? '1' : '0.5'};color:${isLocked ? '#ef4444' : '#22c55e'}">${isLocked ? closedLockSvg : openLockSvg}</button>
+                <button type="button" class="btn-icon spp-close-btn" title="Close peek" style="opacity:0.5;font-size:14px;line-height:1;">\u2715</button>
             </div>
         </div>
         <div class="spp-body">
@@ -617,15 +662,22 @@ function renderSpacePeekPanel(spaceId) {
                         : '<li class="spp-empty">No resources in this space.</li>'}
                 </ul>
             </div>
-            <div class="spp-section spp-note-section">
-                <div class="spp-section-title" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+            <div class="spp-section spp-note-section" style="display:flex;flex-direction:column;min-height:260px;">
+                <div class="spp-section-title" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:6px;">
                     <span>Quick Note</span>
-                    <div class="keep-btn-group" style="display:flex;gap:2px;background:rgba(245,158,11,0.1);padding:2px;border-radius:5px;border:1px solid rgba(245,158,11,0.2);">
-                        <button class="btn-icon spp-keep-toggle" title="Toggle Google Keep Mode" style="opacity:${isKeepMode ? '1' : '0.5'};"><svg class="svg-icon-sm"><use href="#icon-keep"></use></svg></button>
-                        <button class="btn-icon spp-keep-external" title="Open Keep in New Tab" style="display:${isKeepMode && keepUrl ? 'inline-flex' : 'none'};color:#d97706;"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="11" x2="21" y2="3"/></svg></button>
+                    <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">
+                    <div class="spp-webapp-btn-group" style="display:flex;gap:2px;background:rgba(59,130,246,0.1);padding:2px;border-radius:5px;border:1px solid rgba(59,130,246,0.22);">
+                        <button type="button" class="btn-icon spp-note-pick" title="เลือกโน้ตจาก LLM Wiki" style="color:var(--primary-color);">📎</button>
+                        <button type="button" class="btn-icon spp-note-webapp" title="เปิด LLM Wiki Manager (ตั้ง URL ใน Settings)" style="color:var(--primary-color);">📝</button>
+                    </div>
+                    <div class="spp-obsidian-btn-group" style="display:flex;gap:2px;background:rgba(139,92,246,0.12);padding:2px;border-radius:5px;border:1px solid rgba(139,92,246,0.28);">
+                        <button type="button" class="btn-icon spp-obsidian-open" title="เปิดใน Obsidian" style="color:#7c3aed;"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg></button>
+                        <button type="button" class="btn-icon spp-obsidian-path" title="ตั้ง path ไฟล์ใน vault" style="opacity:0.85;color:#7c3aed;"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg></button>
+                        <button type="button" class="btn-icon spp-obsidian-clear" title="ล้าง path — เหลือแค่โน้ตในแอป" style="opacity:0.75;color:#64748b;"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+                    </div>
                     </div>
                 </div>
-                ${keepNoteArea}
+                ${notePeekHtml}
             </div>
         </div>
         <div class="spp-resize-handle"></div>
@@ -644,13 +696,6 @@ function renderSpacePeekPanel(spaceId) {
         }
         panel.style.left = savedL || `${peekState.floatX}px`;
         panel.style.top = savedT || `${peekState.floatY}px`;
-    }
-
-    // Load Keep iframe without reload if URL unchanged
-    const iframe = panel.querySelector('.spp-keep-iframe');
-    if (iframe && iframe.dataset.src && iframe.dataset.loadedUrl !== iframe.dataset.src) {
-        iframe.src = iframe.dataset.src;
-        iframe.dataset.loadedUrl = iframe.dataset.src;
     }
 
     panel.querySelector('.spp-close-btn').onclick = () => {
@@ -705,38 +750,96 @@ function renderSpacePeekPanel(spaceId) {
         renderSpacePeekPanel(peekState.spaceId);
     });
 
-    panel.querySelector('.spp-keep-toggle')?.addEventListener('click', () => {
+    panel.querySelector('.spp-note-pick')?.addEventListener('click', () =>
+        openNoteWebappPickWindow({ pickTarget: 'space', forSpaceId: spaceId })
+    );
+    panel.querySelector('.spp-note-webapp')?.addEventListener('click', () => openNoteWebappInNewTab());
+
+    panel.querySelector('.spp-obsidian-path')?.addEventListener('click', () => {
         const sp = getSpaces().find(s => s.id === spaceId);
         if (!sp) return;
-        sp.quickNoteKeepMode = !sp.quickNoteKeepMode;
+        const cur = (sp.obsidianNoteRelPath || '').trim();
+        const next = prompt('Path ไฟล์ใน vault (สัมพันธ์กับราก vault เช่น 4_drafts/raw/โน้ต.md):', cur);
+        if (next === null) return;
+        sp.obsidianNoteRelPath = next.trim();
+        saveData();
+    });
+
+    panel.querySelector('.spp-obsidian-open')?.addEventListener('click', () => {
+        const app = getAppSettings();
+        const vault = (app.obsidianVaultName || '').trim();
+        if (!vault) {
+            alert('ตั้งชื่อ Obsidian vault ใน App Settings (ปุ่ม ⚙️)');
+            return;
+        }
+        const sp = getSpaces().find(s => s.id === spaceId);
+        if (!sp) return;
+        let rel = (sp.obsidianNoteRelPath || '').trim();
+        if (!rel) {
+            const entered = prompt('Path ไฟล์ใน vault (สัมพันธ์กับราก vault เช่น 4_drafts/raw/โน้ต.md):', '');
+            if (!entered || !entered.trim()) return;
+            rel = entered.trim();
+            sp.obsidianNoteRelPath = rel;
+            saveData();
+        }
+        const uri = buildObsidianOpenUri(vault, rel);
+        if (uri) openObsidianUriInBrowser(uri);
+    });
+
+    panel.querySelector('.spp-obsidian-clear')?.addEventListener('click', () => {
+        const sp = getSpaces().find(s => s.id === spaceId);
+        if (!sp) return;
+        if (!(sp.obsidianNoteRelPath || '').trim()) {
+            alert('ยังไม่ได้ตั้ง path ไฟล์');
+            return;
+        }
+        if (!confirm('ล้าง path ไฟล์ใน vault ของ space นี้?\n(โน้ตในแอปยังอยู่ — แค่เลิกผูกกับไฟล์ Obsidian)')) return;
+        sp.obsidianNoteRelPath = '';
         saveData();
         renderSpacePeekPanel(spaceId);
     });
 
-    panel.querySelector('.spp-keep-external')?.addEventListener('click', () => {
-        const sp = getSpaces().find(s => s.id === spaceId);
-        if (sp?.quickNoteKeepUrl) window.open(sp.quickNoteKeepUrl, '_blank');
-    });
-
-    const keepSaveBtn = panel.querySelector('.spp-keep-save');
-    if (keepSaveBtn) {
-        keepSaveBtn.onclick = () => {
-            const url = panel.querySelector('.spp-keep-input')?.value.trim();
-            if (url) {
-                const sp = getSpaces().find(s => s.id === spaceId);
-                if (sp) { sp.quickNoteKeepUrl = url; saveData(); }
-                renderSpacePeekPanel(spaceId);
+    const sppToolbar = panel.querySelector('.spp-quick-note-toolbar');
+    if (sppToolbar) {
+        sppToolbar.querySelectorAll('button[data-spp-note-cmd]').forEach((btn) => {
+            btn.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                const cmd = btn.getAttribute('data-spp-note-cmd');
+                if (cmd) document.execCommand(cmd, false, undefined);
+            });
+        });
+    }
+    const sppNote = panel.querySelector('#spp-workspace-note');
+    if (sppNote) {
+        const sp = getSpaces().find((s) => s.id === spaceId);
+        const peekLinked = noteSpaceLinkReady(sp);
+        const peekSuppressed = !!(sp?.quickNoteSuppressLocalEditor);
+        if (!peekLinked && document.activeElement !== sppNote) {
+            sppNote.innerHTML = peekSuppressed ? '' : sp?.note || '';
+        }
+        const persist = () => {
+            const target = getSpaces().find((s) => s.id === spaceId);
+            if (target) {
+                target.note = sppNote.innerHTML;
+                saveData();
             }
         };
+        sppNote.addEventListener('input', persist);
+        sppNote.addEventListener('blur', persist);
     }
 
-    const editor = panel.querySelector('.spp-note-editor');
-    if (editor) {
-        editor.oninput = () => {
-            const sp = getSpaces().find(s => s.id === spaceId);
-            // 🟢 FIX: บันทึกลง 'note' แทน 'quickNote' เพื่อให้ซิงค์กับ To-do list ของ Space นั้นๆ
-            if (sp) { sp.note = editor.innerHTML; saveData(); }
-        };
+    const sppBan = panel.querySelector('#spp-quick-note-link-banner');
+    const spPeek = getSpaces().find((s) => s.id === spaceId);
+    if (sppBan && spPeek) {
+        renderQuickNoteLinkBanner(
+            sppBan,
+            spPeek,
+            { pickTarget: 'space', forSpaceId: spaceId },
+            {
+                note: sppNote,
+                toolbar: panel.querySelector('.spp-quick-note-toolbar'),
+            }
+        );
     }
 
     panel.querySelectorAll('.spp-resource-list a[data-res-url]').forEach(a => {
@@ -988,12 +1091,42 @@ export function initMasterEvents() {
         }, 50);
     };
 
-    const addQuickTaskForSpace = (spaceId, inputEl) => {
+    const addQuickTaskForSpace = (spaceId, inputEl, dueDateOverride = null) => {
         const targetSpace = getSpaces().find(s => s.id === spaceId);
         if (!targetSpace || !inputEl) return;
 
         let text = (inputEl.value || '').trim();
         if (!text) return;
+
+        let normalizedDueDate = dueDateOverride || null;
+        if (!normalizedDueDate) {
+            const dateParse = parseTaskDateCommand(text);
+            if (dateParse) {
+                text = dateParse.baseText;
+                inputEl.value = text;
+
+                if (dateParse.type === 'adddate') {
+                    openQuickDatePicker(inputEl, (selectedDate) => {
+                        addQuickTaskForSpace(spaceId, inputEl, selectedDate);
+                    });
+                    return;
+                }
+
+                const targetDate = new Date();
+                if (dateParse.type === 'tomorrow') targetDate.setDate(targetDate.getDate() + 1);
+                normalizedDueDate = formatDateInputValue(targetDate);
+
+                if (!text) {
+                    openQuickDatePicker(inputEl, (selectedDate) => {
+                        if (selectedDate) {
+                            inputEl.value = 'New task';
+                            addQuickTaskForSpace(spaceId, inputEl, selectedDate);
+                        }
+                    });
+                    return;
+                }
+            }
+        }
 
         inputEl.disabled = true;
         if (!targetSpace.tasks) targetSpace.tasks = [];
@@ -1019,7 +1152,7 @@ export function initMasterEvents() {
             });
         }
 
-        const newTask = { text, completed: false, createdAt: Date.now(), isProminent: false, tags: tags };
+        const newTask = { text, completed: false, createdAt: Date.now(), isProminent: false, tags: tags, dueDate: normalizedDueDate || null };
         targetSpace.tasks.push(newTask);
         if (targetSpace.taskSortOrder && targetSpace.taskSortOrder !== 'manual') sortSpaceTasks(targetSpace);
 
@@ -1227,6 +1360,36 @@ export function initMasterEvents() {
             const text = (input.value || '').trim();
             if (!sid || !text) return;
 
+            const dateParse = parseTaskDateCommand(text);
+            if (dateParse) {
+                e.preventDefault();
+                input.value = dateParse.baseText;
+
+                if (dateParse.type === 'adddate') {
+                    openQuickDatePicker(input, (selectedDate) => {
+                        addQuickTaskForSpace(sid, input, selectedDate);
+                    });
+                    return;
+                }
+
+                const targetDate = new Date();
+                if (dateParse.type === 'tomorrow') targetDate.setDate(targetDate.getDate() + 1);
+                const dueDate = formatDateInputValue(targetDate);
+
+                // ถ้าพิมพ์แค่คำสั่ง ให้เปิด date picker เพื่อยืนยันวันที่ก่อนเพิ่มงาน
+                if (!dateParse.baseText) {
+                    openQuickDatePicker(input, (selectedDate) => {
+                        const picked = selectedDate || dueDate;
+                        if (!input.value.trim()) input.value = 'New task';
+                        addQuickTaskForSpace(sid, input, picked);
+                    });
+                    return;
+                }
+
+                addQuickTaskForSpace(sid, input, dueDate);
+                return;
+            }
+
             if (text.toLowerCase().startsWith('@block')) {
                 e.preventDefault();
                 const targetSpace = getSpaces().find(s => s.id === sid);
@@ -1240,6 +1403,41 @@ export function initMasterEvents() {
                             onRefresh();
                         }
                     }
+                });
+                return;
+            }
+
+            const linkParse = parseTaskLinkCommand(text);
+            if (linkParse) {
+                e.preventDefault();
+                const targetSpace = getSpaces().find(s => s.id === sid);
+                input.value = '';
+                const anchorRect = input.getBoundingClientRect?.() || null;
+                showResourceLinkPicker({
+                    spaceId: sid,
+                    anchorRect,
+                    onSelect: res => {
+                        if (!targetSpace) return;
+                        if (!targetSpace.tasks) targetSpace.tasks = [];
+                        const taskTitle =
+                            linkParse.baseText !== ''
+                                ? linkParse.baseText
+                                : res.title || res.url;
+                        const newTask = {
+                            text: taskTitle,
+                            completed: false,
+                            createdAt: Date.now(),
+                            isProminent: false,
+                            tags: [],
+                            linkData: { url: res.url, fromResource: true, isSideview: false },
+                        };
+                        targetSpace.tasks.push(newTask);
+                        if (targetSpace.taskSortOrder && targetSpace.taskSortOrder !== 'manual') {
+                            sortSpaceTasks(targetSpace);
+                        }
+                        saveData();
+                        onRefresh();
+                    },
                 });
                 return;
             }
@@ -1362,6 +1560,12 @@ export function initMasterEvents() {
                 else if (action === 'collapse') nativeBtnId = '#btn-collapse-all-subtasks';
                 else if (action === 'basket') {
                     eventBus.emit(Events.OPEN_BASKET_MODAL, { spaceId: sid });
+                }
+
+                // 🟢 Handle 'goto' action: open the space in the sidebar
+                else if (action === 'goto') {
+                    const sidebarItem = document.querySelector(`#spacebar .space-item[data-id="${sid}"]`);
+                    if (sidebarItem) sidebarItem.click();
                 }
 
                 // 🟢 Fix: Safety check to prevent querySelector('') SyntaxError

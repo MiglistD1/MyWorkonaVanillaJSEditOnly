@@ -1,25 +1,71 @@
-﻿import { getAppSettings, saveData, getCurrentSpaceId } from '../core/storage.js';
+﻿import { getAppSettings, saveData, getCurrentSpaceId, getCurrentSpace } from '../core/storage.js';
+import { buildObsidianOpenUri, openObsidianUriInBrowser } from '../core/obsidianUri.js';
+import { openNoteWebappInNewTab } from '../core/noteWebapp.js';
+import { openNoteWebappPickWindow } from '../core/noteWebappPickBridge.js';
+import { renderQuickNoteLinkBanner } from '../core/quickNoteWebLinkUi.js';
+import { noteSpaceLinkReady } from '../features/noteWebappBridge.js';
 
 /**
- * 📝 Global Dashboard Quick Note Logic
+ * 📝 Dashboard Quick Note — rich text ในแอป (contenteditable) เหมือน Quick Notes คอลัมน์หลัก
  */
 
 export function initDashboardQuickNote() {
-    // โหลดหน้าต่างขึ้นมาทันทีถ้าถูกเปิดค้างไว้
     renderDashboardQuickNote();
 }
 
 export function toggleDashboardQuickNote() {
     const settings = getAppSettings();
     if (!settings.dashboardQuickNote) {
-       settings.dashboardQuickNote = { isOpen: false, isPinned: false, mode: 'local', collapsed: false, content: "", keepUrl: "", x: 100, y: 100, w: 350, h: 400 };
+       settings.dashboardQuickNote = { isOpen: false, isPinned: false, collapsed: false, content: "", obsidianNoteRelPath: '', x: 100, y: 100, w: 350, h: 400 };
     }
     settings.dashboardQuickNote.isOpen = !settings.dashboardQuickNote.isOpen;
     saveData();
     renderDashboardQuickNote();
-    
-    // อัปเดตสถานะสีปุ่มในหน้า Dashboard
+
     if (window.renderDefaultDashboard) window.renderDefaultDashboard();
+}
+
+function attachFloatingNoteEditor(el) {
+    const toolbar = el.querySelector('.db-quick-note-toolbar');
+    if (toolbar) {
+        toolbar.querySelectorAll('button[data-db-note-cmd]').forEach((btn) => {
+            btn.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                const cmd = btn.getAttribute('data-db-note-cmd');
+                if (cmd) document.execCommand(cmd, false, undefined);
+            });
+        });
+    }
+    const noteEl = el.querySelector('#db-workspace-note');
+    if (!noteEl) return;
+    const space = getCurrentSpace();
+    const webLinked = noteSpaceLinkReady(space);
+    const suppressed = !!(space?.quickNoteSuppressLocalEditor);
+    if (!webLinked && document.activeElement !== noteEl) {
+        noteEl.innerHTML = suppressed ? '' : space?.note || '';
+    }
+    const persist = () => {
+        const sp = getCurrentSpace();
+        if (!sp) return;
+        sp.note = noteEl.innerHTML;
+        saveData();
+    };
+    noteEl.addEventListener('input', persist);
+    noteEl.addEventListener('blur', persist);
+
+    const ban = el.querySelector('#db-quick-note-link-banner');
+    const sp = getCurrentSpace();
+    if (ban && sp) {
+        renderQuickNoteLinkBanner(
+            ban,
+            sp,
+            { pickTarget: 'dashboard', forSpaceId: sp.id },
+            {
+                note: noteEl,
+                toolbar: el.querySelector('.db-quick-note-toolbar'),
+            }
+        );
+    }
 }
 
 export function renderDashboardQuickNote() {
@@ -31,9 +77,9 @@ export function renderDashboardQuickNote() {
     const shouldShow = state.isOpen && (state.isPinned || spaceId === 0);
 
     let el = document.getElementById('dashboard-floating-note');
-    
+
     if (!shouldShow) {
-        if (el) el.remove(); // ลบ Element ออกเพื่อความสะอาด
+        if (el) el.remove();
         return;
     }
 
@@ -51,94 +97,39 @@ export function renderDashboardQuickNote() {
     el.style.width = `${state.w}px`;
     el.style.height = state.collapsed ? 'auto' : `${state.h}px`;
 
-    const isKeepMode = state.mode === 'keep';
-    
     el.innerHTML = `
         <div id="db-note-header" class="section-label" style="display:flex; justify-content:space-between; align-items:center; padding: 10px 15px; background: var(--bg-spacebar); border-bottom: 1px solid var(--border-color); cursor: grab; user-select:none; margin: -10px -10px 0 -10px; border-radius: 8px 8px 0 0;">
-            <div style="font-weight: 800; font-size: 11px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 1px; display:flex; align-items:center; gap:6px;">
-                <svg class="svg-icon-sm" style="width:14px; height:14px;"><use href="#icon-pencil"></use></svg>
-                Quick Note
-            </div>
-            <div class="note-controls" style="display:flex; gap: 4px; align-items: center;">
-                <button class="btn-icon" id="db-note-pin" title="Pin note to stay visible in all spaces" style="color: ${state.isPinned ? 'var(--primary-color)' : 'inherit'}; opacity: ${state.isPinned ? '1' : '0.5'}"><svg class="svg-icon-sm"><use href="#icon-pin"></use></svg></button>
-                <div class="keep-btn-group" style="display: flex; gap: 2px; background: rgba(245, 158, 11, 0.15); padding: 2px; border-radius: 6px; border: 1px solid rgba(245, 158, 11, 0.2);">
-                    <button class="btn-icon" id="db-note-keep-toggle" title="Toggle Google Keep Mode" style="opacity: ${isKeepMode ? '1' : '0.5'}"><svg class="svg-icon-sm"><use href="#icon-keep"></use></svg></button>
-                    <button class="btn-icon" id="db-note-keep-external" title="Open in New Tab" style="display: ${isKeepMode && state.keepUrl ? 'inline-flex' : 'none'}; color: #d97706;"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="11" x2="21" y2="3"></line></svg></button>
-                    <button class="btn-icon" id="db-note-keep-edit" title="Change Keep Link" style="display: ${isKeepMode && state.keepUrl ? 'inline-flex' : 'none'}; opacity: 0.7;"><svg class="svg-icon-sm"><use href="#icon-edit"></use></svg></button>
+            <div style="font-weight: 800; font-size: 11px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 1px;">Quick Note</div>
+            <div class="note-controls" style="display:flex; gap:4px; flex-wrap:wrap; align-items:center;">
+                <div class="db-obsidian-btn-group" style="display: flex; gap: 2px; background: rgba(139, 92, 246, 0.12); padding: 2px; border-radius: 6px; border: 1px solid rgba(139, 92, 246, 0.28); align-items: center;">
+                    <button type="button" class="btn-icon" id="db-note-obsidian-open" title="เปิดใน Obsidian" style="color: #7c3aed;"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg></button>
+                    <button type="button" class="btn-icon" id="db-note-obsidian-path" title="ตั้ง path ไฟล์ใน vault" style="opacity: 0.85; color: #7c3aed;"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg></button>
+                    <button type="button" class="btn-icon" id="db-note-obsidian-clear" title="ล้าง path" style="opacity: 0.75; color: #64748b;"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
                 </div>
-                <button class="btn-icon" id="db-note-collapse" title="Collapse / Expand"><svg class="svg-icon-sm"><use href="#icon-chevron-${state.collapsed ? 'up' : 'down'}"></use></svg></button>
-                <button class="btn-icon" id="db-note-close" style="font-size: 16px; opacity: 0.6; width: 24px; height: 24px;">✕</button>
+                <button type="button" class="btn-icon" id="db-note-pick" title="เลือกโน้ตจาก LLM Wiki" style="color: var(--primary-color);">📎</button>
+                <button type="button" class="btn-icon" id="db-note-webapp-tab" title="เปิด LLM Wiki Manager ในแท็บใหม่" style="color: var(--primary-color);">📝</button>
+                <button type="button" class="btn-icon" id="db-note-pin" title="Pin" style="color: ${state.isPinned ? 'var(--primary-color)' : 'inherit'}; opacity: ${state.isPinned ? '1' : '0.5'}"><svg class="svg-icon-sm"><use href="#icon-pin"></use></svg></button>
+                <button type="button" class="btn-icon" id="db-note-collapse" title="ย่อ / ขยาย"><svg class="svg-icon-sm"><use href="#icon-chevron-${state.collapsed ? 'up' : 'down'}"></use></svg></button>
+                <button type="button" class="btn-icon" id="db-note-close" style="font-size: 16px; opacity: 0.6; width: 24px; height: 24px;">✕</button>
             </div>
         </div>
-        
-        <div class="note-container" id="db-note-body" style="flex: 1; margin-top: 0; border: none; box-shadow: none; overflow: hidden; background: var(--bg-card); display: ${state.collapsed ? 'none' : 'flex'}">
-            <div id="db-note-local-area" style="display: ${isKeepMode ? 'none' : 'flex'}; flex-direction: column; height: 100%;">
-                <div class="note-toolbar" style="padding: 6px 10px; border-bottom: 1px dashed var(--border-color); background: rgba(0,0,0,0.02);">
-                    <button class="btn-icon" id="db-note-undo" title="Undo"><svg class="svg-icon-sm"><use href="#icon-undo"></use></svg></button>
-                    <span class="note-toolbar-sep">|</span>
-                    <button class="btn-icon" id="db-note-bold" title="Bold"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path><path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path></svg></button>
-                    <button class="btn-icon" id="db-note-italic" title="Italic"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="4" x2="10" y2="4"></line><line x1="14" y1="20" x2="5" y2="20"></line><line x1="15" y1="4" x2="9" y2="20"></line></svg></button>
-                    <button class="btn-icon" id="db-note-underline" title="Underline"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4v6a6 6 0 0 0 6 6h0a6 6 0 0 0 6-6V4"></path><line x1="4" y1="20" x2="20" y2="20"></line></svg></button>
-                    <span class="note-toolbar-sep">|</span>
-                    <button class="btn-icon" id="db-note-bullet-list" title="Bulleted List (or type '* ')"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg></button>
-                    <button class="btn-icon" id="db-note-checkbox" title="Insert Checkbox (or type '[] ')"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg></button>
-                    <span class="note-toolbar-sep">|</span>
-                    <div class="note-more-actions-wrapper">
-                        <button class="btn-icon note-more-actions-btn" id="db-note-more-actions" title="More Formatting">&#xB7;&#xB7;&#xB7;</button>
-                        <div class="note-more-popup" id="db-note-more-popup">
-                            <div class="note-popup-row">
-                                <button class="btn-icon" id="db-note-strikethrough" title="Strikethrough"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 5H6a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z"></path><path d="M2 12h20"></path><path d="M6 14h12"></path></svg></button>
-                                <button class="btn-icon" id="db-note-numbered-list" title="Numbered List"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="10" y1="6" x2="21" y2="6"></line><line x1="10" y1="12" x2="21" y2="12"></line><line x1="10" y1="18" x2="21" y2="18"></line><path d="M4 6h1v4"></path><path d="M4 10h2"></path><path d="M6 18H4c0-1.1.9-2 2-2s2 .9 2 2c0 1.1-.9 2-2 2z"></path></svg></button>
-                                <button class="btn-icon" id="db-note-hr" title="Horizontal Rule"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
-                                <button class="btn-icon" id="db-note-reset-format" title="Clear Format"><svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path><line x1="17" y1="12" x2="17" y2="18"></line><line x1="13" y1="12" x2="13" y2="18"></line><line x1="9" y1="12" x2="9" y2="18"></line><line x1="5" y1="12" x2="5" y2="18"></line></svg></button>
-                            </div>
-                            <div class="note-popup-sep"></div>
-                            <div class="note-popup-row">
-                                <select id="db-note-font-size" style="padding:2px;border-radius:4px;border:1px solid var(--border-color);background:var(--bg-body);color:var(--text-main);font-size:11px;outline:none;cursor:pointer;flex:1;" data-cmd="fontSize">
-                                    <option value="3">Normal</option>
-                                    <option value="4">Large</option>
-                                    <option value="5">Heading</option>
-                                </select>
-                            </div>
-                            <div class="note-popup-row">
-                                ${(settings.quickColors || ["#ff4d4f", "#4a86e8", "#52c41a"]).map((color, i) => `
-                                    <input type="color" class="custom-color-slot db-note-color-slot" data-index="${i}" value="${color}" style="width:18px; height:18px;">
-                                `).join('')}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div id="db-note-editor" class="note-area" contenteditable="true" placeholder="Start typing here..." style="flex: 1; padding: 15px; font-size: 14px; line-height: 1.6; overflow-y: auto; outline: none;">${state.content || ''}</div>
+        <div id="db-note-body" style="flex:1; min-height:0; display: ${state.collapsed ? 'none' : 'flex'}; flex-direction: column; background: var(--bg-card); padding: 8px; box-sizing: border-box;">
+            <div id="db-quick-note-link-banner" style="flex-shrink:0;margin-bottom:8px;"></div>
+            <div class="db-quick-note-toolbar" style="display:flex; gap:4px; flex-wrap:wrap; margin-bottom:6px; flex-shrink:0;">
+                <button type="button" class="btn-icon" data-db-note-cmd="bold" title="Bold" style="font-weight:800;">B</button>
+                <button type="button" class="btn-icon" data-db-note-cmd="italic" title="Italic" style="font-style:italic;">I</button>
+                <button type="button" class="btn-icon" data-db-note-cmd="underline" title="Underline" style="text-decoration:underline;">U</button>
+                <button type="button" class="btn-icon" data-db-note-cmd="insertUnorderedList" title="Bullet list">•</button>
+                <button type="button" class="btn-icon" data-db-note-cmd="insertOrderedList" title="Numbered list">1.</button>
             </div>
-            
-            <div id="db-note-keep-area" style="display: ${isKeepMode ? 'block' : 'none'}; height: 100%;">
-                ${state.keepUrl ? 
-                    `<iframe id="db-keep-iframe" src="about:blank" style="width:100%; height:100%; border:none;"></iframe>` : 
-                    `<div style="padding: 40px 20px; text-align:center; display: flex; flex-direction: column; gap: 15px; height: 100%; justify-content: center; background: var(--bg-body);">
-                        <div style="font-size: 32px; opacity: 0.8;">💡</div>
-                        <p style="font-size:12px; color:var(--text-muted); margin: 0; line-height: 1.5;">Connect this Dashboard Quick Note to a Google Keep Note URL:</p>
-                        <input type="text" id="db-note-keep-input" class="settings-input" placeholder="https://keep.google.com/..." style="font-size: 12px; text-align: center;">
-                        <button class="btn btn-primary" id="db-note-keep-save" style="width:100%; justify-content: center; padding: 8px;">Connect Keep</button>
-                    </div>`
-                }
-            </div>
+            <div id="db-workspace-note" contenteditable="true" spellcheck="true"
+                style="flex:1; min-height:200px; overflow-y:auto; padding:8px 10px; font-family:var(--note-font); font-size:var(--app-font-size); line-height:1.55; border:1px solid var(--border-color); border-radius:6px; background:var(--bg-card); outline:none;"></div>
         </div>
     `;
 
-    // 🟢 ระบบป้องกันการโหลดซ้ำ (Persistence Fix)
-    if (isKeepMode && state.keepUrl) {
-        const iframe = el.querySelector('#db-keep-iframe');
-        // ถ้า iframe มีอยู่แล้ว และ URL ยังเป็นอันเดิม ไม่ต้องโหลดใหม่
-        if (iframe && iframe.dataset.loadedUrl !== state.keepUrl) {
-            iframe.src = state.keepUrl;
-            iframe.dataset.loadedUrl = state.keepUrl;
-        }
-    }
-
-    // 🟢 เรียกใช้ระบบลากหลังจากใส่ innerHTML เรียบร้อยแล้ว เพื่อให้หา Header เจอ
     setupNoteDrag(el);
+    attachFloatingNoteEditor(el);
 
-    // Event Listeners สำหรับหน้าต่างโน้ต
     el.querySelector('#db-note-close').onclick = () => toggleDashboardQuickNote();
 
     el.querySelector('#db-note-pin').onclick = () => {
@@ -153,155 +144,63 @@ export function renderDashboardQuickNote() {
         renderDashboardQuickNote();
     };
 
-    el.querySelector('#db-note-keep-toggle').onclick = () => {
-        state.mode = state.mode === 'keep' ? 'local' : 'keep';
-        saveData();
-        renderDashboardQuickNote();
+    el.querySelector('#db-note-pick').onclick = () => {
+        const sp = getCurrentSpace();
+        openNoteWebappPickWindow({
+            pickTarget: 'dashboard',
+            forSpaceId: sp?.id ?? null,
+        });
     };
+    el.querySelector('#db-note-webapp-tab').onclick = () => openNoteWebappInNewTab();
 
-    const keepExternal = el.querySelector('#db-note-keep-external');
-    if (keepExternal) {
-        keepExternal.onclick = () => {
-            if (state.keepUrl) window.open(state.keepUrl, '_blank');
-        };
-    }
-
-    const keepEdit = el.querySelector('#db-note-keep-edit');
-    if (keepEdit) {
-        keepEdit.onclick = () => {
-            const newUrl = prompt("Enter new Google Keep URL for Dashboard:", state.keepUrl || "");
-            if (newUrl !== null && newUrl.trim() !== "") {
-                state.keepUrl = newUrl.trim();
-                saveData();
-                renderDashboardQuickNote();
-            }
-        };
-    }
-
-    const undoBtn = el.querySelector('#db-note-undo');
-    if (undoBtn) {
-        undoBtn.onclick = (e) => {
-            e.preventDefault();
-            document.execCommand('undo', false, null);
-        };
-    }
-
-    const fontSizeSelect = el.querySelector('#db-note-font-size');
-    if (fontSizeSelect) {
-        fontSizeSelect.onchange = (e) => {
-            document.execCommand('fontSize', false, e.target.value);
-        };
-    }
-
-    el.querySelectorAll('.db-note-color-slot').forEach(picker => {
-        picker.oninput = (e) => {
-            document.execCommand('foreColor', false, e.target.value);
-            const idx = parseInt(e.target.dataset.index);
-            settings.quickColors[idx] = e.target.value;
-            saveData();
-        };
-    });
-
-
-    const editor = el.querySelector('#db-note-editor');
-    if (editor) {
-        editor.oninput = () => {
-            state.content = editor.innerHTML;
+    const obsPathBtn = el.querySelector('#db-note-obsidian-path');
+    if (obsPathBtn) {
+        obsPathBtn.onclick = () => {
+            const cur = (state.obsidianNoteRelPath || '').trim();
+            const next = prompt('Path ไฟล์ใน vault (เช่น 4_Notes/foo/note.md):', cur);
+            if (next === null) return;
+            state.obsidianNoteRelPath = next.trim();
             saveData();
         };
     }
-
-    const keepInput = el.querySelector('#db-note-keep-input');
-    const keepSave = el.querySelector('#db-note-keep-save');
-    if (keepSave && keepInput) {
-        keepSave.onclick = () => {
-            const url = keepInput.value.trim();
-            if (url) {
-                state.keepUrl = url;
-                saveData();
-                renderDashboardQuickNote();
+    const obsOpenBtn = el.querySelector('#db-note-obsidian-open');
+    if (obsOpenBtn) {
+        obsOpenBtn.onclick = () => {
+            const vault = (getAppSettings().obsidianVaultName || '').trim();
+            if (!vault) {
+                alert('ตั้งชื่อ Obsidian vault ใน App Settings (ปุ่ม ⚙️)');
+                return;
             }
+            let rel = (state.obsidianNoteRelPath || '').trim();
+            if (!rel) {
+                const entered = prompt('Path ไฟล์ใน vault:', '');
+                if (!entered || !entered.trim()) return;
+                rel = entered.trim();
+                state.obsidianNoteRelPath = rel;
+                saveData();
+            }
+            const uri = buildObsidianOpenUri(vault, rel);
+            if (uri) openObsidianUriInBrowser(uri);
         };
     }
-
-    const DB_CHECKBOX_HTML = '<label class="google-task-checkbox" contenteditable="false" style="display:inline-flex; align-items:center; margin-right:8px; vertical-align:middle;"><input type="checkbox"> <div class="checkmark-circle"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg></div></label>&nbsp;';
-
-    const bindCmd = (id, cmd, val = null) => {
-        const btn = el.querySelector('#' + id);
-        if (btn) btn.addEventListener('mousedown', (e) => { e.preventDefault(); document.execCommand(cmd, false, val); if (editor) { state.content = editor.innerHTML; saveData(); } });
-    };
-    bindCmd('db-note-bold', 'bold');
-    bindCmd('db-note-italic', 'italic');
-    bindCmd('db-note-underline', 'underline');
-    bindCmd('db-note-strikethrough', 'strikeThrough');
-    bindCmd('db-note-bullet-list', 'insertUnorderedList');
-    bindCmd('db-note-numbered-list', 'insertOrderedList');
-    bindCmd('db-note-hr', 'insertHorizontalRule');
-    bindCmd('db-note-reset-format', 'removeFormat');
-
-    const dbBtnCheckbox = el.querySelector('#db-note-checkbox');
-    if (dbBtnCheckbox) {
-        dbBtnCheckbox.addEventListener('mousedown', (e) => {
-            e.preventDefault();
-            document.execCommand('insertParagraph');
-            document.execCommand('insertHTML', false, DB_CHECKBOX_HTML);
-            if (editor) { state.content = editor.innerHTML; saveData(); }
-        });
-    }
-
-    const dbBtnMore = el.querySelector('#db-note-more-actions');
-    const dbMorePopup = el.querySelector('#db-note-more-popup');
-    if (dbBtnMore && dbMorePopup) {
-        dbBtnMore.addEventListener('mousedown', (e) => { e.preventDefault(); e.stopPropagation(); dbMorePopup.classList.toggle('is-open'); });
-        document.addEventListener('click', (e) => { if (!e.target.closest('.note-more-actions-wrapper')) dbMorePopup.classList.remove('is-open'); }, true);
-    }
-
-    if (editor) {
-        editor.addEventListener('keydown', (e) => {
-            if (e.key === 'Tab') {
-                e.preventDefault();
-                document.execCommand(e.shiftKey ? 'outdent' : 'indent', false, null);
-                state.content = editor.innerHTML; saveData();
+    const obsClearBtn = el.querySelector('#db-note-obsidian-clear');
+    if (obsClearBtn) {
+        obsClearBtn.onclick = () => {
+            if (!(state.obsidianNoteRelPath || '').trim()) {
+                alert('ยังไม่ได้ตั้ง path');
+                return;
             }
-        });
-        editor.addEventListener('input', () => {
-            const sel = window.getSelection();
-            if (!sel || !sel.rangeCount) return;
-            const range = sel.getRangeAt(0);
-            const node = range.startContainer;
-            if (node.nodeType !== 3) return;
-            const text = node.textContent;
-            const offset = range.startOffset;
-            if (offset >= 2 && text.slice(0, 2) === '* ') {
-                const del = document.createRange();
-                del.setStart(node, 0); del.setEnd(node, 2);
-                sel.removeAllRanges(); sel.addRange(del);
-                document.execCommand('delete', false, null);
-                document.execCommand('insertUnorderedList', false, null);
-                state.content = editor.innerHTML; saveData(); return;
-            }
-            if (offset >= 3 && text.slice(0, 3) === '[] ') {
-                const del = document.createRange();
-                del.setStart(node, 0); del.setEnd(node, 3);
-                sel.removeAllRanges(); sel.addRange(del);
-                document.execCommand('delete', false, null);
-                document.execCommand('insertHTML', false, DB_CHECKBOX_HTML);
-                state.content = editor.innerHTML; saveData();
-            }
-        });
-        editor.addEventListener('change', (e) => {
-            if (e.target.type === 'checkbox' && e.target.closest('.google-task-checkbox')) {
-                if (e.target.checked) { e.target.setAttribute('checked', 'checked'); }
-                else { e.target.removeAttribute('checked'); }
-                state.content = editor.innerHTML; saveData();
-            }
-        });
+            if (!confirm('ล้าง path สำหรับ Obsidian?')) return;
+            state.obsidianNoteRelPath = '';
+            saveData();
+            renderDashboardQuickNote();
+        };
     }
 }
 
 function setupNoteDrag(el) {
     const header = el.querySelector('#db-note-header');
-    if (!header) return; // ป้องกัน Error กรณีหา Header ไม่เจอ
+    if (!header) return;
 
     let isDragging = false;
     let offset = { x: 0, y: 0 };
@@ -309,7 +208,7 @@ function setupNoteDrag(el) {
     header.onmousedown = (e) => {
         if (e.target.closest('button')) return;
         isDragging = true;
-        el.classList.add('is-interacting'); // เปิด Shield ทันทีที่เริ่มลาก
+        el.classList.add('is-interacting');
         const rect = el.getBoundingClientRect();
         offset.x = e.clientX - rect.left;
         offset.y = e.clientY - rect.top;
@@ -326,7 +225,7 @@ function setupNoteDrag(el) {
     const handleUp = () => {
         if (isDragging || el.classList.contains('is-interacting')) {
             isDragging = false;
-            el.classList.remove('is-interacting'); // ปิด Shield
+            el.classList.remove('is-interacting');
             document.body.style.userSelect = '';
             el.style.transition = 'all 0.2s ease';
             const settings = getAppSettings();

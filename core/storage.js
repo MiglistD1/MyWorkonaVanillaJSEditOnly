@@ -50,9 +50,8 @@ let appSettings = {
   dashboardQuickNote: { 
     isOpen: false, 
     isPinned: false,
-    mode: 'local', 
     content: "", 
-    keepUrl: "", 
+    obsidianNoteRelPath: '',
     x: 100, 
     y: 100, 
     w: 350, 
@@ -80,7 +79,17 @@ let appSettings = {
     collapsed: false
   },
   lastUpdated: 0, // 🟢 เก็บเวลาล่าสุดที่มีการแก้ไขข้อมูล
-  focusedTask: null // 🟢 { spaceId, createdAt } เก็บงานที่กำลังโฟกัสอยู่เพียงหนึ่งเดียว
+  focusedTask: null, // 🟢 { spaceId, createdAt } เก็บงานที่กำลังโฟกัสอยู่เพียงหนึ่งเดียว
+  /** ชื่อ vault ใน Obsidian (ใช้กับ obsidian://open) */
+  obsidianVaultName: '',
+  /** path ไฟล์ใน vault สำหรับปุ่ม Obsidian ของแผง Quick Notes (หลัก) */
+  quickNoteObsidianRelPath: '',
+  /** ถ้า true — Quick Note พิมพ์ไม่ได้จนกว่าจะเลือกโน้ตจาก LLM Wiki (📎) */
+  quickNoteLockUnlinked: true,
+  /** LLM Wiki Manager frontend (เช่น http://localhost:5173) — ปุ่มเปิดจาก Quick Note / เมนู */
+  noteWebappUrl: 'http://localhost:5173',
+  /** คงที่: ผูก Quick Note กับ LLM Wiki Manager เท่านั้น */
+  notesLinkProvider: 'webllm',
 };
 
 // 🏠 Device-Specific Settings (ไม่ซิงค์ข้ามเครื่อง, ไม่อยู่ในไฟล์ Backup)
@@ -272,13 +281,26 @@ export async function loadData(onLoadComplete) {
         if(!res.appSettings.quickNoteState) res.appSettings.quickNoteState = { float: false, collapsed: false, x: 100, y: 100, w: 350, h: 400 };
         if(!res.appSettings.habitState) res.appSettings.habitState = { open: false, x: 400, y: 80 };
         if(!res.appSettings.dashboardQuickNote) {
-            res.appSettings.dashboardQuickNote = { isOpen: false, isPinned: false, mode: 'local', content: "", keepUrl: "", x: 100, y: 100, w: 350, h: 400 };
+            res.appSettings.dashboardQuickNote = { isOpen: false, isPinned: false, content: "", obsidianNoteRelPath: "", x: 100, y: 100, w: 350, h: 400 };
         } else if (res.appSettings.dashboardQuickNote.isPinned === undefined) {
             res.appSettings.dashboardQuickNote.isPinned = false;
+        }
+        if (res.appSettings.dashboardQuickNote.obsidianNoteRelPath === undefined) {
+            res.appSettings.dashboardQuickNote.obsidianNoteRelPath = '';
         }
         if(!res.appSettings.focusPopupState) res.appSettings.focusPopupState = { isOpen: false, isMinimized: false, x: 100, y: 100, w: 250, h: 150, collapsed: false };
         if(!res.appSettings.spacePeekSettings) res.appSettings.spacePeekSettings = { isLocked: false, inlineWidth: 268, floatWidth: 280, floatHeight: 480 };
         appSettings = { ...appSettings, ...res.appSettings }; 
+    }
+    if (appSettings.obsidianVaultName === undefined) appSettings.obsidianVaultName = '';
+    if (appSettings.quickNoteObsidianRelPath === undefined) appSettings.quickNoteObsidianRelPath = '';
+    if (appSettings.quickNoteLockUnlinked === undefined) appSettings.quickNoteLockUnlinked = true;
+    if (appSettings.noteWebappUrl === undefined || appSettings.noteWebappUrl === '') {
+        appSettings.noteWebappUrl = 'http://localhost:5173';
+    }
+    appSettings.notesLinkProvider = 'webllm';
+    if (appSettings.dashboardQuickNote && appSettings.dashboardQuickNote.obsidianNoteRelPath === undefined) {
+        appSettings.dashboardQuickNote.obsidianNoteRelPath = '';
     }
     
     if(!appSettings.quickColors) appSettings.quickColors = ["#ff4d4f", "#4a86e8", "#52c41a"];

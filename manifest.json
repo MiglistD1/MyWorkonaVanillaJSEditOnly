@@ -23,13 +23,20 @@
     "declarativeNetRequestWithHostAccess"
   ],
   "host_permissions": [
-    "*://keep.google.com/*",
-    "*://tasks.google.com/*"
+    "*://tasks.google.com/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
   ],
+  "externally_connectable": {
+    "matches": [
+      "http://localhost/*",
+      "http://127.0.0.1/*"
+    ]
+  },
   "declarative_net_request": {
     "rule_resources": [
       {
-        "id": "keep_rules",
+        "id": "tasks_iframe_rules",
         "enabled": true,
         "path": "rules.json"
       }
